@@ -9,7 +9,7 @@ This document is the Phase 0 architecture freeze. Changing a frozen decision req
 
 CARE QR V1 is a **modular monolith**, not a set of microservices.
 
-- The backend is deployed as one API application plus one background worker process.
+- The backend is deployed as one service. Background processing lives inside this service until scale or reliability requirements justify a separate process.
 - Domain code is split into cohesive modules with explicit public interfaces.
 - A module owns its business rules and persistence access. Controllers, jobs, and other modules must not query its tables directly.
 - Cross-module calls use exported application services. Asynchronous side effects use typed domain/application events after the source transaction commits.
@@ -18,27 +18,19 @@ CARE QR V1 is a **modular monolith**, not a set of microservices.
 
 These boundaries allow a module to be extracted into a microservice later. Extraction is an option, not a V1 requirement.
 
-### Planned repository shape for Phase 1
+### Repository shape
 
 ```text
 care-qr/
-├── apps/
-│   ├── patient-web/
-│   ├── staff-web/
-│   └── dashboard/
-├── services/
-│   ├── api/
-│   └── worker/
-├── packages/
-│   └── shared/
-├── deploy/
+├── backend/
+├── frontend/
 └── docs/
     └── architecture/
 ```
 
-The API uses `src/modules/<domain>` for domain modules and keeps shared technical infrastructure in `src/common`, `src/config`, `src/database`, `src/middleware`, `src/security`, `src/realtime`, and `src/jobs`.
+The backend uses `src/modules/<domain>` for domain modules. Technical code lives in `src/common`, `src/config`, `src/database`, and `src/middleware`. More directories are added only when the corresponding feature exists. Shared frontend contracts can be exported from the backend or moved to a package later if there is a demonstrated need.
 
-`packages/shared` may contain stable, platform-neutral contracts and utilities. It must not become a dumping ground for domain logic or database access.
+The original Phase 1 multi-workspace layout was simplified by the user on 2026-10-05. The rationale and impact are recorded in [ADR 0001](./adr-0001-single-app-layout.md).
 
 ## 2. Terminology and location hierarchy
 
@@ -168,4 +160,3 @@ The request priorities are:
 - [x] BedSession approach frozen
 - [x] Assignment modes frozen
 - [x] SLA definitions frozen
-

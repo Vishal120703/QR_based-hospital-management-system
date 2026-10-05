@@ -1,0 +1,34 @@
+{
+  "name": "@care-qr/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/src/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "bootstrap:hospital": "tsx src/modules/hospitals/bootstrap.cli.ts",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "dev": "tsx watch src/server.ts",
+    "prisma:format": "prisma format",
+    "prisma:generate": "prisma generate",
+    "prisma:validate": "cross-env DATABASE_URL=postgresql://careqr:careqr@localhost:5432/careqr prisma validate",
+    "start": "node dist/src/server.js",
+    "test": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0",
+    "express": "^5.1.0",
+    "pino": "^9.9.5",
+    "pino-http": "^10.5.0",
+    "redis": "^4.7.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.6"
+  }
+}

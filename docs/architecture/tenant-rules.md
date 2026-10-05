@@ -17,6 +17,9 @@ The active tenant is derived on the server:
 - Patient/attendant requests: a validated GuestSession supplies `hospitalId`, `bedId`, and `bedSessionId`.
 - Background jobs: the durable job reference is reloaded from PostgreSQL and its tenant ownership is revalidated before processing.
 
+Credential resolution is a narrow pre-tenant exception: login may look up a hospital code and user email, and bearer authentication may look up a hashed opaque session token. These lookups grant no access by themselves. The resolved active hospital, membership, and session must agree before any tenant-owned operation runs.
+
+
 Headers, query parameters, route parameters, request bodies, Socket.IO payloads, and queue payloads never establish tenant ownership by themselves.
 
 After staff authentication, request context exposes a validated actor, tenant, permissions, and scopes. Application services receive this tenant context explicitly.
@@ -76,4 +79,3 @@ For every tenant-owned resource and CRUD capability, tests prove:
 - Filters, pagination, counts, exports, analytics, events, WebSocket subscriptions, caches, and jobs do not leak cross-tenant data.
 
 No phase that introduces tenant-owned entities passes until its isolation suite passes.
-

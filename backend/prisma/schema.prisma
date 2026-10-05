@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum HospitalStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum ScopeType {
+  HOSPITAL
+  FLOOR
+  WARD
+}
+
+enum AuditActorType {
+  SYSTEM
+  STAFF
+}
+
+model Hospital {
+  id          String               @id @default(uuid()) @db.Uuid
+  name        String
+  code        String               @unique
+  timezone    String
+  status      HospitalStatus       @default(ACTIVE)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  settings    HospitalSetting[]
+  memberships HospitalMembership[]
+  roles       Role[]
+  auditLogs   AuditLog[]
+  sessions    StaffSession[]
+}
+
+model HospitalSetting {
+  id         String   @id @default(uuid()) @db.Uuid
+  hospitalId String   @db.Uuid
+  key        String
+  value      Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, key])
+  @@index([hospitalId])
+}
+
+model User {
+  id           String               @id @default(uuid()) @db.Uuid
+  email        String               @unique
+  displayName  String
+  passwordHash String
+  status       UserStatus           @default(ACTIVE)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  memberships  HospitalMembership[]
+}
+
+model HospitalMembership {
+  id         String           @id @default(uuid()) @db.Uuid
+  hospitalId String           @db.Uuid
+  userId     String           @db.Uuid
+  status     MembershipStatus @default(ACTIVE)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  hospital   Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userRoles  UserRole[]
+  sessions   StaffSession[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, userId])
+  @@index([userId])
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  hospitalId      String           @db.Uuid
+  name            String
+  description     String?
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  hospital        Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, name])
+  @@index([hospitalId])
+}
+
+model Permission {
+  key             String           @id
+  description     String
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  id            String     @id @default(uuid()) @db.Uuid
+  hospitalId    String     @db.Uuid
+  roleId        String     @db.Uuid
+  permissionKey String
+  role          Role       @relation(fields: [hospitalId, roleId], references: [hospitalId, id], onDelete: Restrict)
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Restrict)
+
+  @@unique([hospitalId, roleId, permissionKey])
+  @@index([hospitalId, roleId])
+}
+
+model UserRole {
+  id           String             @id @default(uuid()) @db.Uuid
+  hospitalId   String             @db.Uuid
+  membershipId String             @db.Uuid
+  roleId       String             @db.Uuid
+  membership   HospitalMembership @relation(fields: [hospitalId, membershipId], references: [hospitalId, id], onDelete: Restrict)
+  role         Role               @relation(fields: [hospitalId, roleId], references: [hospitalId, id], onDelete: Restrict)
+  scopes       ScopeAssignment[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, membershipId, roleId])
+  @@index([hospitalId, roleId])
+}
+
+model ScopeAssignment {
+  id         String    @id @default(uuid()) @db.Uuid
+  hospitalId String    @db.Uuid
+  userRoleId String    @db.Uuid
+  scopeType  ScopeType
+  scopeId    String    @db.Uuid
+  userRole   UserRole  @relation(fields: [hospitalId, userRoleId], references: [hospitalId, id], onDelete: Restrict)
+
+  @@unique([hospitalId, userRoleId, scopeType, scopeId])
+  @@index([hospitalId, scopeType, scopeId])
+}
+
+model StaffSession {
+  id           String             @id @default(uuid()) @db.Uuid
+  hospitalId   String             @db.Uuid
+  membershipId String             @db.Uuid
+  tokenHash    String             @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime           @default(now())
+  lastSeenAt   DateTime           @default(now())
+  hospital     Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  membership   HospitalMembership @relation(fields: [hospitalId, membershipId], references: [hospitalId, id], onDelete: Restrict)
+
+  @@index([hospitalId, membershipId])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id                String         @id @default(uuid()) @db.Uuid
+  hospitalId        String         @db.Uuid
+  actorType         AuditActorType
+  actorMembershipId String?        @db.Uuid
+  action            String
+  targetType        String
+  targetId          String
+  metadata          Json
+  requestId         String?
+  createdAt         DateTime       @default(now())
+  hospital          Hospital       @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+
+  @@index([hospitalId, createdAt])
+  @@index([hospitalId, targetType, targetId])
+}

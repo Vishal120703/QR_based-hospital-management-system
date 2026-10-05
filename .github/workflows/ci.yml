@@ -9,6 +9,23 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: careqr
+          POSTGRES_PASSWORD: careqr
+          POSTGRES_DB: careqr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U careqr -d careqr"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://careqr:careqr@127.0.0.1:5432/careqr
+      TEST_DATABASE_URL: postgresql://careqr:careqr@127.0.0.1:5432/careqr
 
     steps:
       - uses: actions/checkout@v4
@@ -18,6 +35,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prisma:generate
+      - run: npx prisma migrate deploy --schema backend/prisma/schema.prisma
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck

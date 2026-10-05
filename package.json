@@ -3,11 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "CARE QR modular hospital service request platform",
-  "workspaces": [
-    "apps/*",
-    "services/*",
-    "packages/*"
-  ],
+  "workspaces": ["backend", "frontend"],
   "engines": {
     "node": ">=20.19.0",
     "npm": ">=10.0.0"
@@ -15,15 +11,21 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "clean": "npm run clean --workspaces --if-present",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write backend frontend README.md",
+    "format:check": "prettier --check backend frontend README.md",
     "lint": "eslint . --max-warnings 0",
-    "prisma:format": "npm run prisma:format --workspace @care-qr/api",
-    "prisma:generate": "npm run prisma:generate --workspace @care-qr/api",
-    "prisma:validate": "npm run prisma:validate --workspace @care-qr/api",
-    "test": "npm run test --workspace @care-qr/api",
-    "test:integration": "npm run test:integration --workspace @care-qr/api",
+    "prisma:format": "npm run prisma:format --workspace @care-qr/backend",
+    "prisma:generate": "npm run prisma:generate --workspace @care-qr/backend",
+    "prisma:validate": "npm run prisma:validate --workspace @care-qr/backend",
+    "test": "npm run test --workspace @care-qr/backend",
+    "test:integration": "npm run test:integration --workspace @care-qr/backend",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 100
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",
