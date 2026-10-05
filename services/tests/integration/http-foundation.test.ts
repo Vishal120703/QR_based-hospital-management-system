@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { createApp } from '../../src/app.js';
 import { createLogger } from '../../src/config/logger.js';
@@ -53,6 +54,25 @@ describe('HTTP foundation', () => {
     });
     expect(JSON.stringify(response.body)).not.toContain('sensitive implementation detail');
     expect(JSON.stringify(response.body)).not.toContain('stack');
+  });
+
+  it('maps a database RESTRICT violation to 409 without leaking details', async () => {
+    const application = createApp({
+      logger,
+      configureRoutes(app) {
+        app.get('/test/restrict', () => {
+          throw new Prisma.PrismaClientUnknownRequestError(
+            'PostgresError { code: "23001", message: "violates RESTRICT setting of foreign key constraint \\"Secret_fkey\\"" }',
+            { clientVersion: Prisma.prismaVersion.client },
+          );
+        });
+      },
+    });
+
+    const response = await request(application).get('/test/restrict');
+
+    expect(response.status).toBe(409);
+    expect(JSON.stringify(response.body)).not.toContain('Secret_fkey');
   });
 
   it('checks PostgreSQL and Redis readiness probes', async () => {

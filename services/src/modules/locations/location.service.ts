@@ -582,6 +582,14 @@ export class LocationService {
   public async deleteBed(context: StaffContext, id: string, requestId: string) {
     await this.write(async (transaction) => {
       const before = found(await transaction.bed.findUnique({ where: tenantKey(context, id) }));
+      const hospitalId = context.tenant.hospitalId;
+      const qrCodes = await transaction.bedQrCode.count({ where: { hospitalId, bedId: id } });
+      const sessions = await transaction.bedSession.count({ where: { hospitalId, bedId: id } });
+      if (qrCodes + sessions > 0) {
+        throw new ConflictError(
+          'This bed has a QR code or session history. Deactivate it instead.',
+        );
+      }
       await transaction.bed.delete({ where: tenantKey(context, id) });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'bed.delete',

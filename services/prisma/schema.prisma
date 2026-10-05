@@ -42,21 +42,34 @@ enum BedStatus {
   MAINTENANCE
 }
 
+enum QrCodeStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum BedSessionStatus {
+  ACTIVE
+  CLOSED
+}
+
 model Hospital {
-  id          String               @id @default(uuid()) @db.Uuid
-  name        String
-  code        String               @unique
-  timezone    String
-  status      HospitalStatus       @default(ACTIVE)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  settings    HospitalSetting[]
-  memberships HospitalMembership[]
-  roles       Role[]
-  auditLogs   AuditLog[]
-  sessions    StaffSession[]
-  buildings   Building[]
-  floors      Floor[]
+  id            String               @id @default(uuid()) @db.Uuid
+  name          String
+  code          String               @unique
+  timezone      String
+  status        HospitalStatus       @default(ACTIVE)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  settings      HospitalSetting[]
+  memberships   HospitalMembership[]
+  roles         Role[]
+  auditLogs     AuditLog[]
+  sessions      StaffSession[]
+  buildings     Building[]
+  floors        Floor[]
+  qrCodes       BedQrCode[]
+  bedSessions   BedSession[]
+  guestSessions GuestSession[]
 }
 
 model HospitalSetting {
@@ -270,20 +283,86 @@ model Room {
 // The (hospitalId, wardId, roomId) foreign key guarantees an optional room
 // belongs to the bed's own ward.
 model Bed {
-  id          String    @id @default(uuid()) @db.Uuid
-  hospitalId  String    @db.Uuid
-  wardId      String    @db.Uuid
-  roomId      String?   @db.Uuid
+  id          String       @id @default(uuid()) @db.Uuid
+  hospitalId  String       @db.Uuid
+  wardId      String       @db.Uuid
+  roomId      String?      @db.Uuid
   code        String
   displayName String
-  status      BedStatus @default(AVAILABLE)
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  ward        Ward      @relation(fields: [hospitalId, wardId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
-  room        Room?     @relation(fields: [hospitalId, wardId, roomId], references: [hospitalId, wardId, id], onDelete: Restrict, onUpdate: Restrict)
+  status      BedStatus    @default(AVAILABLE)
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  ward        Ward         @relation(fields: [hospitalId, wardId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  room        Room?        @relation(fields: [hospitalId, wardId, roomId], references: [hospitalId, wardId, id], onDelete: Restrict, onUpdate: Restrict)
+  qrCode      BedQrCode?
+  sessions    BedSession[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, wardId, code])
   @@index([hospitalId, roomId])
+}
+
+// One QR code per bed. Only the SHA-256 hash of the token is stored. Rotation
+// replaces the hash and increments version, so the previous token stops
+// resolving immediately; history is kept in AuditLog.
+model BedQrCode {
+  id         String       @id @default(uuid()) @db.Uuid
+  hospitalId String       @db.Uuid
+  bedId      String       @db.Uuid
+  tokenHash  String       @unique
+  status     QrCodeStatus @default(ACTIVE)
+  version    Int          @default(1)
+  issuedAt   DateTime     @default(now())
+  rotatedAt  DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  hospital   Hospital     @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  bed        Bed          @relation(fields: [hospitalId, bedId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, bedId])
+}
+
+// One admission/occupancy period of a bed, without patient identity.
+// At most one ACTIVE session per bed is enforced by the partial unique index
+// "BedSession_one_active_per_bed" in the migration SQL (Prisma cannot express it).
+model BedSession {
+  id                    String           @id @default(uuid()) @db.Uuid
+  hospitalId            String           @db.Uuid
+  bedId                 String           @db.Uuid
+  status                BedSessionStatus @default(ACTIVE)
+  startedAt             DateTime         @default(now())
+  endedAt               DateTime?
+  startedByMembershipId String           @db.Uuid
+  closedByMembershipId  String?          @db.Uuid
+  hospital              Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  bed                   Bed              @relation(fields: [hospitalId, bedId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  guestSessions         GuestSession[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, bedId, id])
+  @@index([hospitalId, status, startedAt])
+}
+
+// Short-lived patient/attendant access created by scanning a QR code. The
+// (hospitalId, bedId, bedSessionId) foreign key guarantees the session's bed
+// is the bed of its BedSession.
+model GuestSession {
+  id             String     @id @default(uuid()) @db.Uuid
+  hospitalId     String     @db.Uuid
+  bedId          String     @db.Uuid
+  bedSessionId   String     @db.Uuid
+  tokenHash      String     @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime   @default(now())
+  lastActivityAt DateTime   @default(now())
+  hospital       Hospital   @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  bedSession     BedSession @relation(fields: [hospitalId, bedId, bedSessionId], references: [hospitalId, bedId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([hospitalId, bedSessionId])
+  @@index([hospitalId, bedId])
+  @@index([expiresAt])
 }

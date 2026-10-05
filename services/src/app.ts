@@ -15,6 +15,15 @@ import { RoleService } from './modules/roles/role.service.js';
 import { createRoleRouter } from './modules/roles/role.routes.js';
 import { LocationService } from './modules/locations/location.service.js';
 import { createLocationRouter } from './modules/locations/location.routes.js';
+import { GuestSessionService } from './modules/bed-sessions/guest-session.service.js';
+import { BedSessionService } from './modules/bed-sessions/bed-session.service.js';
+import {
+  createBedSessionRouter,
+  createGuestSessionRouter,
+} from './modules/bed-sessions/bed-session.routes.js';
+import { QrCodeService } from './modules/qr/qr.service.js';
+import { createQrAdminRouter, createQrPublicRouter } from './modules/qr/qr.routes.js';
+import { type RateLimitOptions } from './middleware/rate-limit.js';
 import { z } from 'zod';
 
 const noQuerySchema = z.object({}).strict();
@@ -23,6 +32,9 @@ export interface CreateAppOptions {
   readonly logger: Logger;
   readonly readinessProbes?: readonly ReadinessProbe[];
   readonly database?: PrismaClient;
+  readonly publicAppUrl?: string;
+  readonly guestSessionTtlMinutes?: number;
+  readonly qrResolveRateLimit?: RateLimitOptions;
   readonly configureRoutes?: (application: Express) => void;
 }
 
@@ -48,16 +60,33 @@ export function createApp(options: CreateAppOptions): Express {
 
   application.use(createHealthRouter(options.readinessProbes ?? []));
   if (options.database) {
-    const auth = new StaffAuthService(options.database);
+    const database = options.database;
+    const auth = new StaffAuthService(database);
+    const guestSessions = new GuestSessionService(database, options.guestSessionTtlMinutes ?? 120);
+    const qrCodes = new QrCodeService(
+      database,
+      guestSessions,
+      options.publicAppUrl ?? 'http://localhost:5173',
+    );
     application.use(createAuthRouter(auth));
 
     // Every administrative route is authenticated exactly once, here.
     const admin = Router();
     admin.use(requireStaffAuth(auth));
-    admin.use(createHospitalRouter(new HospitalService(options.database)));
-    admin.use(createRoleRouter(new RoleService(options.database)));
-    admin.use(createLocationRouter(new LocationService(options.database)));
+    admin.use(createHospitalRouter(new HospitalService(database)));
+    admin.use(createRoleRouter(new RoleService(database)));
+    admin.use(createLocationRouter(new LocationService(database)));
+    admin.use(createBedSessionRouter(new BedSessionService(database, guestSessions)));
+    admin.use(createQrAdminRouter(qrCodes));
     application.use('/admin', admin);
+
+    // Patient/attendant routes. Guest authentication is applied per route.
+    const publicRoutes = Router();
+    publicRoutes.use(
+      createQrPublicRouter(qrCodes, options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 }),
+    );
+    publicRoutes.use(createGuestSessionRouter(guestSessions));
+    application.use('/public', publicRoutes);
   }
   options.configureRoutes?.(application);
 

@@ -1,7 +1,7 @@
 import { type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { verifyPassword } from './password.js';
-import { createSessionToken, hashSessionToken } from './session-token.js';
+import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
 
 const sessionDurationMs = 8 * 60 * 60 * 1000;
 
@@ -48,13 +48,13 @@ export class StaffAuthService {
       throw new UnauthorizedError();
     }
 
-    const token = createSessionToken();
+    const token = createOpaqueToken();
     const expiresAt = new Date(Date.now() + sessionDurationMs);
     await this.database.staffSession.create({
       data: {
         hospitalId: hospital.id,
         membershipId: membership.id,
-        tokenHash: hashSessionToken(token),
+        tokenHash: hashOpaqueToken(token),
         expiresAt,
       },
     });
@@ -66,7 +66,7 @@ export class StaffAuthService {
     // Credential resolution is the single pre-tenant lookup. The session's
     // composite FK establishes trusted hospital/membership context afterward.
     const session = await this.database.staffSession.findUnique({
-      where: { tokenHash: hashSessionToken(token) },
+      where: { tokenHash: hashOpaqueToken(token) },
       include: {
         hospital: true,
         membership: {

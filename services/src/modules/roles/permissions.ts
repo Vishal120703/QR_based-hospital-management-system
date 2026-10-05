@@ -1,3 +1,5 @@
+// Adding a key requires a migration that inserts its Permission row and grants
+// it to existing roles where appropriate; bootstrap only covers new hospitals.
 export const permissionCatalog = [
   ['hospital.read', 'Read hospital details and settings'],
   ['hospital.manage', 'Manage hospital details and settings'],
@@ -10,6 +12,7 @@ export const permissionCatalog = [
   ['qr.generate', 'Generate care location QR codes'],
   ['qr.rotate', 'Rotate care location QR codes'],
   ['qr.revoke', 'Revoke care location QR codes'],
+  ['bedSession.manage', 'Start and close bed sessions'],
   ['staff.read', 'Read staff records'],
   ['staff.manage', 'Manage staff memberships and assignments'],
   ['service.read', 'Read the service catalog'],

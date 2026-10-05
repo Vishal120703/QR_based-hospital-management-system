@@ -38,3 +38,9 @@ export class ConflictError extends AppError {
     super(409, 'CONFLICT', message);
   }
 }
+
+export class TooManyRequestsError extends AppError {
+  public constructor() {
+    super(429, 'RATE_LIMITED', 'Too many requests. Please wait and try again.');
+  }
+}

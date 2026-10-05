@@ -17,6 +17,8 @@ async function main(): Promise<void> {
   const application = createApp({
     logger,
     database: prisma,
+    publicAppUrl: config.publicAppUrl,
+    guestSessionTtlMinutes: config.guestSessionTtlMinutes,
     readinessProbes: [
       {
         name: 'postgresql',

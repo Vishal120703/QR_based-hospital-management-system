@@ -19,6 +19,9 @@ const environmentSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: connectionUrl(['postgresql:', 'postgres:']),
   REDIS_URL: connectionUrl(['redis:', 'rediss:']),
+  // Base URL of the frontend; printed QR codes link to <PUBLIC_APP_URL>/q/<token>.
+  PUBLIC_APP_URL: connectionUrl(['http:', 'https:']).default('http://localhost:5173'),
+  GUEST_SESSION_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(120),
 });
 
 export interface AppConfig {
@@ -28,6 +31,8 @@ export interface AppConfig {
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   readonly databaseUrl: string;
   readonly redisUrl: string;
+  readonly publicAppUrl: string;
+  readonly guestSessionTtlMinutes: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -40,5 +45,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     logLevel: parsed.LOG_LEVEL,
     databaseUrl: parsed.DATABASE_URL,
     redisUrl: parsed.REDIS_URL,
+    publicAppUrl: parsed.PUBLIC_APP_URL.replace(/\/+$/, ''),
+    guestSessionTtlMinutes: parsed.GUEST_SESSION_TTL_MINUTES,
   };
 }

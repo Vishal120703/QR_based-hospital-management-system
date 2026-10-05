@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hashPassword, verifyPassword } from '../../src/modules/auth/password.js';
-import { createSessionToken, hashSessionToken } from '../../src/modules/auth/session-token.js';
+import { createOpaqueToken, hashOpaqueToken } from '../../src/common/opaque-token.js';
 
 describe('staff credentials', () => {
   it('hashes passwords with a random salt and verifies the correct password', async () => {
@@ -13,12 +13,12 @@ describe('staff credentials', () => {
   });
 
   it('generates unique opaque session tokens and hashes only the stored form', () => {
-    const first = createSessionToken();
-    const second = createSessionToken();
+    const first = createOpaqueToken();
+    const second = createOpaqueToken();
 
     expect(first).toHaveLength(43);
     expect(first).not.toBe(second);
-    expect(hashSessionToken(first)).toMatch(/^[0-9a-f]{64}$/);
-    expect(hashSessionToken(first)).not.toBe(first);
+    expect(hashOpaqueToken(first)).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashOpaqueToken(first)).not.toBe(first);
   });
 });

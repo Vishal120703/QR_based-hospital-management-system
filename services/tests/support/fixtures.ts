@@ -83,3 +83,23 @@ export async function createStaffToken(
   });
   return login(application, hospital.code, user.email);
 }
+
+// Creates Floor -> Ward -> Bed directly in the database (no audit entries).
+export async function createBedFixture(
+  database: PrismaClient,
+  hospital: HospitalFixture,
+  bedCode = '101',
+): Promise<{ bedId: string; wardId: string }> {
+  const { hospitalId } = hospital;
+  const suffix = randomUUID().slice(0, 8).toUpperCase();
+  const floor = await database.floor.create({
+    data: { hospitalId, code: `F-${suffix}`, name: `Floor ${suffix}` },
+  });
+  const ward = await database.ward.create({
+    data: { hospitalId, floorId: floor.id, code: 'GEN', name: 'General Ward' },
+  });
+  const bed = await database.bed.create({
+    data: { hospitalId, wardId: ward.id, code: bedCode, displayName: `Bed ${bedCode}` },
+  });
+  return { bedId: bed.id, wardId: ward.id };
+}

@@ -73,6 +73,21 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
     });
     return;
   }
+  // Postgres reports ON DELETE RESTRICT violations as SQLSTATE 23001, which
+  // Prisma does not map to a known error code. Treat it like P2003.
+  if (
+    error instanceof Prisma.PrismaClientUnknownRequestError &&
+    error.message.includes('code: "23001"')
+  ) {
+    response.status(409).json({
+      error: {
+        code: 'CONFLICT',
+        message: 'The change conflicts with related records.',
+        requestId,
+      },
+    });
+    return;
+  }
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
     response.status(409).json({
       error: {
