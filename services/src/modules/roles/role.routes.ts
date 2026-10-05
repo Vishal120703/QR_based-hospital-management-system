@@ -83,5 +83,27 @@ export function createRoleRouter(roles: RoleService): Router {
     },
   );
 
+  router.delete(
+    '/memberships/:id/roles/:roleId',
+    requirePermission('staff.manage'),
+    requirePermission('role.manage'),
+    async (request, response) => {
+      const context = request.staff;
+      if (!context) throw new UnauthorizedError();
+      const { id, roleId } = z
+        .object({ id: z.string().uuid(), roleId: z.string().uuid() })
+        .strict()
+        .parse(request.params);
+      emptyBodySchema.parse(request.body ?? {});
+      await roles.unassignFromMembership(
+        context,
+        id,
+        roleId,
+        String(response.getHeader('x-request-id')),
+      );
+      response.status(204).send();
+    },
+  );
+
   return router;
 }

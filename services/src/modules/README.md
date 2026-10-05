@@ -11,7 +11,7 @@ CARE QR uses a modular monolith. A module is created only when its planned phase
 
 Planned domain modules are `auth`, `tenancy`, `users`, `roles`, `hospitals`, `locations`, `qr`, `bed-sessions`, `departments`, `staff`, `services`, `routing`, `requests`, `assignments`, `sla`, `notifications`, `feedback`, `audit`, and `analytics`.
 
-`locations` owns the whole Building → Floor → Ward → Room → Bed hierarchy, including beds, because its invariants span levels (see [`docs/architecture/location-hierarchy.md`](../../docs/architecture/location-hierarchy.md)). `qr` owns QR codes and their public resolution. `bed-sessions` owns BedSessions and the GuestSessions created from them (see [`docs/architecture/qr-and-sessions.md`](../../docs/architecture/qr-and-sessions.md)). `audit` currently provides `recordStaffAudit`, which must run inside the transaction of the change it records.
+`locations` owns the whole Building → Floor → Ward → Room → Bed hierarchy, including beds, because its invariants span levels (see [`docs/architecture/location-hierarchy.md`](../../docs/architecture/location-hierarchy.md)). `departments` owns departments. `staff` owns staff memberships after bootstrap (creation, status, duty), their departments, coverage, and shifts, and the eligibility rule `findEligibleStaff` (see [`docs/architecture/staff-and-departments.md`](../../docs/architecture/staff-and-departments.md)). `qr` owns QR codes and their public resolution. `bed-sessions` owns BedSessions and the GuestSessions created from them (see [`docs/architecture/qr-and-sessions.md`](../../docs/architecture/qr-and-sessions.md)). `audit` currently provides `recordStaffAudit`, which must run inside the transaction of the change it records.
 
 Rules:
 

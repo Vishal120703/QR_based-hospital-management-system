@@ -1,4 +1,4 @@
-import { type PrismaClient } from '@prisma/client';
+import { type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { verifyPassword } from './password.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
@@ -136,4 +136,17 @@ export class StaffAuthService {
       data: { revokedAt: new Date() },
     });
   }
+}
+
+// Ends every open session of a staff member, inside the caller's transaction.
+export async function revokeStaffSessions(
+  transaction: Prisma.TransactionClient,
+  hospitalId: string,
+  membershipId: string,
+): Promise<number> {
+  const revoked = await transaction.staffSession.updateMany({
+    where: { hospitalId, membershipId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  return revoked.count;
 }

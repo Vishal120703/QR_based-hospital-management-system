@@ -240,6 +240,54 @@ export class RoleService {
     );
   }
 
+  public async unassignFromMembership(
+    context: StaffContext,
+    membershipId: string,
+    roleId: string,
+    requestId: string,
+  ): Promise<void> {
+    if (membershipId === context.membershipId) {
+      throw new ConflictError('You cannot remove your own roles.');
+    }
+    const hospitalId = context.tenant.hospitalId;
+    await this.database.$transaction(
+      async (transaction) => {
+        const userRole = await transaction.userRole.findUnique({
+          where: { hospitalId_membershipId_roleId: { hospitalId, membershipId, roleId } },
+          include: { role: { include: { rolePermissions: { select: { permissionKey: true } } } } },
+        });
+        if (!userRole) {
+          throw new NotFoundError();
+        }
+        // Symmetric with assignment: nobody can remove a role more privileged than their own.
+        if (
+          userRole.role.rolePermissions.some((item) => !context.permissions.has(item.permissionKey))
+        ) {
+          throw new ForbiddenError();
+        }
+        await transaction.scopeAssignment.deleteMany({
+          where: { hospitalId, userRoleId: userRole.id },
+        });
+        await transaction.userRole.delete({
+          where: { hospitalId_id: { hospitalId, id: userRole.id } },
+        });
+        await transaction.auditLog.create({
+          data: {
+            hospitalId,
+            actorType: 'STAFF',
+            actorMembershipId: context.membershipId,
+            action: 'role.unassign',
+            targetType: 'HospitalMembership',
+            targetId: membershipId,
+            metadata: { roleId },
+            requestId,
+          },
+        });
+      },
+      { isolationLevel: 'Serializable' },
+    );
+  }
+
   private async validatePermissionGrant(
     context: StaffContext,
     permissionKeys: readonly string[],

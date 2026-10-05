@@ -3,10 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AdminLayout } from './pages/AdminLayout';
 import { BedsPage } from './pages/BedsPage';
+import { DepartmentsPage } from './pages/DepartmentsPage';
+import { EligibilityPage } from './pages/EligibilityPage';
 import { LocationsPage } from './pages/LocationsPage';
 import { LoginPage } from './pages/LoginPage';
 import { PatientPage } from './pages/PatientPage';
 import { ScanPage } from './pages/ScanPage';
+import { StaffPage } from './pages/StaffPage';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -24,6 +27,9 @@ createRoot(root).render(
           <Route index element={<Navigate to="beds" replace />} />
           <Route path="beds" element={<BedsPage />} />
           <Route path="locations" element={<LocationsPage />} />
+          <Route path="departments" element={<DepartmentsPage />} />
+          <Route path="staff" element={<StaffPage />} />
+          <Route path="eligibility" element={<EligibilityPage />} />
         </Route>
         {/* Patient flow: a printed QR code opens /q/<token>. */}
         <Route path="/q/:token" element={<ScanPage />} />

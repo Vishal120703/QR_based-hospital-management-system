@@ -1,6 +1,7 @@
 import { type PrismaClient } from '@prisma/client';
 import { ConflictError } from '../../common/errors/app-error.js';
 import { hashPassword } from '../auth/password.js';
+import { exampleDepartments } from '../departments/department.service.js';
 import { permissionCatalog } from '../roles/permissions.js';
 
 export interface BootstrapHospitalInput {
@@ -74,6 +75,9 @@ export async function bootstrapHospital(
         scopeType: 'HOSPITAL',
         scopeId: hospital.id,
       },
+    });
+    await transaction.department.createMany({
+      data: exampleDepartments.map(([code, name]) => ({ hospitalId: hospital.id, code, name })),
     });
     await transaction.auditLog.create({
       data: {

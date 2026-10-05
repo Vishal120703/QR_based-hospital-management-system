@@ -13,6 +13,11 @@ src/
     ├── AdminLayout.tsx    Staff shell; validates the session once
     ├── LocationsPage.tsx  Building → Floor → Ward → Room → Bed setup
     ├── BedsPage.tsx       Bed sessions and QR codes (generate, rotate, revoke, print)
+    ├── DepartmentsPage.tsx
+    ├── StaffPage.tsx      Staff list, duty toggle, and adding staff
+    ├── StaffDialog.tsx    Status, departments, coverage, roles, and shifts of one person
+    ├── staff-directory.ts Data and labels shared by the staff screens
+    ├── EligibilityPage.tsx  "Who can respond?" for a bed and department
     ├── ScanPage.tsx       /q/<token>: exchanges a QR token for a guest session
     └── PatientPage.tsx    What a patient sees after scanning
 ```

@@ -23,6 +23,11 @@ import {
 } from './modules/bed-sessions/bed-session.routes.js';
 import { QrCodeService } from './modules/qr/qr.service.js';
 import { createQrAdminRouter, createQrPublicRouter } from './modules/qr/qr.routes.js';
+import { DepartmentService } from './modules/departments/department.service.js';
+import { createDepartmentRouter } from './modules/departments/department.routes.js';
+import { StaffService } from './modules/staff/staff.service.js';
+import { ShiftService } from './modules/staff/shift.service.js';
+import { createStaffRouter } from './modules/staff/staff.routes.js';
 import { type RateLimitOptions } from './middleware/rate-limit.js';
 import { z } from 'zod';
 
@@ -78,6 +83,8 @@ export function createApp(options: CreateAppOptions): Express {
     admin.use(createLocationRouter(new LocationService(database)));
     admin.use(createBedSessionRouter(new BedSessionService(database, guestSessions)));
     admin.use(createQrAdminRouter(qrCodes));
+    admin.use(createDepartmentRouter(new DepartmentService(database)));
+    admin.use(createStaffRouter(new StaffService(database), new ShiftService(database)));
     application.use('/admin', admin);
 
     // Patient/attendant routes. Guest authentication is applied per route.

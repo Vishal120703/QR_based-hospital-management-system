@@ -28,6 +28,7 @@ export interface FieldSpec {
   options?: { value: string; label: string }[];
   optional?: boolean;
   placeholder?: string;
+  type?: 'text' | 'email' | 'password';
 }
 
 // A small create form. `fields` receives the current values so one select can
@@ -82,6 +83,7 @@ export function CreateForm({
             </select>
           ) : (
             <input
+              type={field.type ?? 'text'}
               value={values[field.name] ?? ''}
               required={!field.optional}
               placeholder={field.placeholder}

@@ -52,6 +52,11 @@ enum BedSessionStatus {
   CLOSED
 }
 
+enum DutyStatus {
+  ON_DUTY
+  OFF_DUTY
+}
+
 model Hospital {
   id            String               @id @default(uuid()) @db.Uuid
   name          String
@@ -70,6 +75,7 @@ model Hospital {
   qrCodes       BedQrCode[]
   bedSessions   BedSession[]
   guestSessions GuestSession[]
+  departments   Department[]
 }
 
 model HospitalSetting {
@@ -98,16 +104,22 @@ model User {
 }
 
 model HospitalMembership {
-  id         String           @id @default(uuid()) @db.Uuid
-  hospitalId String           @db.Uuid
-  userId     String           @db.Uuid
-  status     MembershipStatus @default(ACTIVE)
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-  hospital   Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
-  user       User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  userRoles  UserRole[]
-  sessions   StaffSession[]
+  id             String               @id @default(uuid()) @db.Uuid
+  hospitalId     String               @db.Uuid
+  userId         String               @db.Uuid
+  status         MembershipStatus     @default(ACTIVE)
+  // Operational availability for routing; independent of authorization.
+  dutyStatus     DutyStatus           @default(OFF_DUTY)
+  dutyChangedAt  DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  hospital       Hospital             @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  userRoles      UserRole[]
+  sessions       StaffSession[]
+  departments    StaffDepartment[]
+  locationScopes StaffLocationScope[]
+  shifts         Shift[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, userId])
@@ -228,17 +240,18 @@ model Building {
 }
 
 model Floor {
-  id         String    @id @default(uuid()) @db.Uuid
-  hospitalId String    @db.Uuid
-  buildingId String?   @db.Uuid
-  code       String
-  name       String
-  active     Boolean   @default(true)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  hospital   Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
-  building   Building? @relation(fields: [hospitalId, buildingId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
-  wards      Ward[]
+  id          String               @id @default(uuid()) @db.Uuid
+  hospitalId  String               @db.Uuid
+  buildingId  String?              @db.Uuid
+  code        String
+  name        String
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  hospital    Hospital             @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  building    Building?            @relation(fields: [hospitalId, buildingId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  wards       Ward[]
+  staffScopes StaffLocationScope[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, code])
@@ -246,17 +259,18 @@ model Floor {
 }
 
 model Ward {
-  id         String   @id @default(uuid()) @db.Uuid
-  hospitalId String   @db.Uuid
-  floorId    String   @db.Uuid
-  code       String
-  name       String
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  floor      Floor    @relation(fields: [hospitalId, floorId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
-  rooms      Room[]
-  beds       Bed[]
+  id          String               @id @default(uuid()) @db.Uuid
+  hospitalId  String               @db.Uuid
+  floorId     String               @db.Uuid
+  code        String
+  name        String
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  floor       Floor                @relation(fields: [hospitalId, floorId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  rooms       Room[]
+  beds        Bed[]
+  staffScopes StaffLocationScope[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, floorId, code])
@@ -365,4 +379,77 @@ model GuestSession {
   @@index([hospitalId, bedSessionId])
   @@index([hospitalId, bedId])
   @@index([expiresAt])
+}
+
+// Organizational unit that serves requests (Nursing, Housekeeping, ...).
+// Departments are per-hospital data; new hospitals get editable examples.
+model Department {
+  id         String            @id @default(uuid()) @db.Uuid
+  hospitalId String            @db.Uuid
+  code       String
+  name       String
+  active     Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  hospital   Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  staff      StaffDepartment[]
+  shifts     Shift[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, code])
+}
+
+model StaffDepartment {
+  id           String             @id @default(uuid()) @db.Uuid
+  hospitalId   String             @db.Uuid
+  membershipId String             @db.Uuid
+  departmentId String             @db.Uuid
+  createdAt    DateTime           @default(now())
+  membership   HospitalMembership @relation(fields: [hospitalId, membershipId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  department   Department         @relation(fields: [hospitalId, departmentId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, membershipId, departmentId])
+  @@index([hospitalId, departmentId])
+}
+
+// Where a staff member works and can receive requests. This is operational
+// coverage, separate from the authorization ScopeAssignment on a role.
+// HOSPITAL covers every location; FLOOR and WARD reference a real location.
+// Shape and HOSPITAL-uniqueness are enforced by CHECK and partial unique
+// constraints in the migration SQL.
+model StaffLocationScope {
+  id           String             @id @default(uuid()) @db.Uuid
+  hospitalId   String             @db.Uuid
+  membershipId String             @db.Uuid
+  scopeType    ScopeType
+  floorId      String?            @db.Uuid
+  wardId       String?            @db.Uuid
+  createdAt    DateTime           @default(now())
+  membership   HospitalMembership @relation(fields: [hospitalId, membershipId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  floor        Floor?             @relation(fields: [hospitalId, floorId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  ward         Ward?              @relation(fields: [hospitalId, wardId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, membershipId, floorId])
+  @@unique([hospitalId, membershipId, wardId])
+  @@index([hospitalId, floorId])
+  @@index([hospitalId, wardId])
+}
+
+// A scheduled work period. Informational in V1: routing uses dutyStatus.
+model Shift {
+  id                    String             @id @default(uuid()) @db.Uuid
+  hospitalId            String             @db.Uuid
+  membershipId          String             @db.Uuid
+  departmentId          String?            @db.Uuid
+  startsAt              DateTime
+  endsAt                DateTime
+  createdByMembershipId String             @db.Uuid
+  createdAt             DateTime           @default(now())
+  membership            HospitalMembership @relation(fields: [hospitalId, membershipId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  department            Department?        @relation(fields: [hospitalId, departmentId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, id])
+  @@index([hospitalId, membershipId, startsAt])
+  @@index([hospitalId, startsAt])
 }

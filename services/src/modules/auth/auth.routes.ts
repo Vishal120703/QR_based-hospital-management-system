@@ -35,6 +35,7 @@ export function createAuthRouter(auth: StaffAuthService): Router {
     }
     response.status(200).json({
       user: context.user,
+      membershipId: context.membershipId,
       tenant: context.tenant,
       permissions: [...context.permissions].sort(),
       scopes: context.scopes,

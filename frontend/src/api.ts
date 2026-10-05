@@ -72,6 +72,7 @@ export const credentials = {
 
 export interface Me {
   user: { id: string; email: string; displayName: string };
+  membershipId: string;
   tenant: { hospitalId: string; code: string; name: string };
   permissions: string[];
 }
@@ -128,7 +129,71 @@ export interface GuestLocation {
   expiresAt: string;
 }
 
+export interface Department {
+  id: string;
+  code: string;
+  name: string;
+  active: boolean;
+}
+export type MembershipStatus = 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
+export type DutyStatus = 'ON_DUTY' | 'OFF_DUTY';
+export interface Coverage {
+  id: string;
+  scopeType: 'HOSPITAL' | 'FLOOR' | 'WARD';
+  floorId: string | null;
+  wardId: string | null;
+}
+export type CoverageInput =
+  | { scopeType: 'HOSPITAL' }
+  | { scopeType: 'FLOOR'; floorId: string }
+  | { scopeType: 'WARD'; wardId: string };
+export interface StaffMember {
+  id: string;
+  email: string;
+  displayName: string;
+  status: MembershipStatus;
+  dutyStatus: DutyStatus;
+  dutyChangedAt: string | null;
+  departmentIds: string[];
+  coverage: Coverage[];
+  roleIds: string[];
+}
+export interface Role {
+  id: string;
+  name: string;
+  active: boolean;
+}
+export interface Shift {
+  id: string;
+  membershipId: string;
+  departmentId: string | null;
+  startsAt: string;
+  endsAt: string;
+}
+export interface EligibleStaff {
+  membershipId: string;
+  displayName: string;
+  dutyChangedAt: string | null;
+}
+
+// Each list endpoint returns { <key>: [...] }.
+const listKeys = {
+  buildings: 'buildings',
+  floors: 'floors',
+  wards: 'wards',
+  rooms: 'rooms',
+  beds: 'beds',
+  'qr-codes': 'qrCodes',
+  'bed-sessions': 'bedSessions',
+  departments: 'departments',
+  staff: 'staff',
+  shifts: 'shifts',
+  roles: 'roles',
+} as const;
+type ListKind = keyof typeof listKeys;
+
 export type LocationKind = 'buildings' | 'floors' | 'wards' | 'rooms' | 'beds';
+type StaffResponse = { staff: StaffMember };
 
 export const staffApi = {
   login: (input: { hospitalCode: string; email: string; password: string }) =>
@@ -136,13 +201,46 @@ export const staffApi = {
   me: (token: string) => call<Me>('GET', '/auth/staff/me', token),
   logout: (token: string) => call<null>('POST', '/auth/staff/logout', token),
 
-  async list<T>(token: string, kind: LocationKind | 'qr-codes' | 'bed-sessions', query = '') {
-    const key = kind === 'qr-codes' ? 'qrCodes' : kind === 'bed-sessions' ? 'bedSessions' : kind;
+  async list<T>(token: string, kind: ListKind, query = '') {
     const body = await call<Record<string, T[]>>('GET', `/admin/${kind}${query}`, token);
-    return body[key] ?? [];
+    return body[listKeys[kind]] ?? [];
   },
-  create: (token: string, kind: LocationKind, input: object) =>
+  create: (token: string, kind: LocationKind | 'departments', input: object) =>
     call<unknown>('POST', `/admin/${kind}`, token, input),
+  updateDepartment: (token: string, id: string, input: Partial<Department>) =>
+    call<{ department: Department }>('PATCH', `/admin/departments/${id}`, token, input),
+
+  createStaff: (token: string, input: { email: string; displayName: string; password: string }) =>
+    call<StaffResponse>('POST', '/admin/staff', token, input),
+  setStaffStatus: (token: string, id: string, status: MembershipStatus) =>
+    call<StaffResponse>('POST', `/admin/staff/${id}/status`, token, { status }),
+  setDuty: (token: string, id: string, dutyStatus: DutyStatus) =>
+    call<StaffResponse>('POST', `/admin/staff/${id}/duty`, token, { dutyStatus }),
+  addDepartment: (token: string, id: string, departmentId: string) =>
+    call<StaffResponse>('POST', `/admin/staff/${id}/departments`, token, { departmentId }),
+  removeDepartment: (token: string, id: string, departmentId: string) =>
+    call<StaffResponse>('DELETE', `/admin/staff/${id}/departments/${departmentId}`, token),
+  addCoverage: (token: string, id: string, input: CoverageInput) =>
+    call<StaffResponse>('POST', `/admin/staff/${id}/coverage`, token, input),
+  removeCoverage: (token: string, id: string, coverageId: string) =>
+    call<StaffResponse>('DELETE', `/admin/staff/${id}/coverage/${coverageId}`, token),
+  assignRole: (token: string, id: string, roleId: string) =>
+    call<unknown>('POST', `/admin/memberships/${id}/roles`, token, { roleId }),
+  removeRole: (token: string, id: string, roleId: string) =>
+    call<null>('DELETE', `/admin/memberships/${id}/roles/${roleId}`, token),
+  createShift: (
+    token: string,
+    input: { membershipId: string; departmentId?: string; startsAt: string; endsAt: string },
+  ) => call<{ shift: Shift }>('POST', '/admin/shifts', token, input),
+  deleteShift: (token: string, id: string) => call<null>('DELETE', `/admin/shifts/${id}`, token),
+  eligible: async (token: string, bedId: string, departmentId: string) =>
+    (
+      await call<{ staff: EligibleStaff[] }>(
+        'GET',
+        `/admin/staff/eligible?bedId=${bedId}&departmentId=${departmentId}`,
+        token,
+      )
+    ).staff,
 
   generateQr: (token: string, bedId: string) =>
     call<QrIssue>('POST', `/admin/beds/${bedId}/qr`, token, {}),

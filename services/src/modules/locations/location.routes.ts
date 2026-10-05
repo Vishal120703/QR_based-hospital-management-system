@@ -1,31 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { getRequestId } from '../../middleware/request-id.js';
-import { getStaffContext, requirePermission } from '../../middleware/staff-auth.js';
-import { type StaffContext } from '../auth/auth.service.js';
-import { type PermissionKey } from '../roles/permissions.js';
+import {
+  atLeastOneField,
+  booleanQuerySchema as activeQuerySchema,
+  codeSchema,
+  hasFields,
+  nameSchema,
+  uuidSchema,
+} from '../../common/validation.js';
+import { registerResource } from '../../routes/resource-router.js';
 import { type LocationService } from './location.service.js';
-
-const uuidSchema = z.string().uuid();
-const idParamsSchema = z.object({ id: uuidSchema }).strict();
-const emptyQuerySchema = z.object({}).strict();
-const emptyBodySchema = z.object({}).strict();
-
-// Codes are case-insensitive identifiers printed on signage, stored uppercase.
-const codeSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(32)
-  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/)
-  .transform((value) => value.toUpperCase());
-const nameSchema = z.string().trim().min(1).max(120);
-const activeQuerySchema = z
-  .enum(['true', 'false'])
-  .transform((value) => value === 'true')
-  .optional();
-const hasFields = (value: object) => Object.keys(value).length > 0;
-const atLeastOneField = { message: 'At least one field is required.' };
 
 const locationUpdateSchema = z
   .object({
@@ -35,64 +19,6 @@ const locationUpdateSchema = z
   })
   .strict()
   .refine(hasFields, atLeastOneField);
-
-interface ResourceDefinition<Filter, Create, Update> {
-  readonly path: string;
-  readonly singular: string;
-  readonly plural: string;
-  readonly readPermission: PermissionKey;
-  readonly managePermission: PermissionKey;
-  readonly filterSchema: z.ZodType<Filter, z.ZodTypeDef, unknown>;
-  readonly createSchema: z.ZodType<Create, z.ZodTypeDef, unknown>;
-  readonly updateSchema: z.ZodType<Update, z.ZodTypeDef, unknown>;
-  list(context: StaffContext, filter: Filter): Promise<unknown>;
-  get(context: StaffContext, id: string): Promise<unknown>;
-  create(context: StaffContext, input: Create, requestId: string): Promise<unknown>;
-  update(context: StaffContext, id: string, input: Update, requestId: string): Promise<unknown>;
-  remove(context: StaffContext, id: string, requestId: string): Promise<void>;
-}
-
-function registerResource<Filter, Create, Update>(
-  router: Router,
-  resource: ResourceDefinition<Filter, Create, Update>,
-): void {
-  const itemPath = `${resource.path}/:id`;
-  const canRead = requirePermission(resource.readPermission);
-  const canManage = requirePermission(resource.managePermission);
-
-  router.get(resource.path, canRead, async (request, response) => {
-    const filter = resource.filterSchema.parse(request.query);
-    const items = await resource.list(getStaffContext(request), filter);
-    response.status(200).json({ [resource.plural]: items });
-  });
-
-  router.get(itemPath, canRead, async (request, response) => {
-    const { id } = idParamsSchema.parse(request.params);
-    emptyQuerySchema.parse(request.query);
-    const item = await resource.get(getStaffContext(request), id);
-    response.status(200).json({ [resource.singular]: item });
-  });
-
-  router.post(resource.path, canManage, async (request, response) => {
-    const input = resource.createSchema.parse(request.body);
-    const item = await resource.create(getStaffContext(request), input, getRequestId(response));
-    response.status(201).json({ [resource.singular]: item });
-  });
-
-  router.patch(itemPath, canManage, async (request, response) => {
-    const { id } = idParamsSchema.parse(request.params);
-    const input = resource.updateSchema.parse(request.body);
-    const item = await resource.update(getStaffContext(request), id, input, getRequestId(response));
-    response.status(200).json({ [resource.singular]: item });
-  });
-
-  router.delete(itemPath, canManage, async (request, response) => {
-    const { id } = idParamsSchema.parse(request.params);
-    emptyBodySchema.parse(request.body ?? {});
-    await resource.remove(getStaffContext(request), id, getRequestId(response));
-    response.status(204).send();
-  });
-}
 
 export function createLocationRouter(locations: LocationService): Router {
   const router = Router();
