@@ -176,6 +176,62 @@ export interface EligibleStaff {
   dutyChangedAt: string | null;
 }
 
+export type Priority = 'NORMAL' | 'HIGH' | 'URGENT';
+export interface ServiceCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+  emergencyNotice: boolean;
+  active: boolean;
+}
+export interface ServiceItem {
+  id: string;
+  categoryId: string;
+  departmentId: string;
+  slaPolicyId: string;
+  escalationPolicyId: string | null;
+  name: string;
+  description: string | null;
+  priority: Priority;
+  sortOrder: number;
+  active: boolean;
+}
+export interface SlaPolicy {
+  id: string;
+  name: string;
+  currentVersion: number;
+  acceptMinutes: number;
+  completeMinutes: number;
+  versions: {
+    id: string;
+    version: number;
+    acceptMinutes: number;
+    completeMinutes: number;
+    createdAt: string;
+  }[];
+}
+export type EscalationLevelInput =
+  | { targetType: 'ASSIGNEE'; afterMinutes: number }
+  | { targetType: 'ROLE'; afterMinutes: number; roleId: string };
+export interface EscalationPolicy {
+  id: string;
+  name: string;
+  levels: {
+    level: number;
+    afterMinutes: number;
+    targetType: 'ASSIGNEE' | 'ROLE';
+    roleId: string | null;
+  }[];
+}
+export interface PublicCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  emergencyNotice: boolean;
+  services: { id: string; name: string; description: string | null }[];
+}
+
 // Each list endpoint returns { <key>: [...] }.
 const listKeys = {
   buildings: 'buildings',
@@ -189,6 +245,10 @@ const listKeys = {
   staff: 'staff',
   shifts: 'shifts',
   roles: 'roles',
+  'service-categories': 'serviceCategories',
+  services: 'services',
+  'sla-policies': 'slaPolicies',
+  'escalation-policies': 'escalationPolicies',
 } as const;
 type ListKind = keyof typeof listKeys;
 
@@ -209,6 +269,43 @@ export const staffApi = {
     call<unknown>('POST', `/admin/${kind}`, token, input),
   updateDepartment: (token: string, id: string, input: Partial<Department>) =>
     call<{ department: Department }>('PATCH', `/admin/departments/${id}`, token, input),
+
+  createCategory: (
+    token: string,
+    input: { name: string; emergencyNotice: boolean; sortOrder?: number },
+  ) => call<unknown>('POST', '/admin/service-categories', token, input),
+  updateCategory: (token: string, id: string, input: Partial<Omit<ServiceCategory, 'id'>>) =>
+    call<unknown>('PATCH', `/admin/service-categories/${id}`, token, input),
+  createService: (
+    token: string,
+    input: {
+      categoryId: string;
+      departmentId: string;
+      slaPolicyId: string;
+      escalationPolicyId?: string;
+      name: string;
+      priority: Priority;
+    },
+  ) => call<unknown>('POST', '/admin/services', token, input),
+  updateService: (token: string, id: string, input: Partial<Omit<ServiceItem, 'id'>>) =>
+    call<unknown>('PATCH', `/admin/services/${id}`, token, input),
+  createSlaPolicy: (
+    token: string,
+    input: { name: string; acceptMinutes: number; completeMinutes: number },
+  ) => call<unknown>('POST', '/admin/sla-policies', token, input),
+  updateSlaPolicy: (
+    token: string,
+    id: string,
+    input: { acceptMinutes: number; completeMinutes: number },
+  ) => call<{ slaPolicy: SlaPolicy }>('PATCH', `/admin/sla-policies/${id}`, token, input),
+  getSlaPolicy: async (token: string, id: string) =>
+    (await call<{ slaPolicy: SlaPolicy }>('GET', `/admin/sla-policies/${id}`, token)).slaPolicy,
+  createEscalationPolicy: (
+    token: string,
+    input: { name: string; levels: EscalationLevelInput[] },
+  ) => call<unknown>('POST', '/admin/escalation-policies', token, input),
+  deleteEscalationPolicy: (token: string, id: string) =>
+    call<null>('DELETE', `/admin/escalation-policies/${id}`, token),
 
   createStaff: (token: string, input: { email: string; displayName: string; password: string }) =>
     call<StaffResponse>('POST', '/admin/staff', token, input),
@@ -265,4 +362,7 @@ export const guestApi = {
     ),
   session: (guestToken: string) =>
     call<{ location: GuestLocation }>('GET', '/public/session', guestToken),
+  services: async (guestToken: string) =>
+    (await call<{ categories: PublicCategory[] }>('GET', '/public/services', guestToken))
+      .categories,
 };

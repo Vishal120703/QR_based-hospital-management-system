@@ -88,6 +88,17 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
     });
     return;
   }
+  // A CHECK constraint (SQLSTATE 23514) caught a value the API should have
+  // rejected; treat it as invalid input rather than a server error.
+  if (
+    error instanceof Prisma.PrismaClientUnknownRequestError &&
+    error.message.includes('code: "23514"')
+  ) {
+    response.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Invalid request input.', requestId },
+    });
+    return;
+  }
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
     response.status(409).json({
       error: {

@@ -141,6 +141,11 @@ button.link {
   text-decoration: underline;
 }
 
+button.link:hover:not(:disabled) {
+  background: none;
+  color: var(--primary-dark);
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -501,6 +506,81 @@ tr:last-child td {
 
 td .badge {
   margin-bottom: 0.2rem;
+}
+
+.catalog-forms {
+  margin-top: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.category-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-row .actions {
+  margin-top: 0;
+}
+
+input.minutes {
+  width: 5.5rem;
+}
+
+.save-version {
+  margin-left: 0.5rem;
+}
+
+tr.history td {
+  background: #f8fafb;
+}
+
+.escalation {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.6rem;
+}
+
+.escalation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.escalation ol {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.9rem;
+}
+
+.level-row {
+  margin-top: 0;
+}
+
+.section-title {
+  margin: 0.5rem 0 0.1rem;
+}
+
+.service-group .emergency {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.service-tile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 0.75rem;
+  text-align: center;
+  font-weight: 600;
+  background: #f8fbfa;
 }
 
 @media print {

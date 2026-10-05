@@ -1,6 +1,7 @@
 import { type PrismaClient } from '@prisma/client';
 import { ConflictError } from '../../common/errors/app-error.js';
 import { hashPassword } from '../auth/password.js';
+import { seedExampleCatalog } from '../catalog/examples.js';
 import { exampleDepartments } from '../departments/department.service.js';
 import { permissionCatalog } from '../roles/permissions.js';
 
@@ -76,9 +77,14 @@ export async function bootstrapHospital(
         scopeId: hospital.id,
       },
     });
-    await transaction.department.createMany({
+    const departments = await transaction.department.createManyAndReturn({
       data: exampleDepartments.map(([code, name]) => ({ hospitalId: hospital.id, code, name })),
     });
+    await seedExampleCatalog(
+      transaction,
+      hospital.id,
+      new Map(departments.map((department) => [department.code, department.id])),
+    );
     await transaction.auditLog.create({
       data: {
         hospitalId: hospital.id,

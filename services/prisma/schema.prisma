@@ -57,25 +57,40 @@ enum DutyStatus {
   OFF_DUTY
 }
 
+// URGENT means operationally urgent, never a medical emergency.
+enum RequestPriority {
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum EscalationTarget {
+  ASSIGNEE
+  ROLE
+}
+
 model Hospital {
-  id            String               @id @default(uuid()) @db.Uuid
-  name          String
-  code          String               @unique
-  timezone      String
-  status        HospitalStatus       @default(ACTIVE)
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  settings      HospitalSetting[]
-  memberships   HospitalMembership[]
-  roles         Role[]
-  auditLogs     AuditLog[]
-  sessions      StaffSession[]
-  buildings     Building[]
-  floors        Floor[]
-  qrCodes       BedQrCode[]
-  bedSessions   BedSession[]
-  guestSessions GuestSession[]
-  departments   Department[]
+  id                 String               @id @default(uuid()) @db.Uuid
+  name               String
+  code               String               @unique
+  timezone           String
+  status             HospitalStatus       @default(ACTIVE)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  settings           HospitalSetting[]
+  memberships        HospitalMembership[]
+  roles              Role[]
+  auditLogs          AuditLog[]
+  sessions           StaffSession[]
+  buildings          Building[]
+  floors             Floor[]
+  qrCodes            BedQrCode[]
+  bedSessions        BedSession[]
+  guestSessions      GuestSession[]
+  departments        Department[]
+  serviceCategories  ServiceCategory[]
+  slaPolicies        SlaPolicy[]
+  escalationPolicies EscalationPolicy[]
 }
 
 model HospitalSetting {
@@ -127,16 +142,17 @@ model HospitalMembership {
 }
 
 model Role {
-  id              String           @id @default(uuid()) @db.Uuid
-  hospitalId      String           @db.Uuid
-  name            String
-  description     String?
-  active          Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  hospital        Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
-  rolePermissions RolePermission[]
-  userRoles       UserRole[]
+  id               String            @id @default(uuid()) @db.Uuid
+  hospitalId       String            @db.Uuid
+  name             String
+  description      String?
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  hospital         Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  rolePermissions  RolePermission[]
+  userRoles        UserRole[]
+  escalationLevels EscalationLevel[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, name])
@@ -394,6 +410,7 @@ model Department {
   hospital   Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
   staff      StaffDepartment[]
   shifts     Shift[]
+  services   ServiceItem[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, code])
@@ -452,4 +469,119 @@ model Shift {
   @@unique([hospitalId, id])
   @@index([hospitalId, membershipId, startsAt])
   @@index([hospitalId, startsAt])
+}
+
+// A patient-facing group of services. emergencyNotice shows the "not for
+// emergencies" disclaimer next to the group (for example Nursing Help).
+model ServiceCategory {
+  id              String        @id @default(uuid()) @db.Uuid
+  hospitalId      String        @db.Uuid
+  name            String
+  description     String?
+  sortOrder       Int           @default(0)
+  emergencyNotice Boolean       @default(false)
+  active          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  hospital        Hospital      @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  items           ServiceItem[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, name])
+}
+
+// A service a patient can request. Department and SLA policy are required.
+// Requests snapshot this configuration, so later edits never change them.
+model ServiceItem {
+  id                 String            @id @default(uuid()) @db.Uuid
+  hospitalId         String            @db.Uuid
+  categoryId         String            @db.Uuid
+  departmentId       String            @db.Uuid
+  slaPolicyId        String            @db.Uuid
+  escalationPolicyId String?           @db.Uuid
+  name               String
+  description        String?
+  priority           RequestPriority   @default(NORMAL)
+  sortOrder          Int               @default(0)
+  active             Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  category           ServiceCategory   @relation(fields: [hospitalId, categoryId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  department         Department        @relation(fields: [hospitalId, departmentId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  slaPolicy          SlaPolicy         @relation(fields: [hospitalId, slaPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  escalationPolicy   EscalationPolicy? @relation(fields: [hospitalId, escalationPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, name])
+  @@index([hospitalId, categoryId])
+  @@index([hospitalId, departmentId])
+  @@index([hospitalId, slaPolicyId])
+  @@index([hospitalId, escalationPolicyId])
+}
+
+// Named SLA. Changing its timings creates a new immutable version; requests
+// keep the version they were created with.
+model SlaPolicy {
+  id             String             @id @default(uuid()) @db.Uuid
+  hospitalId     String             @db.Uuid
+  name           String
+  currentVersion Int                @default(1)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  hospital       Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  versions       SlaPolicyVersion[]
+  services       ServiceItem[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, name])
+}
+
+// Immutable: a database trigger rejects UPDATE. Both targets are measured
+// from submission, so completeMinutes >= acceptMinutes (CHECK constraint).
+model SlaPolicyVersion {
+  id                    String    @id @default(uuid()) @db.Uuid
+  hospitalId            String    @db.Uuid
+  slaPolicyId           String    @db.Uuid
+  version               Int
+  acceptMinutes         Int
+  completeMinutes       Int
+  createdByMembershipId String?   @db.Uuid
+  createdAt             DateTime  @default(now())
+  slaPolicy             SlaPolicy @relation(fields: [hospitalId, slaPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, slaPolicyId, version])
+}
+
+// Ordered steps taken after an SLA deadline is missed. Executed in the SLA
+// worker phase; configured here.
+model EscalationPolicy {
+  id         String            @id @default(uuid()) @db.Uuid
+  hospitalId String            @db.Uuid
+  name       String
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  hospital   Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  levels     EscalationLevel[]
+  services   ServiceItem[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, name])
+}
+
+// afterMinutes counts from the missed deadline. A ROLE target notifies holders
+// of that hospital role (for example a manager role); nothing is hardcoded.
+model EscalationLevel {
+  id                 String           @id @default(uuid()) @db.Uuid
+  hospitalId         String           @db.Uuid
+  escalationPolicyId String           @db.Uuid
+  level              Int
+  afterMinutes       Int
+  targetType         EscalationTarget
+  roleId             String?          @db.Uuid
+  policy             EscalationPolicy @relation(fields: [hospitalId, escalationPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  role               Role?            @relation(fields: [hospitalId, roleId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, escalationPolicyId, level])
+  @@index([hospitalId, roleId])
 }

@@ -9,6 +9,8 @@ import { LocationsPage } from './pages/LocationsPage';
 import { LoginPage } from './pages/LoginPage';
 import { PatientPage } from './pages/PatientPage';
 import { ScanPage } from './pages/ScanPage';
+import { ServicesPage } from './pages/ServicesPage';
+import { SlaPage } from './pages/SlaPage';
 import { StaffPage } from './pages/StaffPage';
 import './styles.css';
 
@@ -30,6 +32,8 @@ createRoot(root).render(
           <Route path="departments" element={<DepartmentsPage />} />
           <Route path="staff" element={<StaffPage />} />
           <Route path="eligibility" element={<EligibilityPage />} />
+          <Route path="services" element={<ServicesPage />} />
+          <Route path="sla" element={<SlaPage />} />
         </Route>
         {/* Patient flow: a printed QR code opens /q/<token>. */}
         <Route path="/q/:token" element={<ScanPage />} />

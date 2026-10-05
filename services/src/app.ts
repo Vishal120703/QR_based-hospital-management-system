@@ -28,6 +28,15 @@ import { createDepartmentRouter } from './modules/departments/department.routes.
 import { StaffService } from './modules/staff/staff.service.js';
 import { ShiftService } from './modules/staff/shift.service.js';
 import { createStaffRouter } from './modules/staff/staff.routes.js';
+import { CategoryService } from './modules/catalog/category.service.js';
+import { ServiceItemService } from './modules/catalog/service-item.service.js';
+import {
+  createCatalogRouter,
+  createPublicCatalogRouter,
+} from './modules/catalog/catalog.routes.js';
+import { SlaPolicyService } from './modules/sla/sla-policy.service.js';
+import { EscalationPolicyService } from './modules/sla/escalation-policy.service.js';
+import { createSlaRouter } from './modules/sla/sla.routes.js';
 import { type RateLimitOptions } from './middleware/rate-limit.js';
 import { z } from 'zod';
 
@@ -68,6 +77,7 @@ export function createApp(options: CreateAppOptions): Express {
     const database = options.database;
     const auth = new StaffAuthService(database);
     const guestSessions = new GuestSessionService(database, options.guestSessionTtlMinutes ?? 120);
+    const serviceItems = new ServiceItemService(database);
     const qrCodes = new QrCodeService(
       database,
       guestSessions,
@@ -85,6 +95,10 @@ export function createApp(options: CreateAppOptions): Express {
     admin.use(createQrAdminRouter(qrCodes));
     admin.use(createDepartmentRouter(new DepartmentService(database)));
     admin.use(createStaffRouter(new StaffService(database), new ShiftService(database)));
+    admin.use(createCatalogRouter(new CategoryService(database), serviceItems));
+    admin.use(
+      createSlaRouter(new SlaPolicyService(database), new EscalationPolicyService(database)),
+    );
     application.use('/admin', admin);
 
     // Patient/attendant routes. Guest authentication is applied per route.
@@ -93,6 +107,7 @@ export function createApp(options: CreateAppOptions): Express {
       createQrPublicRouter(qrCodes, options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 }),
     );
     publicRoutes.use(createGuestSessionRouter(guestSessions));
+    publicRoutes.use(createPublicCatalogRouter(serviceItems, guestSessions));
     application.use('/public', publicRoutes);
   }
   options.configureRoutes?.(application);

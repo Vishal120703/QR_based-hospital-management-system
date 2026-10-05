@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ApiError, credentials, guestApi, type GuestLocation } from '../api';
+import { ApiError, credentials, guestApi, type GuestLocation, type PublicCategory } from '../api';
 import { EmergencyNotice } from '../components';
 
 type State =
   | { kind: 'loading' }
-  | { kind: 'ready'; location: GuestLocation }
+  | { kind: 'ready'; location: GuestLocation; categories: PublicCategory[] }
   | { kind: 'ended'; message: string };
 
 const scanAgain = 'Please scan the QR code on your bed to continue.';
@@ -18,9 +18,9 @@ export function PatientPage() {
   useEffect(() => {
     if (!guestToken) return;
     let cancelled = false;
-    guestApi.session(guestToken).then(
-      ({ location }) => {
-        if (!cancelled) setState({ kind: 'ready', location });
+    Promise.all([guestApi.session(guestToken), guestApi.services(guestToken)]).then(
+      ([{ location }, categories]) => {
+        if (!cancelled) setState({ kind: 'ready', location, categories });
       },
       (cause: unknown) => {
         if (cancelled) return;
@@ -63,13 +63,26 @@ export function PatientPage() {
                 .join(' · ')}
             </p>
           </section>
-          <section className="card">
-            <h2>Request help</h2>
-            <p className="muted">
-              Requesting water, cleaning, nurse assistance, and other services will be available
-              here soon.
+          <section>
+            <h2 className="section-title">How can we help?</h2>
+            <p className="muted small">
+              Sending a request from this page opens in the next update.
             </p>
           </section>
+          {state.categories.map((category) => (
+            <section key={category.id} className="card service-group">
+              <h2>{category.name}</h2>
+              {category.description && <p className="muted small">{category.description}</p>}
+              {category.emergencyNotice && <EmergencyNotice />}
+              <div className="service-grid">
+                {category.services.map((service) => (
+                  <div key={service.id} className="service-tile">
+                    {service.name}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
           <p className="small muted">
             This page stays connected until{' '}
             {new Date(state.location.expiresAt).toLocaleTimeString([], {

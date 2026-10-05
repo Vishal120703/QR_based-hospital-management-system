@@ -17,6 +17,8 @@ src/
     ├── StaffPage.tsx      Staff list, duty toggle, and adding staff
     ├── StaffDialog.tsx    Status, departments, coverage, roles, and shifts of one person
     ├── staff-directory.ts Data and labels shared by the staff screens
+    ├── ServicesPage.tsx   Service catalog and categories
+    ├── SlaPage.tsx        SLA policies (versioned) and escalation policies
     ├── EligibilityPage.tsx  "Who can respond?" for a bed and department
     ├── ScanPage.tsx       /q/<token>: exchanges a QR token for a guest session
     └── PatientPage.tsx    What a patient sees after scanning

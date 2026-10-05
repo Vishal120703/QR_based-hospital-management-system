@@ -99,8 +99,13 @@ export class DepartmentService {
         where: { hospitalId, departmentId: id },
       });
       const shifts = await transaction.shift.count({ where: { hospitalId, departmentId: id } });
-      if (staff + shifts > 0) {
-        throw new ConflictError('This department has staff or shifts. Deactivate it instead.');
+      const services = await transaction.serviceItem.count({
+        where: { hospitalId, departmentId: id },
+      });
+      if (staff + shifts + services > 0) {
+        throw new ConflictError(
+          'This department has staff, shifts, or services. Deactivate it instead.',
+        );
       }
       await transaction.department.delete({ where: { hospitalId_id: { hospitalId, id } } });
       await recordStaffAudit(transaction, context, requestId, {

@@ -44,3 +44,10 @@ export class TooManyRequestsError extends AppError {
     super(429, 'RATE_LIMITED', 'Too many requests. Please wait and try again.');
   }
 }
+
+// Input that is well-formed but violates a rule checked against stored data.
+export class InvalidInputError extends AppError {
+  public constructor(message: string) {
+    super(400, 'VALIDATION_ERROR', message);
+  }
+}

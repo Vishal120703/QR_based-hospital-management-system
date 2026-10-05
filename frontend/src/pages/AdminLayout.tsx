@@ -75,6 +75,8 @@ export function AdminLayout() {
           <NavLink to="/admin/locations">Locations</NavLink>
           <NavLink to="/admin/departments">Departments</NavLink>
           <NavLink to="/admin/staff">Staff</NavLink>
+          <NavLink to="/admin/services">Services</NavLink>
+          <NavLink to="/admin/sla">SLA</NavLink>
           <NavLink to="/admin/eligibility">Who can respond?</NavLink>
         </nav>
         <span className="topbar-user">

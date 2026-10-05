@@ -44,10 +44,11 @@ Architecture decisions are in [`services/docs/architecture`](./services/docs/arc
 1. Open http://localhost:5173 and sign in with the hospital code, email, and password from step 2.
 2. **Locations:** add a floor, a ward, optionally a room, and a bed.
 3. **Beds & QR:** generate a QR code for the bed. Choose **Open patient view**: it is refused, because the bed has no active session.
-4. Choose **Start session**, then open the patient view again: it shows the bed and the emergency notice.
+4. Choose **Start session**, then open the patient view again: it shows the bed, the service buttons from the catalog, and the emergency notice.
 5. **Close session** or **Rotate** the QR code: the patient view ends and the old code stops working.
 6. **Staff:** add a staff member, then **Manage** them: add a department (for example Housekeeping) and coverage (a ward). Turn them **On duty**.
-7. **Who can respond?:** pick a bed and a department. Only staff who are active, on duty, in that department, and covering that bed's ward, floor, or the whole hospital are listed.
+7. **Services** and **SLA:** hide a service and it disappears from the patient view. Change an SLA's minutes and it saves a new version; the history keeps every earlier version.
+8. **Who can respond?:** pick a bed and a department. Only staff who are active, on duty, in that department, and covering that bed's ward, floor, or the whole hospital are listed.
 
 To scan with a real phone on the same Wi-Fi, start the frontend with `npm run dev -- --host`, and set `PUBLIC_APP_URL=http://<your-computer-ip>:5173` in `services/.env` before generating the QR code.
 
