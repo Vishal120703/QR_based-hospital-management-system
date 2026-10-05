@@ -1,7 +1,7 @@
-import { type RequestHandler } from 'express';
+import { type Request, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { ForbiddenError, UnauthorizedError } from '../common/errors/app-error.js';
-import { type StaffAuthService } from '../modules/auth/auth.service.js';
+import { type StaffAuthService, type StaffContext } from '../modules/auth/auth.service.js';
 
 const bearerSchema = z.string().regex(/^Bearer [A-Za-z0-9_-]{43}$/);
 
@@ -39,4 +39,11 @@ export function requirePermission(permission: string): RequestHandler {
     }
     next();
   };
+}
+
+export function getStaffContext(request: Request): StaffContext {
+  if (!request.staff) {
+    throw new UnauthorizedError();
+  }
+  return request.staff;
 }

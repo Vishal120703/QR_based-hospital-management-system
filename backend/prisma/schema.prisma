@@ -35,6 +35,13 @@ enum AuditActorType {
   STAFF
 }
 
+enum BedStatus {
+  AVAILABLE
+  OCCUPIED
+  INACTIVE
+  MAINTENANCE
+}
+
 model Hospital {
   id          String               @id @default(uuid()) @db.Uuid
   name        String
@@ -48,6 +55,8 @@ model Hospital {
   roles       Role[]
   auditLogs   AuditLog[]
   sessions    StaffSession[]
+  buildings   Building[]
+  floors      Floor[]
 }
 
 model HospitalSetting {
@@ -184,4 +193,97 @@ model AuditLog {
 
   @@index([hospitalId, createdAt])
   @@index([hospitalId, targetType, targetId])
+}
+
+// Location hierarchy: Hospital -> Building? -> Floor -> Ward -> Room? -> Bed.
+// Parent links are composite (hospitalId, parentId) foreign keys, so the
+// database rejects a parent that belongs to another hospital.
+
+model Building {
+  id         String   @id @default(uuid()) @db.Uuid
+  hospitalId String   @db.Uuid
+  code       String
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  floors     Floor[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, code])
+}
+
+model Floor {
+  id         String    @id @default(uuid()) @db.Uuid
+  hospitalId String    @db.Uuid
+  buildingId String?   @db.Uuid
+  code       String
+  name       String
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  hospital   Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  building   Building? @relation(fields: [hospitalId, buildingId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  wards      Ward[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, code])
+  @@index([hospitalId, buildingId])
+}
+
+model Ward {
+  id         String   @id @default(uuid()) @db.Uuid
+  hospitalId String   @db.Uuid
+  floorId    String   @db.Uuid
+  code       String
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  floor      Floor    @relation(fields: [hospitalId, floorId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  rooms      Room[]
+  beds       Bed[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, floorId, code])
+}
+
+model Room {
+  id         String   @id @default(uuid()) @db.Uuid
+  hospitalId String   @db.Uuid
+  wardId     String   @db.Uuid
+  code       String
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  ward       Ward     @relation(fields: [hospitalId, wardId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  beds       Bed[]
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, wardId, id])
+  @@unique([hospitalId, wardId, code])
+}
+
+// A Bed is the care location (bed position), not a movable bed asset.
+// The (hospitalId, wardId, roomId) foreign key guarantees an optional room
+// belongs to the bed's own ward.
+model Bed {
+  id          String    @id @default(uuid()) @db.Uuid
+  hospitalId  String    @db.Uuid
+  wardId      String    @db.Uuid
+  roomId      String?   @db.Uuid
+  code        String
+  displayName String
+  status      BedStatus @default(AVAILABLE)
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  ward        Ward      @relation(fields: [hospitalId, wardId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  room        Room?     @relation(fields: [hospitalId, wardId, roomId], references: [hospitalId, wardId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, id])
+  @@unique([hospitalId, wardId, code])
+  @@index([hospitalId, roomId])
 }

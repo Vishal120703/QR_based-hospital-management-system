@@ -34,6 +34,7 @@ export function createRoleRouter(roles: RoleService): Router {
     const context = request.staff;
     if (!context) throw new UnauthorizedError();
     const { id } = idSchema.parse(request.params);
+    z.object({}).strict().parse(request.query);
     response.status(200).json({ role: await roles.get(context, id) });
   });
 

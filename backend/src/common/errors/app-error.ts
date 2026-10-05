@@ -10,8 +10,8 @@ export class AppError extends Error {
 }
 
 export class NotFoundError extends AppError {
-  public constructor() {
-    super(404, 'NOT_FOUND', 'The requested resource was not found.');
+  public constructor(message = 'The requested resource was not found.') {
+    super(404, 'NOT_FOUND', message);
   }
 }
 

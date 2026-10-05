@@ -13,6 +13,8 @@ import { HospitalService } from './modules/hospitals/hospital.service.js';
 import { createHospitalRouter } from './modules/hospitals/hospital.routes.js';
 import { RoleService } from './modules/roles/role.service.js';
 import { createRoleRouter } from './modules/roles/role.routes.js';
+import { LocationService } from './modules/locations/location.service.js';
+import { createLocationRouter } from './modules/locations/location.routes.js';
 import { z } from 'zod';
 
 const noQuerySchema = z.object({}).strict();
@@ -36,8 +38,11 @@ export function createApp(options: CreateAppOptions): Express {
     }),
   );
   application.use(express.json({ limit: '1mb' }));
+  // Commands never take query parameters. GET handlers validate their own query.
   application.use((request, _response, next) => {
-    noQuerySchema.parse(request.query);
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      noQuerySchema.parse(request.query);
+    }
     next();
   });
 
@@ -51,6 +56,7 @@ export function createApp(options: CreateAppOptions): Express {
     admin.use(requireStaffAuth(auth));
     admin.use(createHospitalRouter(new HospitalService(options.database)));
     admin.use(createRoleRouter(new RoleService(options.database)));
+    admin.use(createLocationRouter(new LocationService(options.database)));
     application.use('/admin', admin);
   }
   options.configureRoutes?.(application);

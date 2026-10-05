@@ -34,7 +34,7 @@ npm run build
 npm run prisma:validate
 ```
 
-Phase 2 integration tests require `TEST_DATABASE_URL` to point to a disposable PostgreSQL database with migrations applied. Tests create isolated fixture hospitals.
+Integration tests require `TEST_DATABASE_URL` to point to a disposable PostgreSQL database with migrations applied. Tests create isolated fixture hospitals with unique codes, so they can run repeatedly against the same database.
 
 To provision a hospital administrator, set `DATABASE_URL`, `HOSPITAL_NAME`, `HOSPITAL_CODE`, `HOSPITAL_TIMEZONE`, `ADMIN_EMAIL`, `ADMIN_NAME`, and a unique `ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:hospital --workspace @care-qr/backend`. The password is hashed before storage and is not printed.
 

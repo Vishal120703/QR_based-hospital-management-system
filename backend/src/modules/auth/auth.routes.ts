@@ -28,6 +28,7 @@ export function createAuthRouter(auth: StaffAuthService): Router {
   });
 
   router.get('/auth/staff/me', requireStaffAuth(auth), (request, response) => {
+    z.object({}).strict().parse(request.query);
     const context = request.staff;
     if (!context) {
       throw new UnauthorizedError();

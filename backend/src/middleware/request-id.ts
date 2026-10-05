@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { type RequestHandler } from 'express';
+import { type RequestHandler, type Response } from 'express';
 
 export const requestIdMiddleware: RequestHandler = (_request, response, next) => {
   const requestId = randomUUID();
@@ -7,3 +7,7 @@ export const requestIdMiddleware: RequestHandler = (_request, response, next) =>
   response.setHeader('x-request-id', requestId);
   next();
 };
+
+export function getRequestId(response: Response): string {
+  return String(response.getHeader('x-request-id'));
+}

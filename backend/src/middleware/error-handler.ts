@@ -54,7 +54,10 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
     response.status(409).json({
       error: {
         code: 'CONFLICT',
-        message: 'A record with these values already exists.',
+        message:
+          error.code === 'P2002'
+            ? 'A record with these values already exists.'
+            : 'The change conflicts with related records.',
         requestId,
       },
     });
