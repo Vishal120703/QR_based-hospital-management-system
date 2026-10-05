@@ -25,14 +25,17 @@ cp backend/.env.example backend/.env
 docker compose -f backend/docker-compose.yml up -d
 npm install
 npm run prisma:generate
-npx prisma migrate deploy --schema backend/prisma/schema.prisma
+npm run prisma:migrate
 npm run lint
 npm run typecheck
 npm test
 npm run test:integration
 npm run build
 npm run prisma:validate
+npm run dev
 ```
+
+`backend/.env` is read by `npm run dev` and by the `prisma:*` scripts. Tests do not read it; pass `TEST_DATABASE_URL` explicitly.
 
 Integration tests require `TEST_DATABASE_URL` to point to a disposable PostgreSQL database with migrations applied. Tests create isolated fixture hospitals with unique codes, so they can run repeatedly against the same database.
 
