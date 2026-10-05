@@ -1,14 +1,22 @@
 {
-  "name": "@care-qr/backend",
+  "name": "care-qr-services",
   "version": "0.1.0",
   "private": true,
+  "description": "CARE QR backend service: Express API, domain modules, and Prisma",
   "type": "module",
   "main": "dist/src/server.js",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "bootstrap:hospital": "tsx src/modules/hospitals/bootstrap.cli.ts",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsx watch --env-file=.env src/server.ts",
+    "format": "prettier --write src tests",
+    "format:check": "prettier --check src tests",
+    "lint": "eslint . --max-warnings 0",
     "prisma:format": "prisma format",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
@@ -19,6 +27,12 @@
     "test:integration": "vitest run tests/integration",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "prettier": {
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 100
+  },
   "dependencies": {
     "@prisma/client": "6.19.0",
     "express": "^5.1.0",
@@ -28,9 +42,18 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@eslint/js": "^9.37.0",
     "@types/express": "^5.0.3",
+    "@types/node": "^22.18.10",
     "@types/supertest": "^6.0.3",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.37.0",
+    "prettier": "^3.6.2",
+    "prisma": "6.19.0",
     "supertest": "^7.1.4",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.1",
+    "vitest": "^3.2.4"
   }
 }

@@ -22,15 +22,15 @@ These boundaries allow a module to be extracted into a microservice later. Extra
 
 ```text
 care-qr/
-├── backend/
 ├── frontend/
-└── docs/
-    └── architecture/
+└── services/
+    └── docs/
+        └── architecture/
 ```
 
-The backend uses `src/modules/<domain>` for domain modules. Technical code lives in `src/common`, `src/config`, `src/database`, and `src/middleware`. More directories are added only when the corresponding feature exists. Shared frontend contracts can be exported from the backend or moved to a package later if there is a demonstrated need.
+The backend service lives in `services/` and uses `src/modules/<domain>` for domain modules. Technical code lives in `src/common`, `src/config`, `src/database`, and `src/middleware`. More directories are added only when the corresponding feature exists. Shared frontend contracts can be exported from the backend or moved to a package later if there is a demonstrated need.
 
-The original Phase 1 multi-workspace layout was simplified by the user on 2026-10-05. The rationale and impact are recorded in [ADR 0001](./adr-0001-single-app-layout.md).
+The original Phase 1 multi-workspace layout was simplified by the user on 2026-10-05. The rationale and impact, including the later rename to `services/`, are recorded in [ADR 0001](./adr-0001-single-app-layout.md).
 
 ## 2. Terminology and location hierarchy
 

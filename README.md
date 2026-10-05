@@ -2,43 +2,51 @@
 
 CARE QR is a modular hospital service-request platform. V1 has one backend service and one frontend app. The backend keeps domain boundaries inside one process so a module can be extracted later if needed.
 
-Architecture decisions are documented in [`docs/architecture`](./docs/architecture).
-
-## Workspace layout
+## Repository layout
 
 ```text
-backend/   Express API, domain modules, Prisma, tests, and local infrastructure
-frontend/  One app for patient, staff, and administration routes
-docs/      Architecture decisions
+frontend/   Web app for patient, staff, and administration screens (from Phase 8)
+services/   Backend: Express API, domain modules, Prisma, tests, architecture docs
 ```
+
+Architecture decisions are in [`services/docs/architecture`](./services/docs/architecture). Module boundaries are described in [`services/src/modules/README.md`](./services/src/modules/README.md).
 
 ## Prerequisites
 
-- Node.js 20.19 or newer
-- npm 10 or newer
-- PostgreSQL 17+ and Redis 7+ (or Docker with Compose for local services)
+- Node.js 20.19 or newer and npm 10 or newer
+- PostgreSQL 17 or newer (for example Postgres.app)
+- Redis 7 or newer (for example `brew install redis`), needed to run the server but not the tests
 
-## Local foundation workflow
+## Backend setup
+
+Run these commands inside `services/`:
 
 ```bash
-cp backend/.env.example backend/.env
-docker compose -f backend/docker-compose.yml up -d
+cp .env.example .env
 npm install
-npm run prisma:generate
 npm run prisma:migrate
+npm run dev
+```
+
+Edit `DATABASE_URL` and `REDIS_URL` in `.env` to match your local databases. `.env` is read by `npm run dev` and the `prisma:*` scripts.
+
+## Quality gate
+
+Every phase must pass these commands, run inside `services/`:
+
+```bash
+npm run format:check
 npm run lint
 npm run typecheck
 npm test
 npm run test:integration
 npm run build
 npm run prisma:validate
-npm run dev
+npm run prisma:status
 ```
 
-`backend/.env` is read by `npm run dev` and by the `prisma:*` scripts. Tests do not read it; pass `TEST_DATABASE_URL` explicitly.
+Integration tests do not read `.env`. Set `TEST_DATABASE_URL` to a disposable PostgreSQL database with migrations applied. Tests create isolated fixture hospitals with unique codes, so they can run repeatedly against the same database.
 
-Integration tests require `TEST_DATABASE_URL` to point to a disposable PostgreSQL database with migrations applied. Tests create isolated fixture hospitals with unique codes, so they can run repeatedly against the same database.
+## Creating a hospital
 
-To provision a hospital administrator, set `DATABASE_URL`, `HOSPITAL_NAME`, `HOSPITAL_CODE`, `HOSPITAL_TIMEZONE`, `ADMIN_EMAIL`, `ADMIN_NAME`, and a unique `ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:hospital --workspace @care-qr/backend`. The password is hashed before storage and is not printed.
-
-No product domain feature should bypass the module boundaries described in [`backend/src/modules/README.md`](./backend/src/modules/README.md).
+Set `DATABASE_URL`, `HOSPITAL_NAME`, `HOSPITAL_CODE`, `HOSPITAL_TIMEZONE`, `ADMIN_EMAIL`, `ADMIN_NAME`, and a unique `ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:hospital` inside `services/`. The password is hashed before storage and is not printed.

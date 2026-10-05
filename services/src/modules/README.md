@@ -11,7 +11,7 @@ CARE QR uses a modular monolith. A module is created only when its planned phase
 
 Planned domain modules are `auth`, `tenancy`, `users`, `roles`, `hospitals`, `locations`, `qr`, `bed-sessions`, `departments`, `staff`, `services`, `routing`, `requests`, `assignments`, `sla`, `notifications`, `feedback`, `audit`, and `analytics`.
 
-`locations` owns the whole Building → Floor → Ward → Room → Bed hierarchy, including beds, because its invariants span levels (see [`docs/architecture/location-hierarchy.md`](../../../docs/architecture/location-hierarchy.md)). `audit` currently provides `recordStaffAudit`, which must run inside the transaction of the change it records.
+`locations` owns the whole Building → Floor → Ward → Room → Bed hierarchy, including beds, because its invariants span levels (see [`docs/architecture/location-hierarchy.md`](../../docs/architecture/location-hierarchy.md)). `audit` currently provides `recordStaffAudit`, which must run inside the transaction of the change it records.
 
 Rules:
 
