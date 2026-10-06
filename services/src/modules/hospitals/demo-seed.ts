@@ -9,6 +9,7 @@ export const demoHospital = {
   timezone: 'Asia/Kolkata',
   adminEmail: 'admin.demo@careqr.example',
   adminName: 'Demo Administrator',
+  managerEmail: 'floor.manager.demo@careqr.example',
 } as const;
 
 const demoStaff = [
@@ -49,6 +50,7 @@ export interface DemoSeedResult {
   readonly hospitalId: string;
   readonly hospitalCode: string;
   readonly adminEmail: string;
+  readonly managerEmail: string;
   readonly staff: readonly { email: string; departmentCode: string }[];
   readonly occupiedBedId: string;
   readonly availableBedId: string;
@@ -71,6 +73,7 @@ export async function seedDemoHospital(
   const staffPasswordHashes = await Promise.all(
     demoStaff.map(() => hashPassword(input.staffPassword)),
   );
+  const managerPasswordHash = await hashPassword(input.staffPassword);
   let details:
     Pick<DemoSeedResult, 'occupiedBedId' | 'availableBedId' | 'bedSessionId'> | undefined;
 
@@ -168,6 +171,46 @@ export async function seedDemoHospital(
         })),
       });
 
+      const managerRole = await transaction.role.create({
+        data: {
+          hospitalId: created.hospitalId,
+          name: 'Demo Floor Manager',
+          description: 'Assigns patient requests on the demo floor.',
+        },
+      });
+      await transaction.rolePermission.createMany({
+        data: ['request.read', 'request.assign', 'staff.read'].map((permissionKey) => ({
+          hospitalId: created.hospitalId,
+          roleId: managerRole.id,
+          permissionKey,
+        })),
+      });
+      const managerUser = await transaction.user.create({
+        data: {
+          email: demoHospital.managerEmail,
+          displayName: 'Demo Floor Manager',
+          passwordHash: managerPasswordHash,
+        },
+      });
+      const managerMembership = await transaction.hospitalMembership.create({
+        data: { hospitalId: created.hospitalId, userId: managerUser.id },
+      });
+      const managerUserRole = await transaction.userRole.create({
+        data: {
+          hospitalId: created.hospitalId,
+          membershipId: managerMembership.id,
+          roleId: managerRole.id,
+        },
+      });
+      await transaction.scopeAssignment.create({
+        data: {
+          hospitalId: created.hospitalId,
+          userRoleId: managerUserRole.id,
+          scopeType: 'FLOOR',
+          scopeId: floor.id,
+        },
+      });
+
       for (const [index, staff] of demoStaff.entries()) {
         const departmentId = departmentIdByCode.get(staff.departmentCode);
         if (!departmentId) {
@@ -258,6 +301,7 @@ export async function seedDemoHospital(
     hospitalId,
     hospitalCode: demoHospital.code,
     adminEmail: demoHospital.adminEmail,
+    managerEmail: demoHospital.managerEmail,
     staff: demoStaff.map(({ email, departmentCode }) => ({ email, departmentCode })),
     ...details,
     qrToken,

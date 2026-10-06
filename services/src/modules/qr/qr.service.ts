@@ -1,5 +1,10 @@
 import { type BedQrCode, type Prisma, type PrismaClient } from '@prisma/client';
-import { AppError, ConflictError, NotFoundError } from '../../common/errors/app-error.js';
+import {
+  AppError,
+  ConflictError,
+  InvalidInputError,
+  NotFoundError,
+} from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
 import { recordStaffAudit } from '../audit/audit-log.js';
 import { type StaffContext } from '../auth/auth.service.js';
@@ -99,6 +104,79 @@ export class QrCodeService {
       });
       return this.toIssue(qrCode, token);
     });
+  }
+
+  public async generateForWard(
+    context: StaffContext,
+    floorId: string,
+    wardId: string,
+    requestId: string,
+  ) {
+    const hospitalId = context.tenant.hospitalId;
+    return this.database.$transaction(
+      async (transaction) => {
+        const ward = await transaction.ward.findUnique({
+          where: { hospitalId_id: { hospitalId, id: wardId } },
+          select: { floorId: true, name: true, floor: { select: { name: true } } },
+        });
+        if (!ward || ward.floorId !== floorId)
+          throw new NotFoundError('Ward not found on this floor.');
+        const beds = await transaction.bed.findMany({
+          where: { hospitalId, wardId },
+          include: { qrCode: true, room: { select: { name: true } } },
+          orderBy: [{ code: 'asc' }, { id: 'asc' }],
+        });
+        const eligible = beds.filter((bed) => bed.active && bed.qrCode?.status !== 'ACTIVE');
+        if (eligible.length > 100) {
+          throw new InvalidInputError('Generate at most 100 new bed QR codes at a time.');
+        }
+        const issues = [];
+        for (const bed of eligible) {
+          const token = createOpaqueToken();
+          const tokenHash = hashOpaqueToken(token);
+          let qrCode: BedQrCode;
+          if (bed.qrCode) {
+            const updated = await transaction.bedQrCode.updateMany({
+              where: { id: bed.qrCode.id, status: 'REVOKED', version: bed.qrCode.version },
+              data: {
+                tokenHash,
+                status: 'ACTIVE',
+                version: bed.qrCode.version + 1,
+                issuedAt: new Date(),
+                revokedAt: null,
+              },
+            });
+            if (updated.count !== 1)
+              throw new ConflictError('A bed QR changed. Refresh and retry.');
+            qrCode = await transaction.bedQrCode.findUniqueOrThrow({
+              where: { id: bed.qrCode.id },
+            });
+          } else {
+            qrCode = await transaction.bedQrCode.create({
+              data: { hospitalId, bedId: bed.id, tokenHash },
+            });
+          }
+          await recordStaffAudit(transaction, context, requestId, {
+            action: 'qr.generate',
+            targetType: 'BedQrCode',
+            targetId: qrCode.id,
+            metadata: { bedId: bed.id, version: qrCode.version, batch: true },
+          });
+          issues.push({
+            ...this.toIssue(qrCode, token),
+            bedName: bed.displayName,
+            location: [ward.floor.name, ward.name, bed.room?.name].filter(Boolean).join(' · '),
+          });
+        }
+        return {
+          issues,
+          totalBeds: beds.length,
+          skippedActive: beds.filter((bed) => bed.qrCode?.status === 'ACTIVE').length,
+          skippedInactive: beds.filter((bed) => !bed.active).length,
+        };
+      },
+      { timeout: 30_000 },
+    );
   }
 
   public rotate(context: StaffContext, bedId: string, requestId: string): Promise<QrIssue> {

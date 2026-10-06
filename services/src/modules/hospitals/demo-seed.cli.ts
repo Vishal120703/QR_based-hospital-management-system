@@ -51,6 +51,7 @@ async function main(): Promise<void> {
     process.stdout.write(`Created ${demoHospital.name} (${result.hospitalCode})\n`);
     process.stdout.write(`Hospital ID: ${result.hospitalId}\n`);
     process.stdout.write(`Admin login email: ${result.adminEmail}\n`);
+    process.stdout.write(`Floor manager login email: ${result.managerEmail}\n`);
     for (const staff of result.staff) {
       process.stdout.write(`${staff.departmentCode} staff login email: ${staff.email}\n`);
     }

@@ -3,16 +3,36 @@ import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-
 import { ApiError, credentials, staffApi, type Me } from '../api';
 import { ErrorNotice, LoadState } from '../components';
 
+// `anyScope` pages filter their data by floor or ward on the server, so a
+// permission held for only part of the hospital is enough to open them.
 export const adminPages = [
+  { path: 'overview', label: 'Overview', group: 'Work', permissions: [] },
+  {
+    path: 'requests',
+    label: 'Requests',
+    group: 'Work',
+    permissions: ['request.read'],
+    anyScope: true,
+  },
   { path: 'beds', label: 'Beds & QR', group: 'Care locations', permissions: ['bed.read'] },
   {
     path: 'locations',
     label: 'Location setup',
     group: 'Care locations',
-    permissions: ['location.read'],
+    permissions: ['location.read', 'location.manage'],
   },
-  { path: 'departments', label: 'Departments', group: 'People', permissions: ['staff.read'] },
-  { path: 'staff', label: 'Staff & coverage', group: 'People', permissions: ['staff.read'] },
+  {
+    path: 'departments',
+    label: 'Departments',
+    group: 'People',
+    permissions: ['staff.read', 'staff.manage'],
+  },
+  {
+    path: 'staff',
+    label: 'Staff & coverage',
+    group: 'People',
+    permissions: ['staff.read', 'staff.manage'],
+  },
   {
     path: 'eligibility',
     label: 'Who can respond?',
@@ -29,7 +49,7 @@ export const adminPages = [
     path: 'sla',
     label: 'Response targets (SLA)',
     group: 'Patient services',
-    permissions: ['service.read'],
+    permissions: ['service.read', 'sla.manage'],
   },
 ] as const;
 
@@ -39,22 +59,21 @@ export interface AdminContext {
   // Shows the error, or signs out when the session is no longer valid.
   reportError: (error: unknown) => void;
   reportSuccess: (message: string) => void;
+  // Held hospital-wide.
   can: (permission: string) => boolean;
+  // Held for at least one floor or ward (request work screens).
+  canAnywhere: (permission: string) => boolean;
+}
+
+type AdminPage = (typeof adminPages)[number];
+
+function pageAllowed(page: AdminPage, context: Pick<AdminContext, 'can' | 'canAnywhere'>) {
+  const check = 'anyScope' in page ? context.canAnywhere : context.can;
+  return page.permissions.every((permission) => check(permission));
 }
 
 export function AdminIndex() {
-  const { me } = useAdmin();
-  const first = adminPages.find((page) =>
-    page.permissions.every((permission) => me.permissions.includes(permission)),
-  );
-  return first ? (
-    <Navigate to={first.path} replace />
-  ) : (
-    <p>
-      Your account has no access to the setup screens. Ask your hospital administrator to assign the
-      required permissions.
-    </p>
-  );
+  return <Navigate to="overview" replace />;
 }
 
 export function useAdmin(): AdminContext {
@@ -131,10 +150,19 @@ export function AdminLayout() {
   }
 
   const can = (permission: string) => me?.permissions.includes(permission) ?? false;
-  const context: AdminContext | null = me && { token, me, reportError, reportSuccess, can };
-  const available = adminPages.filter((page) => page.permissions.every(can));
+  const canAnywhere = (permission: string) =>
+    (me?.scopedPermissions ?? me?.permissions ?? []).includes(permission);
+  const context: AdminContext | null = me && {
+    token,
+    me,
+    reportError,
+    reportSuccess,
+    can,
+    canAnywhere,
+  };
+  const available = adminPages.filter((page) => pageAllowed(page, { can, canAnywhere }));
   const current = adminPages.find((page) => location.pathname === `/admin/${page.path}`);
-  const allowed = !current || current.permissions.every(can);
+  const allowed = !current || pageAllowed(current, { can, canAnywhere });
 
   return (
     <div className="admin">
@@ -166,7 +194,7 @@ export function AdminLayout() {
         <aside className="sidebar">
           <p className="eyebrow">Hospital workspace</p>
           <nav aria-label="Hospital administration">
-            {['Care locations', 'People', 'Patient services'].map((group) => {
+            {['Work', 'Care locations', 'People', 'Patient services'].map((group) => {
               const pages = available.filter((page) => page.group === group);
               return (
                 pages.length > 0 && (
@@ -190,9 +218,11 @@ export function AdminLayout() {
             })}
           </nav>
           <div className="sidebar-note">
-            <strong>Setup & patient requests</strong>
+            <strong>{can('hospital.manage') ? 'Hospital setup' : 'Care workspace'}</strong>
             <p>
-              Patients can submit and track requests. Staff routing and task screens come later.
+              {can('hospital.manage')
+                ? 'Set up beds and print patient QR codes here.'
+                : 'Use the sections available to your role. Patients use a bedside QR without signing in.'}
             </p>
           </div>
         </aside>

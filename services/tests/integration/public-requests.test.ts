@@ -9,6 +9,7 @@ import { createPrismaClient } from '../../src/database/prisma.js';
 import {
   createBedFixture,
   createHospitalFixture,
+  createStaffToken,
   requireTestDatabaseUrl,
   type HospitalFixture,
 } from '../support/fixtures.js';
@@ -36,6 +37,7 @@ const errorSchema = z.object({ error: z.object({ code: z.string() }) });
 
 let hospitalA: HospitalFixture;
 let hospitalB: HospitalFixture;
+let departmentIdA: string;
 let serviceIdA: string;
 let serviceIdB: string;
 let staffMembershipId: string;
@@ -101,6 +103,7 @@ beforeAll(async () => {
     where: { hospitalId: hospitalA.hospitalId, name: 'Drinking Water' },
   });
   serviceIdA = serviceA.id;
+  departmentIdA = serviceA.departmentId;
   serviceIdB = (
     await database.serviceItem.findFirstOrThrow({
       where: { hospitalId: hospitalB.hospitalId, name: 'Drinking Water' },
@@ -136,6 +139,80 @@ afterAll(async () => {
 });
 
 describe('Phase 8 public patient requests', () => {
+  it('lets a floor-scoped manager see and assign only requests on that floor', async () => {
+    const firstBed = await occupiedBed(hospitalA);
+    const secondBed = await occupiedBed(hospitalA);
+    const first = await createRequest(firstBed.guestToken);
+    const second = await createRequest(secondBed.guestToken);
+    const firstStored = await storedRequest(first.publicId);
+    const secondStored = await storedRequest(second.publicId);
+    const floor = await database.bed.findUniqueOrThrow({
+      where: { id: firstBed.bedId },
+      select: { ward: { select: { floorId: true } } },
+    });
+    const managerToken = await createStaffToken(database, application, hospitalA, [
+      'request.read',
+      'request.assign',
+      'staff.read',
+    ]);
+    const managerSession = await database.staffSession.findUniqueOrThrow({
+      where: { tokenHash: hashOpaqueToken(managerToken) },
+    });
+    const managerRole = await database.userRole.findFirstOrThrow({
+      where: { membershipId: managerSession.membershipId },
+    });
+    await database.scopeAssignment.updateMany({
+      where: { userRoleId: managerRole.id },
+      data: { scopeType: 'FLOOR', scopeId: floor.ward.floorId },
+    });
+
+    // A floor-scoped staff.read must not unlock the hospital-wide staff list,
+    // but does allow eligibility checks for beds on that floor.
+    expect((await as(managerToken).get('/admin/staff')).status).toBe(403);
+    const eligibleQuery = (bedId: string) =>
+      `/admin/staff/eligible?bedId=${bedId}&departmentId=${departmentIdA}`;
+    expect((await as(managerToken).get(eligibleQuery(firstBed.bedId))).status).toBe(200);
+    expect((await as(managerToken).get(eligibleQuery(secondBed.bedId))).status).toBe(404);
+    const me = await as(managerToken).get('/auth/staff/me');
+    expect(me.body).toMatchObject({
+      permissions: [],
+      scopedPermissions: ['request.assign', 'request.read', 'staff.read'],
+    });
+
+    const listed = await as(managerToken).get('/admin/requests');
+    expect(listed.status, JSON.stringify(listed.body)).toBe(200);
+    const ids = z
+      .object({ serviceRequests: z.array(z.object({ id: uuid })) })
+      .parse(listed.body)
+      .serviceRequests.map((item) => item.id);
+    expect(ids).toContain(firstStored.id);
+    expect(ids).not.toContain(secondStored.id);
+
+    // A hospital-wide administrator sees requests on every floor.
+    const adminList = await as(hospitalA.adminToken).get('/admin/requests');
+    expect(adminList.status, JSON.stringify(adminList.body)).toBe(200);
+    const adminIds = z
+      .object({ serviceRequests: z.array(z.object({ id: uuid })) })
+      .parse(adminList.body)
+      .serviceRequests.map((item) => item.id);
+    expect(adminIds).toEqual(expect.arrayContaining([firstStored.id, secondStored.id]));
+    expect(
+      (
+        await as(managerToken).post(`/admin/requests/${secondStored.id}/assign`, {
+          expectedVersion: 1,
+          assigneeId: staffMembershipId,
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await as(managerToken).post(`/admin/requests/${firstStored.id}/assign`, {
+          expectedVersion: 1,
+          assigneeId: staffMembershipId,
+        })
+      ).status,
+    ).toBe(200);
+  });
   it('creates and tracks a request, then returns the same active request to both guests in one bed session', async () => {
     const bed = await occupiedBed(hospitalA);
     const otherGuest = await openGuest(bed.qrToken);

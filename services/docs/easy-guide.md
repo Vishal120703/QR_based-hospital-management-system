@@ -14,7 +14,7 @@ With CARE QR:
 2. The patient (or their family) **scans it with their phone**. No app, no login.
 3. A web page opens showing buttons like **Drinking Water**, **Nurse Assistance**, **Room Cleaning**.
 4. They tap a button → a **request** is saved and shown in their request history.
-5. In the intended full workflow, the right staff member (for example the Pantry team for water) handles it and the patient sees progress. **The staff workflow screens are not built yet**; a new request currently stays Submitted unless it is handled through the backend command API.
+5. A floor manager assigns the request to an eligible staff member (for example the Pantry team for water). That staff member accepts, starts, and marks the work complete; the patient sees the updated status.
 
 The current version provides a testable foundation for tracking requests and response-time targets. It must not be relied on to summon staff in a real hospital yet.
 
@@ -60,7 +60,7 @@ The current version provides a testable foundation for tracking requests and res
                                                           ▼
                                           Request created: SUBMITTED
                                                           │
-             (later phases) manager/system assigns it to an eligible Pantry staff
+                       Floor manager assigns it to an eligible Pantry staff
                                                           ▼
                        ASSIGNED ──► ACCEPTED ──► IN PROGRESS ──► COMPLETED ──► CLOSED
 ```
@@ -73,14 +73,27 @@ The current version provides a testable foundation for tracking requests and res
 
 | Done ✅ (Phases 0–8) | Not yet ⏳ (Phases 9–25) |
 |---|---|
-| Admin sign-in, hospital setup | Automatic routing of requests to staff |
-| Floors, wards, rooms, beds | Manager dashboard |
-| QR codes + bed sessions | Staff mobile screens (accept/complete in the app) |
+| Admin sign-in, hospital setup, **Overview** home page | Automatic routing of requests to staff |
+| Floors, wards, rooms, beds | Full manager dashboard (charts, reports) |
+| QR codes + bed sessions; manual manager assignment and staff completion | Dedicated mobile task app and automatic routing |
 | Departments, staff, duty, coverage | SLA alerts & escalation actually firing |
 | Service catalog + SLA versions | Notifications (push/SMS/WhatsApp), live updates |
 | Patient: scan, request, track, cancel, Hindi/English | Feedback, analytics, deployment, pilot |
 
-So today: **a patient's request is saved and stays "Submitted"** — no staff screen picks it up yet. That is expected, not a bug.
+Today: a request stays **Submitted** until a manager assigns it. Assigned staff can then accept, start, and complete it in **Requests**, and a manager closes it (or cancels it with a reason). The patient sees a progress bar move through each step.
+
+### Finding your way around the staff area
+
+After signing in you land on **Overview**:
+
+- **Counters** at the top: requests waiting for assignment, being handled, overdue, completed today, occupied beds, and staff on duty. Click any counter to jump to that screen.
+- **Finish setting up** (admins only): a five-step checklist that ticks itself off as you add beds, staff, services, a QR, and handle a first request. It disappears when everything is done.
+- **How CARE QR works**: the four steps from scan to done.
+- **Go to**: a shortcut card for every screen your role can open, with one line saying what it is for.
+
+The **Requests** screen has three tabs: **Open** (still being worked on, most urgent first), **Ready to close** (staff finished; manager closes), and **History** (closed or cancelled). It refreshes itself every 15 seconds. Each card shows the bed, how long ago it was sent, who it is assigned to, and the response-time target, which turns **red** with "overdue by …" when it is missed.
+
+You only see the screens your role allows. A floor manager, for example, sees **Overview** and **Requests** for their own floor, not the hospital-wide staff list.
 
 ---
 
@@ -102,13 +115,17 @@ The app is a **modular monolith**: one backend process and one frontend, with se
 
 | Frontend page | Purpose |
 |---|---|
+| `/` | Patient-first QR scanner, with a separate staff sign-in link |
 | `/login` | Staff/admin sign-in |
+| `/admin/requests` | Manager assignment and staff work |
 | `/admin/locations`, `/admin/beds` | Location setup, admissions, QR issuance |
 | `/admin/departments`, `/admin/staff`, `/admin/eligibility` | Teams, people, coverage/duty, eligibility check |
 | `/admin/services`, `/admin/sla` | Patient service buttons and response targets |
 | `/q/<secret>`, `/patient` | QR exchange and patient request screen |
 
-The backend exposes `/health` and `/ready` for checks; `/auth/staff/*` for staff sessions; `/admin/*` for permission-checked administration and request commands; and `/public/*` for QR/guest-session services. Admin request commands exist even though request-management screens do not. The frontend sends its API calls through the `/api` proxy during local development.
+Patients and attendants do not have a login account or staff role. An authorized staff member starts the bed session. Only hospital managers with the matching QR permission can issue, replace, or disable a bed-wise QR in **Beds & QR**. The print action appears when they issue or replace it. Scanning that QR creates a short-lived guest session tied to the bed stay. The patient then chooses a published service, sends a request, and tracks it under **Your requests**. The raw QR link is shown only when issued. If a demo bed already has an active QR but you do not have its printed copy or link, use **Replace QR** to get a new one; this invalidates the old QR and connected patient sessions.
+
+The backend exposes `/health` and `/ready` for checks; `/auth/staff/*` for staff sessions; `/admin/*` for permission-checked administration and request commands; and `/public/*` for QR/guest-session services. The frontend sends its API calls through the `/api` proxy during local development. **Requests** is the manual manager/staff work screen.
 
 ### What is protected behind the scenes
 
@@ -161,6 +178,8 @@ DEMO_SEED_CONFIRM=CAREQR-DEMO npm run seed:demo
 
 The script accepts only a local PostgreSQL URL, creates the demo hospital in one transaction, and refuses to overwrite an existing demo hospital or login email. It does not print passwords or the QR secret by default. If it says the hospital already exists, do **not** reset your database: use the existing demo credentials, or ask for help choosing a separate local test database. The detailed seed inventory and safety rules are in the [test plan](./manual-test-plan-phases-0-8.md).
 
+A **fresh** demo seed also creates `floor.manager.demo@careqr.example` with the `DEMO_STAFF_PASSWORD`. This account can assign requests only on the demo floor. An already-seeded hospital is not modified by this code change; its Hospital Admin can use **Requests** to test assignment without reseeding.
+
 ---
 
 ## 8. Start the app (every time)
@@ -195,6 +214,7 @@ To stop: press `Ctrl + C` in each window.
 | Who | Hospital code | Email | Password |
 |---|---|---|---|
 | Admin | `CAREQR-DEMO` | `admin.demo@careqr.example` | the private `DEMO_ADMIN_PASSWORD` chosen when seeding |
+| Floor manager (fresh seed only) | `CAREQR-DEMO` | `floor.manager.demo@careqr.example` | the private `DEMO_STAFF_PASSWORD` chosen when seeding |
 | Staff | `CAREQR-DEMO` | `nurse.demo@careqr.example` (also `pantry.demo`, `housekeeping.demo`, `transport.demo`) | the private `DEMO_STAFF_PASSWORD` chosen when seeding |
 
 Your passwords may be in your local `.env` or only in the terminal/password manager, depending on how you set them. Never paste them into ChatGPT or commit them. The script stores **password hashes** in PostgreSQL, not the original passwords.
@@ -208,8 +228,8 @@ After a successful seed, the demo hospital has: Demo Wing → First Floor → Ge
 Do these in order. ✔ = what you should see.
 
 **A. Sign in**
-1. Go to http://localhost:5173, enter the admin login.
-   ✔ You see the admin area with a left menu.
+1. Go to http://localhost:5173, choose **Staff sign in**, then enter the admin login.
+   ✔ You land on **Overview** with counters, a setup checklist, and shortcuts. The left menu lists every screen.
 
 **B. Look at the hospital layout**
 2. Click **Location setup**.
@@ -221,37 +241,51 @@ Do these in order. ✔ = what you should see.
 4. Click **Open patient view** (opens a new tab).
    ✔ "We couldn't connect" — because no patient is admitted yet. Correct!
 5. Go back, click **Done**, then **Start session** on Bed 02.
-6. Open the **privately saved** Bed 02 patient link again; if you did not save it, use **Replace QR** and open that new link. An old link stops working after replacement.
+6. Open the **privately saved** Bed 02 patient link again, or paste it into the **Scan QR** screen at `http://localhost:5173`. If you did not save it, use **Replace QR** and open that new link. An old link stops working after replacement.
    ✔ "You are connected to Bed 02" with service buttons and a red "Not for emergencies" box.
 
 **D. Send a request as the patient**
 7. In the patient tab, tap **Request service** under Drinking Water.
-   ✔ A request appears under "Your requests" with a `CR-...` reference and status **Submitted**.
+   ✔ A request appears under "Your requests" with a `CR-...` reference, status **Submitted**, and a progress bar with the first step filled.
 8. Change **Language** to हिन्दी.
    ✔ The page switches to Hindi. Switch back to English.
 9. Click **Cancel request** → **Yes, cancel request**.
    ✔ Status becomes **Cancelled**.
 
+**D2. Handle the request as staff**
+
+10. Submit Drinking Water again in the patient tab.
+11. In the staff tab, sign in as `floor.manager.demo@careqr.example` (fresh seed) or stay as the admin, and open **Requests**.
+    ✔ The request is on the **Open** tab with "Accept by …" or, after 3 minutes, a red "Accept overdue by …".
+12. Click **Choose staff**. When only one person is eligible they are selected for you; otherwise pick **Demo Pantry Staff**. Click **Assign request**.
+    ✔ The card shows "Assigned to Demo Pantry Staff". The patient's progress bar moves to **Assigned** (within 30 seconds, or press **Refresh status**).
+13. Sign out, sign in as `pantry.demo@careqr.example` with the staff password, open **Requests**, then click **Accept**, **Start work**, and **Mark complete**.
+    ✔ The patient's progress bar fills up to **Completed**.
+14. Sign back in as the manager/admin → **Requests** → **Ready to close** tab → **Close request**.
+    ✔ The request moves to **History**. Also try **Cancel…** on another new request: you must choose a reason first.
+
+On an older demo database without the floor-manager account, the Hospital Admin can do the manager steps. Do not re-run the seed against that existing hospital.
+
 **E. Check which staff can respond**
-10. Admin tab → **Who can respond?** → choose Bed 01 and **Pantry** → Check.
+15. Admin tab → **Who can respond?** → choose Bed 01 and **Pantry** → Check.
     ✔ "Demo Pantry Staff".
-11. Choose **Billing**.
+16. Choose **Billing**.
     ✔ "Nobody is eligible" (no billing staff).
 
 **F. Add a staff member**
-12. **Staff & coverage** → fill "Add staff member" (any name, an email ending `@careqr.example`, a 12+ character password).
-13. In the **Manage** box add department **Pantry** and coverage **Ward → General Ward**. Click **Set on duty**.
-14. Repeat step 10.
+17. **Staff & coverage** → fill "Add staff member" (any name, an email ending `@careqr.example`, a 12+ character password).
+18. In the **Manage** box add department **Pantry** and coverage **Ward → General Ward**. In the **Duty** column click **Set on duty** (the badge above it shows the current state).
+19. Repeat step 15.
     ✔ Your new person now appears too. Set them off duty → they disappear.
 
 **G. Change the services**
-15. **Service catalog** → **Deactivate service** on Drinking Water. Reload the patient tab.
+20. **Service catalog** → **Deactivate** under Drinking Water's **Active** badge. Reload the patient tab.
     ✔ Drinking Water is gone. Activate it again.
-16. **Response targets (SLA)** → change Quick response to 4 and 12 → **Save as vN** (the next version).
+21. **Response targets (SLA)** → change Quick response to 4 and 12 → **Save as vN** (the next version).
     ✔ History keeps the earlier version as well as the new one. On a fresh seed, those are v1 (3/10) and v2 (4/12).
 
 **H. Discharge**
-17. **Beds & QR** → **Close session** on Bed 02. Reload the patient tab.
+22. **Beds & QR** → **Close session** on Bed 02. Reload the patient tab.
     ✔ "Your session has ended." The QR no longer works.
 
 If all ✔ appeared, this **browser tour** passed; the API/security/concurrency tests in the full plan still need to run before Phase 9.

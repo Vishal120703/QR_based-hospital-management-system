@@ -9,6 +9,7 @@ const emptyBodySchema = z.object({}).strict();
 const bedParamsSchema = z.object({ id: z.string().uuid() }).strict();
 const listQuerySchema = z.object({ bedId: z.string().uuid().optional() }).strict();
 const resolveSchema = z.object({ token: z.string().min(1).max(256) }).strict();
+const batchSchema = z.object({ floorId: z.string().uuid(), wardId: z.string().uuid() }).strict();
 
 // Responses carrying a raw token must never be cached by browsers or proxies.
 function noStore(response: Response): Response {
@@ -24,26 +25,57 @@ export function createQrAdminRouter(qrCodes: QrCodeService): Router {
     response.status(200).json({ qrCodes: await qrCodes.list(getStaffContext(request), filter) });
   });
 
-  router.post('/beds/:id/qr', requirePermission('qr.generate'), async (request, response) => {
-    const { id } = bedParamsSchema.parse(request.params);
-    emptyBodySchema.parse(request.body ?? {});
-    const issue = await qrCodes.generate(getStaffContext(request), id, getRequestId(response));
-    noStore(response).status(201).json(issue);
-  });
+  router.post(
+    '/qr-codes/batch',
+    requirePermission('hospital.manage'),
+    requirePermission('qr.generate'),
+    async (request, response) => {
+      const { floorId, wardId } = batchSchema.parse(request.body);
+      const result = await qrCodes.generateForWard(
+        getStaffContext(request),
+        floorId,
+        wardId,
+        getRequestId(response),
+      );
+      noStore(response).status(201).json(result);
+    },
+  );
 
-  router.post('/beds/:id/qr/rotate', requirePermission('qr.rotate'), async (request, response) => {
-    const { id } = bedParamsSchema.parse(request.params);
-    emptyBodySchema.parse(request.body ?? {});
-    const issue = await qrCodes.rotate(getStaffContext(request), id, getRequestId(response));
-    noStore(response).status(200).json(issue);
-  });
+  router.post(
+    '/beds/:id/qr',
+    requirePermission('hospital.manage'),
+    requirePermission('qr.generate'),
+    async (request, response) => {
+      const { id } = bedParamsSchema.parse(request.params);
+      emptyBodySchema.parse(request.body ?? {});
+      const issue = await qrCodes.generate(getStaffContext(request), id, getRequestId(response));
+      noStore(response).status(201).json(issue);
+    },
+  );
 
-  router.post('/beds/:id/qr/revoke', requirePermission('qr.revoke'), async (request, response) => {
-    const { id } = bedParamsSchema.parse(request.params);
-    emptyBodySchema.parse(request.body ?? {});
-    const qrCode = await qrCodes.revoke(getStaffContext(request), id, getRequestId(response));
-    response.status(200).json({ qrCode });
-  });
+  router.post(
+    '/beds/:id/qr/rotate',
+    requirePermission('hospital.manage'),
+    requirePermission('qr.rotate'),
+    async (request, response) => {
+      const { id } = bedParamsSchema.parse(request.params);
+      emptyBodySchema.parse(request.body ?? {});
+      const issue = await qrCodes.rotate(getStaffContext(request), id, getRequestId(response));
+      noStore(response).status(200).json(issue);
+    },
+  );
+
+  router.post(
+    '/beds/:id/qr/revoke',
+    requirePermission('hospital.manage'),
+    requirePermission('qr.revoke'),
+    async (request, response) => {
+      const { id } = bedParamsSchema.parse(request.params);
+      emptyBodySchema.parse(request.body ?? {});
+      const qrCode = await qrCodes.revoke(getStaffContext(request), id, getRequestId(response));
+      response.status(200).json({ qrCode });
+    },
+  );
 
   return router;
 }

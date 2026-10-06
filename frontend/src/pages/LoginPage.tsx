@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { ApiError, credentials, staffApi } from '../api';
 import { ErrorNotice } from '../components';
 
@@ -129,6 +129,14 @@ export function LoginPage() {
           Use the hospital code and staff account provided by your administrator. Patients should
           scan their bedside QR code.
         </p>
+        <div className="patient-entry-note">
+          <strong>Patient or attendant?</strong>
+          <p>
+            You do not need a staff login. Scan the QR code at your bed to request a service and
+            track its status. If there is no QR code, ask hospital staff for help.
+          </p>
+          <Link to="/">Go to patient QR scanner</Link>
+        </div>
       </form>
     </main>
   );

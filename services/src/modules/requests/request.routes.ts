@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getGuestContext, requireGuestSession } from '../../middleware/guest-auth.js';
 import { getRequestId } from '../../middleware/request-id.js';
-import { getStaffContext, requirePermission } from '../../middleware/staff-auth.js';
+import { getStaffContext, requireScopedPermission } from '../../middleware/staff-auth.js';
 import { type GuestSessionService } from '../bed-sessions/guest-session.service.js';
 import { type RequestService } from './request.service.js';
 
@@ -19,14 +19,25 @@ const transfer = withAssignee.extend({ reason }).strict();
 export function createRequestRouter(requests: RequestService): Router {
   const router = Router();
 
-  router.get('/requests/:id', requirePermission('request.read'), async (request, response) => {
+  router.get('/requests', requireScopedPermission('request.read'), async (request, response) => {
     empty.parse(request.query);
-    const { id } = params.parse(request.params);
-    response.status(200).json({ serviceRequest: await requests.get(getStaffContext(request), id) });
+    response.status(200).json({ serviceRequests: await requests.list(getStaffContext(request)) });
   });
+
+  router.get(
+    '/requests/:id',
+    requireScopedPermission('request.read'),
+    async (request, response) => {
+      empty.parse(request.query);
+      const { id } = params.parse(request.params);
+      response
+        .status(200)
+        .json({ serviceRequest: await requests.get(getStaffContext(request), id) });
+    },
+  );
   router.get(
     '/requests/:id/events',
-    requirePermission('request.read'),
+    requireScopedPermission('request.read'),
     async (request, response) => {
       empty.parse(request.query);
       const { id } = params.parse(request.params);
@@ -47,7 +58,7 @@ export function createRequestRouter(requests: RequestService): Router {
   for (const command of commands) {
     router.post(
       `/requests/:id/${command.name}`,
-      requirePermission(command.permission),
+      requireScopedPermission(command.permission),
       async (request, response) => {
         const { id } = params.parse(request.params);
         const input = command.schema.parse(request.body);

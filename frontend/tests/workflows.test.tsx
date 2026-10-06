@@ -22,6 +22,7 @@ const me: Me = {
   membershipId: 'admin-membership',
   tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital' },
   permissions: [],
+  scopedPermissions: [],
 };
 
 const policy: SlaPolicy = {
@@ -43,7 +44,11 @@ const policy: SlaPolicy = {
 
 function renderAdmin(page: ReactNode, path: string, permissions: string[]) {
   credentials.setStaff('staff-token');
-  vi.spyOn(staffApi, 'me').mockResolvedValue({ ...me, permissions });
+  vi.spyOn(staffApi, 'me').mockResolvedValue({
+    ...me,
+    permissions,
+    scopedPermissions: permissions,
+  });
   return render(
     <MemoryRouter initialEntries={[`/admin/${path}`]}>
       <Routes>

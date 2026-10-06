@@ -6,6 +6,8 @@ Run: 6 October 2026, on a local development machine, following [the Phase 0–8 
 
 Environment: macOS, Node.js 20.20.2, PostgreSQL 18.6 (Postgres.app), Chromium-based browser at desktop and 375 × 812 phone size. Redis was **not installed**. The backend therefore ran through a temporary launcher that skips the Redis startup wait but keeps the real database and Redis readiness probes.
 
+> **Update (6 October 2026, later):** Redis is now installed and `/ready` returns `ok` for PostgreSQL and Redis, so **M02 passes**. Minor UI notes 4–6 below are fixed (state badges with compact toggles in the Duty and service Status columns; Hindi times use a 24-hour clock). The staff **Requests** board, **Overview** page, and a floor-scope permission fix were added afterwards; test them with M29–M33 in the plan. Automated totals after these changes: backend 8 unit + 85 integration, frontend 46.
+
 ## Result
 
 | | Count |

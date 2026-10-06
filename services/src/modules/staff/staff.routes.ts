@@ -2,7 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { emptySchema, idParamsSchema, uuidSchema } from '../../common/validation.js';
 import { getRequestId } from '../../middleware/request-id.js';
-import { getStaffContext, requirePermission } from '../../middleware/staff-auth.js';
+import {
+  getStaffContext,
+  requirePermission,
+  requireScopedPermission,
+} from '../../middleware/staff-auth.js';
 import { type ShiftService } from './shift.service.js';
 import { type StaffService } from './staff.service.js';
 
@@ -64,11 +68,16 @@ export function createStaffRouter(staff: StaffService, shifts: ShiftService): Ro
     response.status(200).json({ staff: await staff.list(getStaffContext(request), filter) });
   });
 
-  // Registered before /staff/:id so "eligible" is not parsed as an ID.
-  router.get('/staff/eligible', canRead, async (request, response) => {
-    const query = eligibleQuerySchema.parse(request.query);
-    response.status(200).json({ staff: await staff.eligible(getStaffContext(request), query) });
-  });
+  // Registered before /staff/:id so "eligible" is not parsed as an ID. A floor
+  // or ward manager may check eligibility for beds inside their own scope.
+  router.get(
+    '/staff/eligible',
+    requireScopedPermission('staff.read'),
+    async (request, response) => {
+      const query = eligibleQuerySchema.parse(request.query);
+      response.status(200).json({ staff: await staff.eligible(getStaffContext(request), query) });
+    },
+  );
 
   router.get('/staff/:id', canRead, async (request, response) => {
     const { id } = idParamsSchema.parse(request.params);

@@ -14,7 +14,7 @@ import {
   UnauthorizedError,
 } from '../../common/errors/app-error.js';
 import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
+import { canAccessLocation, scopesFor, type StaffContext } from '../auth/auth.service.js';
 import { type GuestContext } from '../bed-sessions/guest-session.service.js';
 import { snapshotService } from '../catalog/service-snapshot.js';
 import { findEligibleStaff } from '../staff/eligibility.js';
@@ -52,15 +52,6 @@ const commandPermissions: Record<Command, string> = {
   transfer: 'request.transfer',
 };
 
-function canAccessBed(context: StaffContext, wardId: string, floorId: string): boolean {
-  return context.scopes.some(
-    (scope) =>
-      (scope.type === 'HOSPITAL' && scope.id === context.tenant.hospitalId) ||
-      (scope.type === 'FLOOR' && scope.id === floorId) ||
-      (scope.type === 'WARD' && scope.id === wardId),
-  );
-}
-
 function isUniqueConflict(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
@@ -90,6 +81,59 @@ function toPublicRequest(request: ServiceRequest) {
 
 export class RequestService {
   public constructor(private readonly database: PrismaClient) {}
+
+  // Every open request in the caller's area, plus the 100 most recent finished
+  // ones, so a long history never hides work that still needs attention.
+  public async list(context: StaffContext) {
+    if (!context.permissions.has('request.read')) throw new ForbiddenError();
+    const hospitalId = context.tenant.hospitalId;
+    const scopes = scopesFor(context, 'request.read');
+    const hospitalWide = scopes.some(
+      (scope) => scope.type === 'HOSPITAL' && scope.id === hospitalId,
+    );
+    const floorIds = scopes.filter((scope) => scope.type === 'FLOOR').map((scope) => scope.id);
+    const wardIds = scopes.filter((scope) => scope.type === 'WARD').map((scope) => scope.id);
+    if (!hospitalWide && floorIds.length === 0 && wardIds.length === 0) return [];
+
+    const where: Prisma.ServiceRequestWhereInput = {
+      hospitalId,
+      ...(hospitalWide
+        ? {}
+        : {
+            bed: {
+              OR: [
+                ...(floorIds.length > 0 ? [{ ward: { floorId: { in: floorIds } } }] : []),
+                ...(wardIds.length > 0 ? [{ wardId: { in: wardIds } }] : []),
+              ],
+            },
+          }),
+      ...(!context.permissions.has('request.assign') ? { assigneeId: context.membershipId } : {}),
+    };
+    const query = {
+      include: {
+        bed: { select: { code: true, displayName: true } },
+        assignee: { select: { user: { select: { displayName: true } } } },
+      },
+      orderBy: [{ submittedAt: 'desc' as const }, { id: 'desc' as const }],
+    };
+    const [open, finished] = await Promise.all([
+      this.database.serviceRequest.findMany({
+        ...query,
+        where: { ...where, status: { in: [...activeRequestStatuses, 'COMPLETED'] } },
+        take: 500,
+      }),
+      this.database.serviceRequest.findMany({
+        ...query,
+        where: { ...where, status: { in: ['CLOSED', 'CANCELLED', 'REJECTED'] } },
+        take: 100,
+      }),
+    ]);
+    return [...open, ...finished].map(({ bed, assignee, ...request }) => ({
+      ...request,
+      bed: { code: bed.code, displayName: bed.displayName },
+      assigneeName: assignee?.user.displayName ?? null,
+    }));
+  }
 
   // Core creation use case; the public adapter below adds retry behavior while
   // keeping this single transactional path for new request persistence.
@@ -309,7 +353,11 @@ export class RequestService {
       throw new NotFoundError();
     }
     const { bed, ...visible } = request;
-    if (!canAccessBed(context, bed.wardId, bed.ward.floorId)) throw new NotFoundError();
+    if (
+      !canAccessLocation(context, 'request.read', { wardId: bed.wardId, floorId: bed.ward.floorId })
+    ) {
+      throw new NotFoundError();
+    }
     return visible;
   }
 
@@ -360,7 +408,13 @@ export class RequestService {
         where: { hospitalId_id: { hospitalId, id } },
         include: { bed: { select: { wardId: true, ward: { select: { floorId: true } } } } },
       });
-      if (!current || !canAccessBed(context, current.bed.wardId, current.bed.ward.floorId)) {
+      if (
+        !current ||
+        !canAccessLocation(context, commandPermissions[action], {
+          wardId: current.bed.wardId,
+          floorId: current.bed.ward.floorId,
+        })
+      ) {
         throw new NotFoundError();
       }
       if (

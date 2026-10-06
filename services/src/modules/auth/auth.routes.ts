@@ -37,7 +37,10 @@ export function createAuthRouter(auth: StaffAuthService): Router {
       user: context.user,
       membershipId: context.membershipId,
       tenant: context.tenant,
-      permissions: [...context.permissions].sort(),
+      // Hospital-wide permissions; scopedPermissions also lists the ones held
+      // only for some floors or wards (used by request work screens).
+      permissions: [...context.hospitalPermissions].sort(),
+      scopedPermissions: [...context.permissions].sort(),
       scopes: context.scopes,
     });
   });

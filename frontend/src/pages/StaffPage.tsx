@@ -152,25 +152,31 @@ export function StaffPage() {
                   </span>
                 </td>
                 <td>
-                  {canManage ? (
-                    <button
-                      type="button"
-                      className={member.dutyStatus === 'ON_DUTY' ? '' : 'secondary'}
-                      disabled={
-                        busyMemberId !== null ||
-                        (member.status !== 'ACTIVE' && member.dutyStatus === 'OFF_DUTY')
-                      }
-                      onClick={() => void toggleDuty(member)}
+                  <div className="duty-cell">
+                    <span
+                      className={`badge ${member.dutyStatus === 'ON_DUTY' ? 'badge-available' : ''}`}
                     >
-                      {busyMemberId === member.id
-                        ? 'Saving…'
-                        : member.dutyStatus === 'ON_DUTY'
-                          ? 'Set off duty'
-                          : 'Set on duty'}
-                    </button>
-                  ) : (
-                    <span className="badge">{member.dutyStatus === 'ON_DUTY' ? 'on' : 'off'}</span>
-                  )}
+                      {member.dutyStatus === 'ON_DUTY' ? 'On duty' : 'Off duty'}
+                    </span>
+                    {canManage && (
+                      <button
+                        type="button"
+                        className="secondary compact"
+                        aria-label={`${member.dutyStatus === 'ON_DUTY' ? 'Set off duty' : 'Set on duty'}: ${member.displayName}`}
+                        disabled={
+                          busyMemberId !== null ||
+                          (member.status !== 'ACTIVE' && member.dutyStatus === 'OFF_DUTY')
+                        }
+                        onClick={() => void toggleDuty(member)}
+                      >
+                        {busyMemberId === member.id
+                          ? 'Saving…'
+                          : member.dutyStatus === 'ON_DUTY'
+                            ? 'Set off duty'
+                            : 'Set on duty'}
+                      </button>
+                    )}
+                  </div>
                 </td>
                 <td>
                   {member.departmentIds.length === 0 && (

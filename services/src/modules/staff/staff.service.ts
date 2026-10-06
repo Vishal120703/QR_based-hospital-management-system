@@ -6,7 +6,7 @@ import {
 } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
 import { recordStaffAudit } from '../audit/audit-log.js';
-import { revokeStaffSessions, type StaffContext } from '../auth/auth.service.js';
+import { canAccessLocation, revokeStaffSessions, type StaffContext } from '../auth/auth.service.js';
 import { hashPassword } from '../auth/password.js';
 import { findEligibleStaff } from './eligibility.js';
 
@@ -79,8 +79,19 @@ export class StaffService {
     return toView(await this.requireMember(this.database, context, id));
   }
 
-  public eligible(context: StaffContext, query: { bedId: string; departmentId: string }) {
-    return findEligibleStaff(this.database, context.tenant.hospitalId, query);
+  public async eligible(context: StaffContext, query: { bedId: string; departmentId: string }) {
+    const hospitalId = context.tenant.hospitalId;
+    const bed = await this.database.bed.findUnique({
+      where: { hospitalId_id: { hospitalId, id: query.bedId } },
+      select: { wardId: true, ward: { select: { floorId: true } } },
+    });
+    if (
+      !bed ||
+      !canAccessLocation(context, 'staff.read', { wardId: bed.wardId, floorId: bed.ward.floorId })
+    ) {
+      throw new NotFoundError();
+    }
+    return findEligibleStaff(this.database, hospitalId, query);
   }
 
   // Creates a new person and their membership in this hospital. Linking an

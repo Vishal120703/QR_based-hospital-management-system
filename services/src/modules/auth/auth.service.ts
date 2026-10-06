@@ -5,16 +5,46 @@ import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js
 
 const sessionDurationMs = 8 * 60 * 60 * 1000;
 
+export interface AuthorizationScope {
+  readonly type: 'HOSPITAL' | 'FLOOR' | 'WARD';
+  readonly id: string;
+}
+
 export interface StaffContext {
   readonly user: { readonly id: string; readonly email: string; readonly displayName: string };
   readonly tenant: { readonly hospitalId: string; readonly code: string; readonly name: string };
   readonly membershipId: string;
   readonly sessionId: string;
+  // Every permission held in at least one scope. Only location-aware code
+  // (requests, eligibility) may rely on this, together with scopesFor().
   readonly permissions: ReadonlySet<string>;
-  readonly scopes: ReadonlyArray<{
-    readonly type: 'HOSPITAL' | 'FLOOR' | 'WARD';
-    readonly id: string;
-  }>;
+  // Permissions held hospital-wide. Plain route guards check this set, so a
+  // floor- or ward-scoped role never unlocks hospital-wide screens.
+  readonly hospitalPermissions: ReadonlySet<string>;
+  readonly permissionScopes: ReadonlyMap<string, ReadonlyArray<AuthorizationScope>>;
+  readonly scopes: ReadonlyArray<AuthorizationScope>;
+}
+
+// The scopes in which the staff member holds one permission.
+export function scopesFor(
+  context: StaffContext,
+  permission: string,
+): ReadonlyArray<AuthorizationScope> {
+  return context.permissionScopes.get(permission) ?? [];
+}
+
+// Whether the permission covers a bed in this ward and floor.
+export function canAccessLocation(
+  context: StaffContext,
+  permission: string,
+  location: { readonly wardId: string; readonly floorId: string },
+): boolean {
+  return scopesFor(context, permission).some(
+    (scope) =>
+      (scope.type === 'HOSPITAL' && scope.id === context.tenant.hospitalId) ||
+      (scope.type === 'FLOOR' && scope.id === location.floorId) ||
+      (scope.type === 'WARD' && scope.id === location.wardId),
+  );
 }
 
 export class StaffAuthService {
@@ -94,19 +124,31 @@ export class StaffAuthService {
       throw new UnauthorizedError();
     }
 
-    const activeRoles = session.membership.userRoles.filter((entry) => entry.role.active);
-    const scopes = activeRoles.flatMap((entry) =>
-      entry.scopes.map((scope) => ({ type: scope.scopeType, id: scope.scopeId })),
+    const activeRoles = session.membership.userRoles.filter(
+      (entry) => entry.role.active && entry.scopes.length > 0,
     );
-    const hospitalScopedRoles = activeRoles.filter((entry) =>
-      entry.scopes.some(
-        (scope) => scope.scopeType === 'HOSPITAL' && scope.scopeId === session.hospitalId,
-      ),
-    );
-    const hasHospitalScope = hospitalScopedRoles.length > 0;
-    if (!hasHospitalScope) {
+    if (activeRoles.length === 0) {
       throw new UnauthorizedError();
     }
+
+    const permissionScopes = new Map<string, AuthorizationScope[]>();
+    for (const entry of activeRoles) {
+      const roleScopes = entry.scopes.map((scope) => ({
+        type: scope.scopeType,
+        id: scope.scopeId,
+      }));
+      for (const { permissionKey } of entry.role.rolePermissions) {
+        permissionScopes.set(permissionKey, [
+          ...(permissionScopes.get(permissionKey) ?? []),
+          ...roleScopes,
+        ]);
+      }
+    }
+    const hospitalPermissions = [...permissionScopes]
+      .filter(([, scopes]) =>
+        scopes.some((scope) => scope.type === 'HOSPITAL' && scope.id === session.hospitalId),
+      )
+      .map(([permission]) => permission);
 
     return {
       user: {
@@ -121,12 +163,12 @@ export class StaffAuthService {
       },
       membershipId: session.membershipId,
       sessionId: session.id,
-      permissions: new Set(
-        hospitalScopedRoles.flatMap((entry) =>
-          entry.role.rolePermissions.map((item) => item.permissionKey),
-        ),
+      permissions: new Set(permissionScopes.keys()),
+      hospitalPermissions: new Set(hospitalPermissions),
+      permissionScopes,
+      scopes: activeRoles.flatMap((entry) =>
+        entry.scopes.map((scope) => ({ type: scope.scopeType, id: scope.scopeId })),
       ),
-      scopes,
     };
   }
 

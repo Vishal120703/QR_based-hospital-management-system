@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router';
 import {
   ApiError,
   credentials,
@@ -30,6 +31,9 @@ const copy = {
   en: {
     language: 'Language',
     scanAgain: 'Please scan the QR code on your bed to continue.',
+    openScanner: 'Scan a QR code',
+    noLogin:
+      'No patient account or staff login is needed. Ask hospital staff for the bedside QR code if it is missing.',
     sessionEnded: 'Your session has ended.',
     loading: 'Loading your hospital services and requests…',
     tryAgain: 'Try again',
@@ -38,7 +42,7 @@ const copy = {
     services: 'Hospital services',
     servicesHelp: 'Choose a service to send a request to hospital staff.',
     processingNotice:
-      'Requests are recorded, but automatic staff routing and alerts are not active yet. A new request stays Submitted until staff process it. For help now, tell hospital staff directly.',
+      'Requests go to a floor manager for manual assignment. Automatic routing and alerts are not active yet. For urgent help, tell hospital staff directly.',
     noServices: 'No services available yet',
     noServicesHelp:
       'The hospital has not published its service catalog. Please contact staff for assistance.',
@@ -84,6 +88,9 @@ const copy = {
   hi: {
     language: 'भाषा',
     scanAgain: 'जारी रखने के लिए अपने बिस्तर पर लगा QR कोड फिर से स्कैन करें।',
+    openScanner: 'QR कोड स्कैन करें',
+    noLogin:
+      'मरीज के लिए खाता या कर्मचारी लॉगिन ज़रूरी नहीं है। बिस्तर पर QR कोड न हो तो अस्पताल के कर्मचारियों से पूछें।',
     sessionEnded: 'आपका सत्र समाप्त हो गया है।',
     loading: 'अस्पताल की सेवाएँ और अनुरोध लोड हो रहे हैं…',
     tryAgain: 'फिर कोशिश करें',
@@ -92,7 +99,7 @@ const copy = {
     services: 'अस्पताल की सेवाएँ',
     servicesHelp: 'अस्पताल के कर्मचारियों को अनुरोध भेजने के लिए सेवा चुनें।',
     processingNotice:
-      'अनुरोध दर्ज होता है, लेकिन कर्मचारियों तक अपने-आप पहुँचाने और सूचना भेजने की सुविधा अभी चालू नहीं है। कर्मचारियों की कार्रवाई तक नया अनुरोध “भेजा गया” स्थिति में रहेगा। अभी मदद के लिए सीधे कर्मचारी को बताएँ।',
+      'अनुरोध फ़्लोर मैनेजर को भेजा जाता है, जो इसे कर्मचारी को सौंपता है। अपने-आप सौंपने और सूचना भेजने की सुविधा अभी चालू नहीं है। तुरंत मदद के लिए सीधे अस्पताल के कर्मचारी को बताएँ।',
     noServices: 'अभी कोई सेवा उपलब्ध नहीं है',
     noServicesHelp:
       'अस्पताल ने अभी सेवाएँ प्रकाशित नहीं की हैं। मदद के लिए कर्मचारी से संपर्क करें।',
@@ -144,7 +151,45 @@ function requestTime(value: string, language: Language): string {
     : date.toLocaleString(language === 'hi' ? 'hi-IN' : 'en-IN', {
         dateStyle: 'medium',
         timeStyle: 'short',
+        // Hindi readers get a 24-hour clock instead of a Latin "am/pm".
+        ...(language === 'hi' ? { hourCycle: 'h23' as const } : {}),
       });
+}
+
+const progressSteps: PublicRequestStatus[] = [
+  'SUBMITTED',
+  'ASSIGNED',
+  'ACCEPTED',
+  'IN_PROGRESS',
+  'COMPLETED',
+];
+
+// Shows how far a request has moved. Cancelled and rejected requests have no
+// progress, so their status badge alone is shown.
+function RequestProgress({
+  status,
+  labels,
+}: {
+  status: PublicRequestStatus;
+  labels: Record<PublicRequestStatus, string>;
+}) {
+  const current = progressSteps.indexOf(status === 'CLOSED' ? 'COMPLETED' : status);
+  if (current < 0) return null;
+  return (
+    <ol className="request-progress" aria-label={labels[status]}>
+      {progressSteps.map((step, index) => (
+        <li
+          key={step}
+          className={[index <= current ? 'reached' : '', index === current ? 'now' : '']
+            .filter(Boolean)
+            .join(' ')}
+          aria-current={index === current ? 'step' : undefined}
+        >
+          {labels[step]}
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function upsertRequest(requests: PublicRequest[], updated: PublicRequest): PublicRequest[] {
@@ -413,6 +458,10 @@ export function PatientPage() {
             {guestToken ? `${t.sessionEnded} ` : ''}
             {t.scanAgain}
           </p>
+          <p className="small muted patient-access-help">{t.noLogin}</p>
+          <Link className="button secondary" to="/">
+            {t.openScanner}
+          </Link>
         </section>
       )}
 
@@ -529,6 +578,7 @@ export function PatientPage() {
                       <h3>{request.serviceName}</h3>
                       <span className="badge">{t.requestStatus[request.status]}</span>
                     </div>
+                    <RequestProgress status={request.status} labels={t.requestStatus} />
                     <dl className="patient-request-meta">
                       <div>
                         <dt>{t.reference}</dt>
@@ -588,6 +638,7 @@ export function PatientPage() {
               {
                 hour: '2-digit',
                 minute: '2-digit',
+                ...(language === 'hi' ? { hourCycle: 'h23' as const } : {}),
               },
             )}
             .

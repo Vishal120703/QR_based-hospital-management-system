@@ -193,26 +193,32 @@ export function ServicesPage() {
                     {byId(catalog.escalationPolicies, service.escalationPolicyId)?.name ?? '—'}
                   </td>
                   <td>
-                    {canManage ? (
-                      <button
-                        type="button"
-                        className={service.active ? '' : 'secondary'}
-                        disabled={busyKey !== null}
-                        onClick={() =>
-                          void change(service.id, () =>
-                            staffApi.updateService(token, service.id, { active: !service.active }),
-                          )
-                        }
-                      >
-                        {busyKey === service.id
-                          ? 'Saving…'
-                          : service.active
-                            ? 'Deactivate service'
-                            : 'Activate service'}
-                      </button>
-                    ) : (
-                      <span className="badge">{service.active ? 'active' : 'inactive'}</span>
-                    )}
+                    <div className="duty-cell">
+                      <span className={`badge ${service.active ? 'badge-available' : ''}`}>
+                        {service.active ? 'Active' : 'Inactive'}
+                      </span>
+                      {canManage && (
+                        <button
+                          type="button"
+                          className="secondary compact"
+                          aria-label={`${service.active ? 'Deactivate' : 'Activate'} ${service.name}`}
+                          disabled={busyKey !== null}
+                          onClick={() =>
+                            void change(service.id, () =>
+                              staffApi.updateService(token, service.id, {
+                                active: !service.active,
+                              }),
+                            )
+                          }
+                        >
+                          {busyKey === service.id
+                            ? 'Saving…'
+                            : service.active
+                              ? 'Deactivate'
+                              : 'Activate'}
+                        </button>
+                      )}
+                    </div>
                     {service.active &&
                       ((!category?.active && category) || (!department?.active && department)) && (
                         <div className="muted small">

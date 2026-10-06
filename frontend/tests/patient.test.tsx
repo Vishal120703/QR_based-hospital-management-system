@@ -13,6 +13,7 @@ import {
 } from '../src/api';
 import { PatientPage } from '../src/pages/PatientPage';
 import { ScanPage } from '../src/pages/ScanPage';
+import { LoginPage } from '../src/pages/LoginPage';
 
 const location: GuestLocation = {
   hospitalName: 'Test Hospital',
@@ -47,7 +48,28 @@ function mockPatient(requests: PublicRequest[] = [], services = categories) {
   vi.spyOn(guestApi, 'requests').mockResolvedValue(requests);
 }
 
+function renderPatient() {
+  return render(
+    <MemoryRouter>
+      <PatientPage />
+    </MemoryRouter>,
+  );
+}
+
 describe('Patient request flow', () => {
+  it('explains that patients enter through the bedside QR, not staff login', () => {
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Patient or attendant?')).toBeTruthy();
+    expect(screen.getByText(/Scan the QR code at your bed to request a service/)).toBeTruthy();
+
+    renderPatient();
+    expect(screen.getByText(/No patient account or staff login is needed/)).toBeTruthy();
+  });
+
   it('retries transient errors without discarding the guest credential', async () => {
     const user = userEvent.setup();
     credentials.setGuest('guest-token');
@@ -56,7 +78,7 @@ describe('Patient request flow', () => {
       .mockResolvedValue({ location });
     vi.spyOn(guestApi, 'services').mockResolvedValue([]);
     vi.spyOn(guestApi, 'requests').mockResolvedValue([]);
-    render(<PatientPage />);
+    renderPatient();
     await user.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Bed 101' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'No services available yet' })).toBeTruthy();
@@ -72,7 +94,7 @@ describe('Patient request flow', () => {
     );
     vi.spyOn(guestApi, 'services').mockResolvedValue([]);
     vi.spyOn(guestApi, 'requests').mockResolvedValue([]);
-    render(<PatientPage />);
+    renderPatient();
     expect(await screen.findByText(/Your session has ended/)).toBeTruthy();
     expect(credentials.guest()).toBeNull();
   });
@@ -82,7 +104,7 @@ describe('Patient request flow', () => {
     credentials.setGuest('guest-token');
     mockPatient();
     const submit = vi.spyOn(guestApi, 'submitRequest').mockResolvedValue(submittedRequest);
-    render(<PatientPage />);
+    renderPatient();
 
     await user.click(await screen.findByRole('button', { name: 'Request service' }));
 
@@ -92,7 +114,7 @@ describe('Patient request flow', () => {
       '#request-CR-12345678',
     );
     expect(screen.queryByRole('button', { name: 'Request service' })).toBeNull();
-    expect(screen.getByText('Submitted')).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Submitted' })).toBeTruthy();
   });
 
   it('asks before cancellation and updates the status after confirmation', async () => {
@@ -102,7 +124,7 @@ describe('Patient request flow', () => {
     const cancel = vi
       .spyOn(guestApi, 'cancelRequest')
       .mockResolvedValue({ ...submittedRequest, status: 'CANCELLED' });
-    render(<PatientPage />);
+    renderPatient();
 
     await user.click(await screen.findByRole('button', { name: 'Cancel request' }));
     expect(cancel).not.toHaveBeenCalled();
@@ -122,7 +144,7 @@ describe('Patient request flow', () => {
     vi.spyOn(guestApi, 'submitRequest').mockRejectedValue(
       new ApiError(409, 'CONFLICT', 'Already requested'),
     );
-    render(<PatientPage />);
+    renderPatient();
 
     await user.click(await screen.findByRole('button', { name: 'Request service' }));
 
@@ -138,11 +160,11 @@ describe('Patient request flow', () => {
     vi.spyOn(guestApi, 'requests')
       .mockResolvedValueOnce([submittedRequest])
       .mockResolvedValue([{ ...submittedRequest, status: 'IN_PROGRESS' }]);
-    render(<PatientPage />);
+    renderPatient();
 
     await user.click(await screen.findByRole('button', { name: 'Refresh status' }));
 
-    expect(await screen.findByText('In progress')).toBeTruthy();
+    expect(await screen.findByRole('list', { name: 'In progress' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Cancel request' })).toBeNull();
   });
 
@@ -150,7 +172,7 @@ describe('Patient request flow', () => {
     const user = userEvent.setup();
     credentials.setGuest('guest-token');
     mockPatient([submittedRequest]);
-    render(<PatientPage />);
+    renderPatient();
 
     await user.selectOptions(await screen.findByLabelText('Language'), 'hi');
 

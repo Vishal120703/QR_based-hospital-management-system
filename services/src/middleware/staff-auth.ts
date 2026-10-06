@@ -27,13 +27,28 @@ export function requireStaffAuth(auth: StaffAuthService): RequestHandler {
   };
 }
 
+// Requires the permission hospital-wide. Use this for every screen or record
+// that is not filtered by floor or ward.
 export function requirePermission(permission: string): RequestHandler {
+  return guard(permission, (context) => context.hospitalPermissions);
+}
+
+// Requires the permission in at least one scope. Only for handlers whose
+// service checks the target's floor or ward with canAccessLocation().
+export function requireScopedPermission(permission: string): RequestHandler {
+  return guard(permission, (context) => context.permissions);
+}
+
+function guard(
+  permission: string,
+  granted: (context: StaffContext) => ReadonlySet<string>,
+): RequestHandler {
   return (request, _response, next) => {
     if (!request.staff) {
       next(new UnauthorizedError());
       return;
     }
-    if (!request.staff.permissions.has(permission)) {
+    if (!granted(request.staff).has(permission)) {
       next(new ForbiddenError());
       return;
     }

@@ -9,6 +9,7 @@ src/
 ├── components.tsx     Shared UI (forms, retry states, notices, native modal)
 ├── styles.css
 └── pages/
+    ├── QrEntryPage.tsx    /: patient-first camera scanner and QR-link entry
     ├── LoginPage.tsx      Staff sign-in
     ├── AdminLayout.tsx    Staff shell; validates the session once
     ├── LocationsPage.tsx  Building → Floor → Ward → Room → Bed setup
@@ -25,6 +26,8 @@ src/
 ```
 
 Run `npm run dev` with the backend running on port 3001; see the root [README](../README.md).
+
+The website opens on the patient QR entry screen. Staff use **Staff sign in**. The QR decoder loads only when requested and reads CARE QR links for this website; patients can scan live, take/choose a QR photo (decoded locally without upload), or paste a link. Printed QR links still open `/q/<token>` directly. Live camera permission requires HTTPS or localhost; a plain HTTP LAN address can use QR-photo capture, the phone's Camera app, or a pasted link.
 
 Staff tokens are kept in `localStorage` until their 8-hour session ends. Guest tokens are kept in `sessionStorage`, so a patient's access lasts only for the tab that scanned the code.
 

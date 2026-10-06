@@ -7,7 +7,10 @@ import { DepartmentsPage } from './pages/DepartmentsPage';
 import { EligibilityPage } from './pages/EligibilityPage';
 import { LocationsPage } from './pages/LocationsPage';
 import { LoginPage } from './pages/LoginPage';
+import { OverviewPage } from './pages/OverviewPage';
 import { PatientPage } from './pages/PatientPage';
+import { QrEntryPage } from './pages/QrEntryPage';
+import { RequestsPage } from './pages/RequestsPage';
 import { ScanPage } from './pages/ScanPage';
 import { ServicesPage } from './pages/ServicesPage';
 import { SlaPage } from './pages/SlaPage';
@@ -23,10 +26,12 @@ createRoot(root).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="/" element={<QrEntryPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminIndex />} />
+          <Route path="overview" element={<OverviewPage />} />
+          <Route path="requests" element={<RequestsPage />} />
           <Route path="beds" element={<BedsPage />} />
           <Route path="locations" element={<LocationsPage />} />
           <Route path="departments" element={<DepartmentsPage />} />

@@ -128,6 +128,51 @@ afterAll(async () => {
 });
 
 describe('Phase 4 secure QR codes', () => {
+  it('bulk-generates one QR per eligible bed in a ward without rotating active codes', async () => {
+    const { bedId, wardId } = await createBedFixture(database, hospitalA);
+    const floorId = (await database.ward.findUniqueOrThrow({ where: { id: wardId } })).floorId;
+    const secondBed = await database.bed.create({
+      data: { hospitalId: hospitalA.hospitalId, wardId, code: '102', displayName: 'Bed 102' },
+    });
+    const existing = await issueQr(hospitalA, bedId);
+    const batch = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', { floorId, wardId });
+    expect(batch.status, JSON.stringify(batch.body)).toBe(201);
+    expect(batch.headers['cache-control']).toBe('no-store');
+    const result = z
+      .object({
+        issues: z.array(issueSchema.extend({ bedName: z.string(), location: z.string() })),
+        totalBeds: z.number(),
+        skippedActive: z.number(),
+        skippedInactive: z.number(),
+      })
+      .parse(batch.body);
+    expect(result.totalBeds).toBe(2);
+    expect(result.skippedActive).toBe(1);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]?.qrCode.bedId).toBe(secondBed.id);
+    expect(
+      (
+        await database.bedQrCode.findUniqueOrThrow({
+          where: { hospitalId_bedId: { hospitalId: hospitalA.hospitalId, bedId } },
+        })
+      ).tokenHash,
+    ).toBe(hashOpaqueToken(existing.token));
+    const repeated = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', {
+      floorId,
+      wardId,
+    });
+    expect(z.object({ issues: z.array(issueSchema) }).parse(repeated.body).issues).toEqual([]);
+    expect(
+      (
+        await as(hospitalA.adminToken).post('/admin/qr-codes/batch', {
+          floorId: secondBed.id,
+          wardId,
+        })
+      ).status,
+    ).toBe(404);
+    const ordinary = as(await createStaffToken(database, application, hospitalA, ['qr.generate']));
+    expect((await ordinary.post('/admin/qr-codes/batch', { floorId, wardId })).status).toBe(403);
+  });
   it('issues a QR code once and stores only the SHA-256 hash', async () => {
     const { bedId } = await createBedFixture(database, hospitalA);
     const response = await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr`);
@@ -472,9 +517,15 @@ describe('Phase 4 bed sessions and guest sessions', () => {
     expect((await reader.post('/admin/bed-sessions', { bedId })).status).toBe(403);
 
     const issuer = as(await createStaffToken(database, application, hospitalA, ['qr.generate']));
-    expect((await issuer.post(`/admin/beds/${bedId}/qr`)).status).toBe(201);
+    expect((await issuer.post(`/admin/beds/${bedId}/qr`)).status).toBe(403);
     expect((await issuer.post(`/admin/beds/${bedId}/qr/rotate`)).status).toBe(403);
     expect((await issuer.post(`/admin/beds/${bedId}/qr/revoke`)).status).toBe(403);
+
+    const manager = as(
+      await createStaffToken(database, application, hospitalA, ['hospital.manage', 'qr.generate']),
+    );
+    expect((await manager.post(`/admin/beds/${bedId}/qr`)).status).toBe(201);
+    expect((await manager.post(`/admin/beds/${bedId}/qr/rotate`)).status).toBe(403);
 
     const floorManager = as(
       await createStaffToken(database, application, hospitalA, ['bedSession.manage']),

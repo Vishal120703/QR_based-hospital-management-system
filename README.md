@@ -19,7 +19,7 @@ Before Phase 9, use the [Phase 0–8 manual test plan](./services/docs/manual-te
 
 For a plain-language walkthrough of the architecture, demo data, and local setup, read the [easy project guide](./services/docs/easy-guide.md).
 
-Patients can now submit, track, and cancel eligible service requests from an active QR session. Requests remain `SUBMITTED` until staff handle them; routing, dashboards, and notifications are later phases. This is not ready for hospital production use.
+Patients can submit, track, and cancel eligible service requests from an active QR session. A floor manager can manually assign requests; assigned staff can accept, start, and mark them complete. Automatic routing, alerts, and notifications are still later work. This is not ready for hospital production use.
 
 ## Prerequisites
 
@@ -57,16 +57,16 @@ If you change `services/.env` (especially `DATABASE_URL`), stop and restart the 
 
 ## Try it
 
-1. Open http://localhost:5173 and sign in with the hospital code, email, and password from step 2.
+1. Open http://localhost:5173. Patients see **Scan QR** first and can use the live camera, take/choose a QR photo, or paste their bedside QR link without signing in. Staff choose **Staff sign in** and enter the hospital code, email, and password from step 2. Staff land on **Overview**, which shows live counts, a setup checklist, and a shortcut to every screen their role can open.
 2. **Locations:** add a floor, a ward, optionally a room, and a bed.
-3. **Beds & QR:** generate a QR code for the bed. Choose **Open patient view**: it is refused, because the bed has no active session.
-4. Choose **Start session**, then open the patient view again: it shows the bed, service catalog, and emergency notice. Choose a service to submit a request, then track or cancel it from **Your requests**.
-5. **Close session** or **Replace QR**: connected patients lose access; the patient page rechecks access every 30 seconds and when the tab becomes visible. **Replace QR** and **Disable QR** also invalidate the old code.
+3. **Beds & QR:** choose **Start session** for an available bed, then **Generate QR**. In the one-time QR dialog, choose **Open patient view** to test on this computer or **Print** for the bedside. If an active QR already exists but its link was lost, choose **Replace QR** to issue a new one; the old code stops working.
+4. On the patient page, choose a service and select **Request service**. The request appears under **Your requests**, where the patient can track or cancel it while eligible.
+5. **Close session**, **Replace QR**, or **Disable QR** ends existing patient access. The patient page rechecks access every 30 seconds and when the tab becomes visible.
 6. **Staff:** add a staff member, then **Manage** them: add a department (for example Housekeeping) and coverage (a ward). Turn them **On duty**.
 7. **Services** and **SLA:** hide a service and it disappears from the patient view. Change an SLA's minutes and it saves a new version; the history keeps every earlier version.
 8. **Who can respond?:** pick a bed and a department. Only staff who are active, on duty, in that department, and covering that bed's ward, floor, or the whole hospital are listed.
 
-To scan with a real phone on the same Wi-Fi, start the frontend with `npm run dev -- --host`, and set `PUBLIC_APP_URL=http://<your-computer-ip>:5173` in `services/.env` before generating the QR code.
+To open a printed QR with a real phone on the same Wi-Fi, start the frontend with `npm run dev -- --host`, and set `PUBLIC_APP_URL=http://<your-computer-ip>:5173` in `services/.env` **before issuing the QR**. A phone's built-in Camera app can open the printed link directly. In-app live camera scanning requires a secure browser context (HTTPS, or `localhost` on the device running the browser); on an HTTP LAN address, use **Take / choose a QR photo**, the phone's Camera app, or a pasted link instead. QR photos are decoded locally and not uploaded.
 
 ## Quality gate
 

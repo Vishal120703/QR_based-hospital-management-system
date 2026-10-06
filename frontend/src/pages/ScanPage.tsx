@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError, credentials, guestApi } from '../api';
 import { EmergencyNotice } from '../components';
 
@@ -64,6 +64,9 @@ export function ScanPage() {
             >
               Try again
             </button>
+            <Link className="button secondary" to="/">
+              Scan another QR
+            </Link>
           </>
         ) : (
           <p className="muted">Connecting to your bed…</p>

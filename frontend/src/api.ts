@@ -107,7 +107,10 @@ export interface Me {
   user: { id: string; email: string; displayName: string };
   membershipId: string;
   tenant: { hospitalId: string; code: string; name: string };
+  // Held hospital-wide.
   permissions: string[];
+  // Also includes permissions held only for some floors or wards.
+  scopedPermissions: string[];
 }
 export interface Building {
   id: string;
@@ -145,6 +148,12 @@ export interface QrIssue {
   qrCode: QrCode;
   token: string;
   url: string;
+}
+export interface QrBatch {
+  issues: (QrIssue & { bedName: string; location: string })[];
+  totalBeds: number;
+  skippedActive: number;
+  skippedInactive: number;
 }
 export interface BedSession {
   id: string;
@@ -208,6 +217,25 @@ export interface EligibleStaff {
   displayName: string;
   dutyChangedAt: string | null;
 }
+
+export interface StaffRequest {
+  id: string;
+  publicId: string;
+  bedId: string;
+  bed: { code: string; displayName: string };
+  departmentId: string;
+  serviceName: string;
+  priority: Priority;
+  status: PublicRequestStatus;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  submittedAt: string;
+  acceptDueAt: string;
+  completeDueAt: string;
+  completedAt: string | null;
+  version: number;
+}
+export type StaffRequestAction = 'assign' | 'accept' | 'start' | 'complete' | 'close' | 'cancel';
 
 export type Priority = 'NORMAL' | 'HIGH' | 'URGENT';
 export interface ServiceCategory {
@@ -387,9 +415,28 @@ export const staffApi = {
         token,
       )
     ).staff,
+  requests: async (token: string) =>
+    (await call<{ serviceRequests: StaffRequest[] }>('GET', '/admin/requests', token))
+      .serviceRequests,
+  requestAction: async (
+    token: string,
+    id: string,
+    action: StaffRequestAction,
+    input: { expectedVersion: number; assigneeId?: string; reason?: string },
+  ) =>
+    (
+      await call<{ serviceRequest: StaffRequest }>(
+        'POST',
+        `/admin/requests/${id}/${action}`,
+        token,
+        input,
+      )
+    ).serviceRequest,
 
   generateQr: (token: string, bedId: string) =>
     call<QrIssue>('POST', `/admin/beds/${bedId}/qr`, token, {}),
+  generateWardQrs: (token: string, floorId: string, wardId: string) =>
+    call<QrBatch>('POST', '/admin/qr-codes/batch', token, { floorId, wardId }),
   rotateQr: (token: string, bedId: string) =>
     call<QrIssue>('POST', `/admin/beds/${bedId}/qr/rotate`, token, {}),
   revokeQr: (token: string, bedId: string) =>
