@@ -1,42 +1,51 @@
-import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   staffApi,
   type Bed,
   type BedSession,
+  type Building,
   type Floor,
+  type QrBatch,
+  type QrBatchScope,
   type QrCode,
   type QrIssue,
   type Room,
   type Ward,
 } from '../api';
 import { useAdmin } from './AdminLayout';
-import { LoadState, Modal, PageHeading } from '../components';
+import { LoadState, PageHeading } from '../components';
+import { labelFromIssue, labelsFromBatch, QrLabelsDialog, type LabelItem } from './QrLabelsDialog';
 
 interface BedRow {
   bed: Bed;
   location: string;
+  buildingId: string | undefined;
+  buildingName: string | undefined;
   floorId: string | undefined;
   floorName: string | undefined;
   wardId: string;
   wardName: string | undefined;
+  roomId: string | null;
+  roomName: string | undefined;
   qrCode: QrCode | undefined;
   session: BedSession | undefined;
 }
 
 interface Issued {
-  issue: QrIssue;
-  bedName: string;
-  location: string;
+  items: LabelItem[];
+  area: string;
+  // A single bed also offers its patient link for testing.
+  url?: string;
 }
 
 async function loadRows(token: string, canReadLocations: boolean): Promise<BedRow[]> {
-  const [beds, wards, floors, rooms, qrCodes, sessions] = await Promise.all([
+  const [beds, wards, floors, rooms, buildings, qrCodes, sessions] = await Promise.all([
     staffApi.list<Bed>(token, 'beds'),
     canReadLocations ? staffApi.list<Ward>(token, 'wards') : Promise.resolve([]),
     canReadLocations ? staffApi.list<Floor>(token, 'floors') : Promise.resolve([]),
     canReadLocations ? staffApi.list<Room>(token, 'rooms') : Promise.resolve([]),
+    canReadLocations ? staffApi.list<Building>(token, 'buildings') : Promise.resolve([]),
     staffApi.list<QrCode>(token, 'qr-codes'),
     staffApi.list<BedSession>(token, 'bed-sessions', '?status=ACTIVE'),
   ]);
@@ -44,13 +53,19 @@ async function loadRows(token: string, canReadLocations: boolean): Promise<BedRo
     const ward = wards.find((item) => item.id === bed.wardId);
     const floor = floors.find((item) => item.id === ward?.floorId);
     const room = rooms.find((item) => item.id === bed.roomId);
+    // Floor names repeat across buildings ("Ground Floor"), so name both.
+    const building = buildings.find((item) => item.id === floor?.buildingId);
     return {
       bed,
-      location: [floor?.name, ward?.name, room?.name].filter(Boolean).join(' · '),
+      location: [building?.name, floor?.name, ward?.name, room?.name].filter(Boolean).join(' · '),
+      buildingId: building?.id,
+      buildingName: building?.name,
       floorId: floor?.id,
-      floorName: floor?.name,
+      floorName: floor && [building?.name, floor.name].filter(Boolean).join(' · '),
       wardId: bed.wardId,
       wardName: ward?.name,
+      roomId: bed.roomId,
+      roomName: room?.name,
       qrCode: qrCodes.find((item) => item.bedId === bed.id),
       session: sessions.find((item) => item.bedId === bed.id),
     };
@@ -58,19 +73,18 @@ async function loadRows(token: string, canReadLocations: boolean): Promise<BedRo
 }
 
 export function BedsPage() {
-  const { token, me, reportError, reportSuccess } = useAdmin();
+  const { token, me, reportError, reportSuccess, canAnywhere } = useAdmin();
   const [rows, setRows] = useState<BedRow[] | null>(null);
   const [version, setVersion] = useState(0);
   const [busyBedId, setBusyBedId] = useState<string | null>(null);
-  const [issued, setIssued] = useState<Issued[] | null>(null);
-  const [floorId, setFloorId] = useState('');
-  const [wardId, setWardId] = useState('');
-  const [batchMessage, setBatchMessage] = useState<string | null>(null);
+  const [issued, setIssued] = useState<Issued | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const pending = useRef(false);
-  const canReadLocations = me.permissions.includes('location.read');
+  // Floor and ward managers hold these for their own area; the server returns
+  // only the beds there.
+  const canReadLocations = canAnywhere('location.read');
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +106,7 @@ export function BedsPage() {
 
   const can = (permission: string) => me.permissions.includes(permission);
   const canManageQr = can('hospital.manage');
-  const canManageSessions = can('bedSession.manage');
+  const canManageSessions = canAnywhere('bedSession.manage');
 
   async function act(row: BedRow, action: () => Promise<unknown>, confirmText?: string) {
     if (pending.current) return;
@@ -120,27 +134,31 @@ export function BedsPage() {
   // Generating or rotating returns the raw token once; show it for printing.
   const issueQr = (row: BedRow, request: () => Promise<QrIssue>) => async () => {
     const issue = await request();
-    setIssued([{ issue, bedName: row.bed.displayName, location: row.location }]);
+    setIssued({
+      items: [
+        labelFromIssue(issue, {
+          bedName: row.bed.displayName,
+          bedCode: row.bed.code,
+          location: row.location,
+        }),
+      ],
+      area: row.bed.displayName,
+      url: issue.url,
+    });
   };
 
-  async function generateWard() {
-    if (!floorId || !wardId || pending.current) return;
+  async function generateBatch(scope: QrBatchScope, area: string, replaceExisting: boolean) {
+    if (pending.current) return null;
     pending.current = true;
     setBusyBedId('batch');
-    setBatchMessage(null);
     try {
-      const result = await staffApi.generateWardQrs(token, floorId, wardId);
-      setBatchMessage(
-        `${result.issues.length} new QR codes created. ${result.skippedActive} beds already had active QR codes; ${result.skippedInactive} inactive beds were skipped.`,
-      );
-      if (result.issues.length > 0) {
-        setIssued(
-          result.issues.map(({ bedName, location, ...issue }) => ({ issue, bedName, location })),
-        );
-      }
+      const result = await staffApi.generateQrBatch(token, scope, replaceExisting);
+      if (result.issues.length > 0) setIssued({ items: labelsFromBatch(result), area });
       setRows(await loadRows(token, canReadLocations));
+      return result;
     } catch (cause) {
       reportError(cause);
+      return null;
     } finally {
       pending.current = false;
       setBusyBedId(null);
@@ -168,25 +186,6 @@ export function BedsPage() {
         .includes(search.trim().toLowerCase()) &&
       (filter === 'ALL' || (filter === 'ACTIVE' ? Boolean(row.session) : !row.session)),
   );
-  const floors = [
-    ...new Map(
-      rows
-        .filter((row) => row.floorId)
-        .map((row) => [row.floorId, { id: row.floorId!, name: row.floorName ?? 'Floor' }]),
-    ).values(),
-  ];
-  const wards = [
-    ...new Map(
-      rows
-        .filter((row) => row.floorId === floorId)
-        .map((row) => [row.wardId, { id: row.wardId, name: row.wardName ?? 'Ward' }]),
-    ).values(),
-  ];
-  const selected = rows.filter((row) => row.floorId === floorId && row.wardId === wardId);
-  const newCount = selected.filter(
-    (row) => row.bed.active && row.qrCode?.status !== 'ACTIVE',
-  ).length;
-
   return (
     <>
       <PageHeading
@@ -243,70 +242,12 @@ export function BedsPage() {
         </div>
       </div>
       {canManageQr && can('qr.generate') && canReadLocations && rows.length > 0 && (
-        <section className="card no-print" aria-label="Generate ward QR codes">
-          <h2>Print QR codes for a ward</h2>
-          <p className="muted small">
-            Choose a floor and ward. Each active bed without an active QR gets its own code.
-            Existing QR codes are left unchanged.
-          </p>
-          <div className="inline-form">
-            <label>
-              Floor
-              <select
-                aria-label="Floor for QR codes"
-                value={floorId}
-                onChange={(event) => {
-                  setFloorId(event.target.value);
-                  setWardId('');
-                  setBatchMessage(null);
-                }}
-              >
-                <option value="">Choose floor…</option>
-                {floors.map((floor) => (
-                  <option key={floor.id} value={floor.id}>
-                    {floor.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Ward
-              <select
-                aria-label="Ward for QR codes"
-                value={wardId}
-                disabled={!floorId}
-                onChange={(event) => {
-                  setWardId(event.target.value);
-                  setBatchMessage(null);
-                }}
-              >
-                <option value="">Choose ward…</option>
-                {wards.map((ward) => (
-                  <option key={ward.id} value={ward.id}>
-                    {ward.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              disabled={!wardId || newCount === 0 || busyBedId !== null}
-              onClick={() => void generateWard()}
-            >
-              Generate {newCount} QR {newCount === 1 ? 'code' : 'codes'}
-            </button>
-          </div>
-          {wardId && (
-            <p className="small muted">
-              {selected.length} beds in this ward · {newCount} new codes to print
-            </p>
-          )}
-          {batchMessage && (
-            <p role="status" className="small">
-              {batchMessage}
-            </p>
-          )}
-        </section>
+        <PrintLabels
+          rows={rows}
+          canReplace={can('qr.rotate')}
+          busy={busyBedId !== null}
+          onGenerate={generateBatch}
+        />
       )}
       <div className="toolbar">
         <label className="search-field">
@@ -487,75 +428,248 @@ export function BedsPage() {
         </div>
       )}
 
-      {issued && <QrDialog issued={issued} onClose={() => setIssued(null)} />}
+      {issued && (
+        <QrLabelsDialog items={issued.items} area={issued.area} onClose={() => setIssued(null)}>
+          {issued.url && <PatientLinkActions url={issued.url} />}
+        </QrLabelsDialog>
+      )}
     </>
   );
 }
 
-function QrDialog({ issued, onClose }: { issued: Issued[]; onClose: () => void }) {
+function PatientLinkActions({ url }: { url: string }) {
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   async function copy() {
     try {
-      await navigator.clipboard.writeText(issued[0]!.issue.url);
+      await navigator.clipboard.writeText(url);
       setCopyMessage('Patient link copied. Keep it private.');
     } catch {
-      setCopyMessage('Could not copy. Use Open patient view or print the QR instead.');
+      setCopyMessage('Could not copy. Use Open patient view instead.');
     }
   }
   return (
-    <Modal
-      title={
-        issued.length === 1
-          ? 'Print your new bedside QR'
-          : `Print ${issued.length} bedside QR codes`
-      }
-      onClose={onClose}
-      wide={issued.length > 1}
-    >
-      <p className="notice notice-warning no-print">
-        This QR code is shown only once. Print it now; to get another, rotate the code.
-      </p>
-      <div className="print-area print-sheet">
-        {issued.map((item) => (
-          <div className="print-label" key={item.issue.qrCode.id}>
-            <QRCodeSVG value={item.issue.url} size={240} marginSize={2} />
-            <h2>{item.bedName}</h2>
-            <p className="muted">{item.location}</p>
-            <p>Scan to request hospital services and track your request.</p>
-            <p className="small">
-              <strong>Not for emergencies.</strong> Use the nurse-call button.
-            </p>
-          </div>
-        ))}
-      </div>
-      <div className="actions no-print">
-        <button type="button" onClick={() => window.print()}>
-          Print
-        </button>
-        {issued.length === 1 && (
-          <a
-            className="button secondary"
-            href={issued[0]!.issue.url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Open patient view
-          </a>
-        )}
-        {issued.length === 1 && (
-          <button type="button" className="secondary" onClick={() => void copy()}>
-            Copy patient link
-          </button>
-        )}
-        <button type="button" className="secondary" onClick={onClose}>
-          Done
-        </button>
-      </div>
+    <>
+      <a className="button secondary" href={url} target="_blank" rel="noreferrer">
+        Open patient view
+      </a>
+      <button type="button" className="secondary" onClick={() => void copy()}>
+        Copy patient link
+      </button>
       {copyMessage && (
-        <p className="small no-print" role="status">
+        <span className="small" role="status">
           {copyMessage}
+        </span>
+      )}
+    </>
+  );
+}
+
+const sortByName = (left: { name: string }, right: { name: string }) =>
+  left.name.localeCompare(right.name, undefined, { numeric: true });
+
+function uniqueOptions(
+  rows: BedRow[],
+  pick: (row: BedRow) => [string | null | undefined, string | undefined],
+) {
+  const options = new Map<string, string>();
+  for (const row of rows) {
+    const [id, name] = pick(row);
+    if (id) options.set(id, name ?? '—');
+  }
+  return [...options].map(([id, name]) => ({ id, name })).sort(sortByName);
+}
+
+// Choose any part of the hospital and print QR labels for its beds.
+function PrintLabels({
+  rows,
+  canReplace,
+  busy,
+  onGenerate,
+}: {
+  rows: BedRow[];
+  canReplace: boolean;
+  busy: boolean;
+  onGenerate: (scope: QrBatchScope, area: string, replace: boolean) => Promise<QrBatch | null>;
+}) {
+  const [buildingId, setBuildingId] = useState('');
+  const [floorId, setFloorId] = useState('');
+  const [wardId, setWardId] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [replace, setReplace] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const buildings = uniqueOptions(rows, (row) => [row.buildingId, row.buildingName]);
+  const inBuilding = rows.filter((row) => !buildingId || row.buildingId === buildingId);
+  const floors = uniqueOptions(inBuilding, (row) => [row.floorId, row.floorName]);
+  const onFloor = inBuilding.filter((row) => !floorId || row.floorId === floorId);
+  const wards = floorId ? uniqueOptions(onFloor, (row) => [row.wardId, row.wardName]) : [];
+  const inWard = onFloor.filter((row) => !wardId || row.wardId === wardId);
+  const rooms = wardId ? uniqueOptions(inWard, (row) => [row.roomId, row.roomName]) : [];
+  const selected = inWard.filter((row) => !roomId || row.roomId === roomId);
+
+  const active = selected.filter((row) => row.bed.active);
+  const withQr = active.filter((row) => row.qrCode?.status === 'ACTIVE').length;
+  const count = replace ? active.length : active.length - withQr;
+  const name = (list: { id: string; name: string }[], id: string) =>
+    list.find((item) => item.id === id)?.name;
+  const area =
+    [
+      name(buildings, buildingId),
+      floorId ? name(floors, floorId)?.split(' · ').pop() : undefined,
+      name(wards, wardId),
+      name(rooms, roomId),
+    ]
+      .filter(Boolean)
+      .join(' · ') || 'Whole hospital';
+  const scope: QrBatchScope = roomId
+    ? { kind: 'ROOM', id: roomId }
+    : wardId
+      ? { kind: 'WARD', id: wardId }
+      : floorId
+        ? { kind: 'FLOOR', id: floorId }
+        : buildingId
+          ? { kind: 'BUILDING', id: buildingId }
+          : { kind: 'HOSPITAL' };
+
+  function pick(level: 'building' | 'floor' | 'ward' | 'room', value: string) {
+    setMessage(null);
+    if (level === 'building') {
+      setBuildingId(value);
+      setFloorId('');
+    }
+    if (level === 'building' || level === 'floor') {
+      if (level === 'floor') setFloorId(value);
+      setWardId('');
+    }
+    if (level !== 'room') setRoomId('');
+    if (level === 'ward') setWardId(value);
+    if (level === 'room') setRoomId(value);
+  }
+
+  async function generate() {
+    if (
+      replace &&
+      withQr > 0 &&
+      !window.confirm(
+        `Replace ${withQr} printed QR label${withQr === 1 ? '' : 's'} in ${area}? The old labels stop working at once and patients using them must scan the new ones.`,
+      )
+    ) {
+      return;
+    }
+    const result = await onGenerate(scope, area, replace);
+    if (result) {
+      setMessage(
+        [
+          `${result.issues.length} labels created for ${area}.`,
+          result.replaced > 0 ? `${result.replaced} old labels replaced.` : '',
+          result.skippedActive > 0 ? `${result.skippedActive} beds already had labels.` : '',
+          result.skippedInactive > 0 ? `${result.skippedInactive} inactive beds skipped.` : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
+      setReplace(false);
+    }
+  }
+
+  return (
+    <section className="card no-print print-labels" aria-labelledby="print-labels-title">
+      <h2 id="print-labels-title">Print QR labels</h2>
+      <p className="muted small">
+        Choose an area, then download one PDF with a label for every bed in it, in location order.
+        Beds that already have a printed QR are left alone unless you choose to replace them.
+      </p>
+      <div className="field-grid">
+        {buildings.length > 0 && (
+          <label>
+            Building
+            <select
+              aria-label="Building for QR labels"
+              value={buildingId}
+              onChange={(event) => pick('building', event.target.value)}
+            >
+              <option value="">All buildings</option>
+              {buildings.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label>
+          Floor
+          <select
+            aria-label="Floor for QR labels"
+            value={floorId}
+            onChange={(event) => pick('floor', event.target.value)}
+          >
+            <option value="">All floors</option>
+            {floors.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Unit / ward
+          <select
+            aria-label="Unit for QR labels"
+            value={wardId}
+            disabled={!floorId}
+            onChange={(event) => pick('ward', event.target.value)}
+          >
+            <option value="">{floorId ? 'All units' : 'Choose a floor first'}</option>
+            {wards.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {rooms.length > 0 && (
+          <label>
+            Room
+            <select
+              aria-label="Room for QR labels"
+              value={roomId}
+              onChange={(event) => pick('room', event.target.value)}
+            >
+              <option value="">All rooms and open bays</option>
+              {rooms.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      <p className="small">
+        <strong>{area}</strong>: {active.length} active beds · {withQr} already have a QR label ·{' '}
+        {active.length - withQr} need one
+      </p>
+      {canReplace && withQr > 0 && (
+        <label className="checkbox small">
+          <input
+            type="checkbox"
+            checked={replace}
+            onChange={(event) => setReplace(event.target.checked)}
+          />
+          Also reprint the {withQr} existing labels (the old ones stop working)
+        </label>
+      )}
+      <div className="actions">
+        <button type="button" disabled={busy || count === 0} onClick={() => void generate()}>
+          {count === 0 ? 'No labels needed' : `Create ${count} QR label${count === 1 ? '' : 's'}`}
+        </button>
+      </div>
+      {message && (
+        <p role="status" className="small">
+          {message}
         </p>
       )}
-    </Modal>
+    </section>
   );
 }

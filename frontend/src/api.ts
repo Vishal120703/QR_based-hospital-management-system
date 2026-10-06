@@ -11,9 +11,11 @@ export class ApiError extends Error {
   }
 }
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-async function call<T>(method: Method, path: string, token: string | null, body?: object) {
+// JSON bodies are serialised; a Blob (for example an image) is sent as is.
+async function call<T>(method: Method, path: string, token: string | null, body?: object | Blob) {
+  const isFile = body instanceof Blob;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 20_000);
   let response: Response;
@@ -22,10 +24,10 @@ async function call<T>(method: Method, path: string, token: string | null, body?
       method,
       signal: controller.signal,
       headers: {
-        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(body ? { 'content-type': isFile ? body.type : 'application/json' } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
-      ...(body ? { body: JSON.stringify(body) } : {}),
+      ...(body ? { body: isFile ? body : JSON.stringify(body) } : {}),
     });
   } catch {
     throw new ApiError(
@@ -66,6 +68,7 @@ async function call<T>(method: Method, path: string, token: string | null, body?
 // Credentials. Staff stay signed in across tabs until the 8-hour session ends;
 // a guest session lives only in the tab that scanned the QR code.
 const staffKey = 'careqr.staffToken';
+const platformKey = 'careqr.platformToken';
 const guestKey = 'careqr.guestToken';
 
 const memory = new Map<string, string>();
@@ -96,6 +99,8 @@ function write(storage: () => Storage, key: string, value: string | null): void 
 
 export const credentials = {
   staff: () => read(() => localStorage, staffKey),
+  platform: () => read(() => localStorage, platformKey),
+  setPlatform: (token: string | null) => write(() => localStorage, platformKey, token),
   setStaff: (token: string | null) => write(() => localStorage, staffKey, token),
   guest: () => read(() => sessionStorage, guestKey),
   setGuest: (token: string | null) => write(() => sessionStorage, guestKey, token),
@@ -106,12 +111,26 @@ export const credentials = {
 export interface Me {
   user: { id: string; email: string; displayName: string };
   membershipId: string;
-  tenant: { hospitalId: string; code: string; name: string };
+  tenant: { hospitalId: string; code: string; name: string; logoUrl: string | null };
   // Held hospital-wide.
   permissions: string[];
   // Also includes permissions held only for some floors or wards.
   scopedPermissions: string[];
 }
+export interface Hospital {
+  id: string;
+  name: string;
+  code: string;
+  timezone: string;
+  logoUrl: string | null;
+  logoUpdatedAt: string | null;
+}
+
+// Server paths such as a logo URL, as the browser must request them.
+export function assetUrl(path: string): string {
+  return `/api${path}`;
+}
+
 export interface Building {
   id: string;
   code: string;
@@ -120,12 +139,50 @@ export interface Building {
 }
 export interface Floor extends Building {
   buildingId: string | null;
+  // -1 basement, 0 ground, 1 first, ...; null when not set.
+  level: number | null;
 }
+export type WardType =
+  | 'GENERAL'
+  | 'PRIVATE'
+  | 'SEMI_PRIVATE'
+  | 'ICU'
+  | 'HDU'
+  | 'CCU'
+  | 'NICU'
+  | 'PICU'
+  | 'EMERGENCY'
+  | 'DAY_CARE'
+  | 'MATERNITY'
+  | 'LABOUR_ROOM'
+  | 'PEDIATRIC'
+  | 'ISOLATION'
+  | 'BURNS'
+  | 'DIALYSIS'
+  | 'RECOVERY'
+  | 'PSYCHIATRY'
+  | 'OTHER';
+export type RoomType =
+  'GENERAL' | 'PRIVATE' | 'SEMI_PRIVATE' | 'DELUXE' | 'SUITE' | 'ISOLATION' | 'OTHER';
+export type BedType =
+  | 'STANDARD'
+  | 'ICU'
+  | 'VENTILATOR'
+  | 'ISOLATION'
+  | 'PEDIATRIC_COT'
+  | 'NEONATAL'
+  | 'DAY_CARE_CHAIR'
+  | 'DIALYSIS_CHAIR'
+  | 'EMERGENCY_TROLLEY'
+  | 'LABOUR'
+  | 'OTHER';
 export interface Ward extends Building {
   floorId: string;
+  unitType: WardType;
 }
 export interface Room extends Building {
   wardId: string;
+  roomType: RoomType;
 }
 export type BedStatus = 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE' | 'INACTIVE';
 export interface Bed {
@@ -134,9 +191,29 @@ export interface Bed {
   roomId: string | null;
   code: string;
   displayName: string;
+  bedType: BedType;
   status: BedStatus;
   active: boolean;
 }
+export type BulkBedsInput =
+  | {
+      mode: 'BEDS';
+      roomId?: string;
+      codePrefix: string;
+      namePrefix: string;
+      start: number;
+      count: number;
+      bedType: BedType;
+    }
+  | {
+      mode: 'ROOMS';
+      roomPrefix: string;
+      start: number;
+      count: number;
+      roomType: RoomType;
+      bedsPerRoom: number;
+      bedType: BedType;
+    };
 export interface QrCode {
   id: string;
   bedId: string;
@@ -150,11 +227,17 @@ export interface QrIssue {
   url: string;
 }
 export interface QrBatch {
-  issues: (QrIssue & { bedName: string; location: string })[];
+  // Sorted by building, floor, unit, room, then bed.
+  issues: (QrIssue & { bedId: string; bedName: string; bedCode: string; location: string })[];
   totalBeds: number;
+  replaced: number;
   skippedActive: number;
   skippedInactive: number;
 }
+export type QrBatchScope =
+  | { kind: 'HOSPITAL' }
+  | { kind: 'BUILDING' | 'FLOOR' | 'WARD' | 'ROOM'; id: string }
+  | { kind: 'BEDS'; bedIds: string[] };
 export interface BedSession {
   id: string;
   bedId: string;
@@ -164,6 +247,7 @@ export interface BedSession {
 }
 export interface GuestLocation {
   hospitalName: string;
+  hospitalLogoUrl: string | null;
   bed: { code: string; displayName: string };
   room: string | null;
   ward: string;
@@ -199,11 +283,30 @@ export interface StaffMember {
   departmentIds: string[];
   coverage: Coverage[];
   roleIds: string[];
+  // Where each role applies: the hospital, or specific floors, wards, or departments.
+  roleAssignments?: { roleId: string; scopes: { type: RoleScopeType; id: string }[] }[];
 }
+export type RoleScopeLevel = 'HOSPITAL' | 'FLOOR' | 'WARD' | 'DEPARTMENT';
+export type RoleScopeType = RoleScopeLevel;
 export interface Role {
   id: string;
   name: string;
   active: boolean;
+  description?: string | null;
+  scopeLevel?: RoleScopeLevel;
+  systemKey?: string | null;
+  permissionKeys?: string[];
+  memberCount?: number;
+  builtIn?: boolean;
+  // The Hospital Manager role: always every permission, never edited.
+  locked?: boolean;
+}
+export interface RoleInput {
+  name?: string;
+  description?: string | null;
+  scopeLevel?: RoleScopeLevel;
+  permissionKeys?: string[];
+  active?: boolean;
 }
 export interface Shift {
   id: string;
@@ -336,6 +439,13 @@ export const staffApi = {
   login: (input: { hospitalCode: string; email: string; password: string }) =>
     call<{ token: string; expiresAt: string }>('POST', '/auth/staff/login', null, input),
   me: (token: string) => call<Me>('GET', '/auth/staff/me', token),
+  hospital: async (token: string) =>
+    (await call<{ hospital: Hospital }>('GET', '/admin/hospital', token)).hospital,
+  updateHospital: async (token: string, input: { name?: string; timezone?: string }) =>
+    (await call<{ hospital: Hospital }>('PATCH', '/admin/hospital', token, input)).hospital,
+  uploadLogo: (token: string, image: Blob) =>
+    call<{ logoUrl: string }>('PUT', '/admin/hospital/logo', token, image),
+  removeLogo: (token: string) => call<null>('DELETE', '/admin/hospital/logo', token),
   logout: (token: string) => call<null>('POST', '/auth/staff/logout', token),
 
   async list<T>(token: string, kind: ListKind, query = '') {
@@ -344,6 +454,12 @@ export const staffApi = {
   },
   create: (token: string, kind: LocationKind | 'departments', input: object) =>
     call<unknown>('POST', `/admin/${kind}`, token, input),
+  updateLocation: (token: string, kind: LocationKind, id: string, input: object) =>
+    call<unknown>('PATCH', `/admin/${kind}/${id}`, token, input),
+  deleteLocation: (token: string, kind: LocationKind, id: string) =>
+    call<null>('DELETE', `/admin/${kind}/${id}`, token),
+  bulkBeds: (token: string, wardId: string, input: BulkBedsInput) =>
+    call<{ rooms: Room[]; beds: Bed[] }>('POST', `/admin/wards/${wardId}/bulk-beds`, token, input),
   updateDepartment: (token: string, id: string, input: Partial<Department>) =>
     call<{ department: Department }>('PATCH', `/admin/departments/${id}`, token, input),
 
@@ -398,10 +514,25 @@ export const staffApi = {
     call<StaffResponse>('POST', `/admin/staff/${id}/coverage`, token, input),
   removeCoverage: (token: string, id: string, coverageId: string) =>
     call<StaffResponse>('DELETE', `/admin/staff/${id}/coverage/${coverageId}`, token),
-  assignRole: (token: string, id: string, roleId: string) =>
-    call<unknown>('POST', `/admin/memberships/${id}/roles`, token, { roleId }),
-  removeRole: (token: string, id: string, roleId: string) =>
-    call<null>('DELETE', `/admin/memberships/${id}/roles/${roleId}`, token),
+  assignRole: (token: string, id: string, roleId: string, scopeId?: string) =>
+    call<unknown>('POST', `/admin/memberships/${id}/roles`, token, {
+      roleId,
+      ...(scopeId ? { scopeId } : {}),
+    }),
+  // Without scopeId the role is removed everywhere; with it, for that place only.
+  removeRole: (token: string, id: string, roleId: string, scopeId?: string) =>
+    call<null>(
+      'DELETE',
+      `/admin/memberships/${id}/roles/${roleId}${scopeId ? `/scopes/${scopeId}` : ''}`,
+      token,
+    ),
+  roles: async (token: string) =>
+    (await call<{ roles: Role[] }>('GET', '/admin/roles', token)).roles,
+  createRole: async (token: string, input: RoleInput & { name: string }) =>
+    (await call<{ role: Role }>('POST', '/admin/roles', token, input)).role,
+  updateRole: async (token: string, id: string, input: RoleInput) =>
+    (await call<{ role: Role }>('PATCH', `/admin/roles/${id}`, token, input)).role,
+  deleteRole: (token: string, id: string) => call<null>('DELETE', `/admin/roles/${id}`, token),
   createShift: (
     token: string,
     input: { membershipId: string; departmentId?: string; startsAt: string; endsAt: string },
@@ -435,8 +566,8 @@ export const staffApi = {
 
   generateQr: (token: string, bedId: string) =>
     call<QrIssue>('POST', `/admin/beds/${bedId}/qr`, token, {}),
-  generateWardQrs: (token: string, floorId: string, wardId: string) =>
-    call<QrBatch>('POST', '/admin/qr-codes/batch', token, { floorId, wardId }),
+  generateQrBatch: (token: string, scope: QrBatchScope, replaceExisting = false) =>
+    call<QrBatch>('POST', '/admin/qr-codes/batch', token, { scope, replaceExisting }),
   rotateQr: (token: string, bedId: string) =>
     call<QrIssue>('POST', `/admin/beds/${bedId}/qr/rotate`, token, {}),
   revokeQr: (token: string, bedId: string) =>
@@ -479,4 +610,71 @@ export const guestApi = {
         { reason },
       )
     ).serviceRequest,
+};
+
+// SaaS platform administration (super admin), separate from hospital staff.
+export interface PlatformHospital {
+  id: string;
+  name: string;
+  code: string;
+  timezone: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'INACTIVE';
+  createdAt: string;
+  logoUrl: string | null;
+  activeBeds?: number;
+  activeStaff?: number;
+  openRequests?: number;
+  managers?: { membershipId: string; status: string; email: string; displayName: string }[];
+}
+export interface NewHospitalInput {
+  name: string;
+  code: string;
+  timezone: string;
+  managerName: string;
+  managerEmail: string;
+  managerPassword: string;
+}
+
+export const platformApi = {
+  login: (input: { email: string; password: string }) =>
+    call<{ token: string; expiresAt: string }>('POST', '/auth/platform/login', null, input),
+  me: (token: string) =>
+    call<{ user: { id: string; email: string; displayName: string } }>(
+      'GET',
+      '/auth/platform/me',
+      token,
+    ),
+  logout: (token: string) => call<null>('POST', '/auth/platform/logout', token),
+  hospitals: async (token: string) =>
+    (await call<{ hospitals: PlatformHospital[] }>('GET', '/platform/hospitals', token)).hospitals,
+  hospital: async (token: string, id: string) =>
+    (await call<{ hospital: PlatformHospital }>('GET', `/platform/hospitals/${id}`, token))
+      .hospital,
+  createHospital: async (token: string, input: NewHospitalInput) =>
+    (await call<{ hospital: PlatformHospital }>('POST', '/platform/hospitals', token, input))
+      .hospital,
+  updateHospital: async (
+    token: string,
+    id: string,
+    input: { name?: string; timezone?: string; status?: 'ACTIVE' | 'SUSPENDED' },
+  ) =>
+    (await call<{ hospital: PlatformHospital }>('PATCH', `/platform/hospitals/${id}`, token, input))
+      .hospital,
+  uploadLogo: (token: string, id: string, image: Blob) =>
+    call<{ logoUrl: string }>('PUT', `/platform/hospitals/${id}/logo`, token, image),
+  removeLogo: (token: string, id: string) =>
+    call<null>('DELETE', `/platform/hospitals/${id}/logo`, token),
+  addManager: async (
+    token: string,
+    id: string,
+    input: { displayName: string; email: string; password: string },
+  ) =>
+    (
+      await call<{ hospital: PlatformHospital }>(
+        'POST',
+        `/platform/hospitals/${id}/managers`,
+        token,
+        input,
+      )
+    ).hospital,
 };

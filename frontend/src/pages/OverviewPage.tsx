@@ -24,8 +24,10 @@ interface Snapshot {
 }
 
 const pageHelp: Record<string, string> = {
+  hospital: 'Your hospital name and logo, shown to staff and patients.',
   requests: 'Assign, track, and close patient requests.',
   beds: 'Admit a patient to a bed and print its QR code.',
+  roles: 'Decide who can do what, hospital-wide or for one floor, ward, or department.',
   locations: 'Add floors, wards, rooms, and beds.',
   departments: 'Teams that handle requests, like Nursing or Pantry.',
   staff: 'Add people, their departments, ward coverage, and duty.',
@@ -46,7 +48,8 @@ export function OverviewPage() {
   const now = useNow();
 
   const canRequests = canAnywhere('request.read');
-  const canBeds = can('bed.read');
+  // Floor and ward managers see the beds of their own area.
+  const canBeds = canAnywhere('bed.read');
   const canStaff = can('staff.read');
   const canServices = can('service.read');
 
@@ -115,7 +118,9 @@ export function OverviewPage() {
             manager={canAnywhere('request.assign')}
             me={me.membershipId}
           />
-          {can('hospital.manage') && <SetupChecklist data={data} />}
+          {can('hospital.manage') && (
+            <SetupChecklist data={data} hasLogo={Boolean(me.tenant.logoUrl)} />
+          )}
           <HowItWorks />
           <section aria-labelledby="shortcuts-title">
             <h2 id="shortcuts-title" className="section-title">
@@ -219,9 +224,15 @@ function Stats({
   );
 }
 
-function SetupChecklist({ data }: { data: Snapshot }) {
+function SetupChecklist({ data, hasLogo }: { data: Snapshot; hasLogo: boolean }) {
   const occupiedBedIds = new Set((data.sessions ?? []).map((session) => session.bedId));
   const steps = [
+    {
+      done: hasLogo,
+      title: 'Add your hospital logo',
+      help: 'Shown to staff and patients, and printed on QR labels.',
+      to: '/admin/hospital',
+    },
     {
       done: (data.beds ?? []).length > 0,
       title: 'Add floors, wards, and beds',

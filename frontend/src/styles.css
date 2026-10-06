@@ -129,6 +129,10 @@ input[type='radio'] {
   align-items: start;
   margin-bottom: 1.5rem;
 }
+.page-heading > button,
+.page-heading > .button {
+  white-space: nowrap;
+}
 .page-heading p {
   margin: 0.4rem 0 0;
   max-width: 760px;
@@ -939,6 +943,709 @@ a.shortcut:hover {
 .request-progress li.now {
   font-weight: 700;
   color: var(--primary-dark);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+label.checkbox input {
+  width: auto;
+}
+
+/* Hospital layout explorer */
+
+.layout-explorer {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.layout-tree {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+}
+.tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.9rem;
+}
+.tree > ul {
+  padding-left: 0;
+  margin-top: 0.3rem;
+}
+.tree-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+}
+button.tree-toggle,
+span.tree-toggle {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  font-size: 0.8rem;
+}
+button.tree-toggle:hover:not(:disabled) {
+  background: #eef6f5;
+  color: var(--text);
+}
+button.tree-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text);
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.86rem;
+}
+button.tree-item:hover:not(:disabled) {
+  background: #f1f6f4;
+}
+button.tree-item[aria-current='true'] {
+  background: #eaf4ef;
+  border-color: #d7e9dd;
+  color: var(--primary-dark);
+  font-weight: 650;
+}
+button.tree-item.inactive .tree-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-detail {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+.tree-building > .tree-item .tree-name {
+  font-weight: 650;
+}
+.tree-root {
+  font-weight: 650;
+}
+.tree-group {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding: 0.7rem 0 0.2rem 0.5rem;
+}
+
+.layout-detail {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.breadcrumbs button.link {
+  font-size: inherit;
+}
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.panel-header .eyebrow {
+  margin: 0 0 0.2rem;
+}
+.panel-header h2 {
+  font-size: 1.35rem;
+  margin: 0;
+}
+.panel-header h2 .code {
+  font-size: 0.8rem;
+}
+.location-actions {
+  margin: 0;
+  flex-wrap: wrap;
+}
+.panel-header-actions,
+.room-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.next-step {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.next-step .actions {
+  margin: 0;
+  align-items: center;
+}
+
+/* Hospital branding */
+.tenant-logo {
+  height: 32px;
+  max-width: 120px;
+  object-fit: contain;
+}
+.topbar-user {
+  align-items: center;
+}
+.patient-logo {
+  height: 40px;
+  max-width: 200px;
+  object-fit: contain;
+}
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.logo-stage {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  margin-bottom: 0.8rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: repeating-conic-gradient(#f3f5f7 0% 25%, #ffffff 0% 50%) 50% / 16px 16px;
+  padding: 1rem;
+}
+.logo-stage img {
+  max-width: 100%;
+  max-height: 140px;
+  object-fit: contain;
+}
+label.file-button {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+label.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+label.file-button:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.profile-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 1rem 0 0.4rem;
+}
+.profile-facts dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.profile-facts dd {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
+}
+.label-logo {
+  max-height: 22px;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+/* Roles & access */
+.hierarchy {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.hierarchy li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.9rem;
+  border-left: 4px solid var(--primary);
+  background: var(--surface);
+  border-radius: 8px;
+}
+.hierarchy li:nth-child(2) {
+  margin-left: 1.25rem;
+  border-left-color: #2f9e62;
+}
+.hierarchy li:nth-child(3) {
+  margin-left: 2.5rem;
+  border-left-color: #8fb8a6;
+}
+.hierarchy span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+.role-card {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+}
+.role-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.role-card h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.role-card p {
+  margin: 0;
+}
+.role-card.inactive {
+  opacity: 0.7;
+}
+.compact-chips {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.compact-chips .chip {
+  font-size: 0.75rem;
+}
+.permission-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0 1rem;
+}
+.permission-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+.permission-group legend {
+  font-weight: 650;
+  padding: 0 0.3rem;
+}
+.permission-group label.checkbox {
+  font-size: 0.88rem;
+}
+.permission-group label:has(input:disabled) {
+  color: var(--muted);
+}
+
+/* Platform (super admin) */
+.platform-entry {
+  margin: 0.75rem 0 0;
+  text-align: center;
+}
+.platform .platform-main {
+  max-width: 1100px;
+}
+.platform-search {
+  display: block;
+  max-width: 420px;
+  margin: 1rem 0;
+}
+.hospital-list {
+  display: grid;
+  gap: 0.6rem;
+}
+a.hospital-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.9rem;
+  color: inherit;
+  text-decoration: none;
+}
+a.hospital-row:hover {
+  border-color: var(--primary);
+}
+.hospital-row-main {
+  display: grid;
+}
+.hospital-mark {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+.hospital-mark.initials {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: var(--primary-dark);
+  background: #eaf4ef;
+}
+.platform-hospital-header {
+  margin-bottom: 1rem;
+}
+.platform-hospital-title {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.platform-hospital-title h1 {
+  margin: 0;
+}
+.platform-hospital-title p {
+  margin: 0.2rem 0 0;
+}
+.logo-preview {
+  max-height: 60px;
+  max-width: 200px;
+  object-fit: contain;
+  margin-top: 0.4rem;
+}
+.field-grid > .wide-field {
+  grid-column: 1 / -1;
+}
+.password-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.password-row input {
+  flex: 1;
+  min-width: 0;
+}
+.manager-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 1rem;
+  display: grid;
+  gap: 0.4rem;
+}
+.manager-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.75rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f0f2f4;
+}
+
+@media (max-width: 700px) {
+  a.hospital-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .hospital-row-stats,
+  a.hospital-row .badge {
+    grid-column: 2;
+  }
+  .hierarchy li:nth-child(2),
+  .hierarchy li:nth-child(3) {
+    margin-left: 0;
+  }
+}
+
+/* QR label dialog */
+.size-picker {
+  border: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 0.5rem;
+}
+.size-picker legend {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+.size-picker label {
+  display: grid;
+  gap: 0.1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+.size-picker label.active {
+  border-color: var(--primary);
+  background: #eef7f2;
+}
+.size-picker input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.size-picker label:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+}
+.label-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin: 0.5rem 0 1rem;
+  max-height: 340px;
+  overflow: auto;
+}
+.label-card {
+  margin: 0;
+  border: 1px dashed #b9c3cc;
+  border-radius: 8px;
+  padding: 0.6rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+.label-card svg {
+  max-width: 100%;
+  height: auto;
+}
+.label-card figcaption {
+  display: grid;
+}
+.label-more {
+  align-self: center;
+}
+.print-labels .field-grid {
+  margin-bottom: 0.5rem;
+}
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.6rem;
+  margin: 0;
+}
+.stat-row div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+}
+.stat-row dt {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.stat-row dd {
+  margin: 0.1rem 0 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.child-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+}
+button.child-card {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
+  text-align: left;
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+button.child-card:hover:not(:disabled) {
+  background: #f7fbf9;
+  border-color: var(--primary);
+}
+button.child-card.inactive {
+  opacity: 0.7;
+}
+.form-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.create-form.card {
+  border-top: 1px solid var(--border);
+  padding-top: 1.1rem;
+}
+.create-form h3,
+.create-form h4 {
+  margin: 0;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 0.6rem 1rem;
+  align-items: start;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+  justify-self: start;
+}
+.segmented label {
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.segmented label.active {
+  background: var(--primary);
+  color: #fff;
+}
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.segmented label:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+}
+.segmented label:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.bulk-preview {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: #eef7f2;
+  font-size: 0.85rem;
+}
+.room-group {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  margin-bottom: 0.6rem;
+}
+.room-group.inactive {
+  opacity: 0.75;
+}
+.room-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.table-wrap.flat {
+  border: none;
+  border-radius: 0;
+}
+.bed-list td,
+.bed-list th {
+  padding: 0.45rem 0.6rem;
+  vertical-align: middle;
+}
+.bed-list tr.inactive td {
+  color: var(--muted);
+}
+.bed-list .location-actions {
+  justify-content: flex-end;
+}
+.more-forms summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.more-forms[open] summary {
+  margin-bottom: 0.8rem;
+}
+.type-summary {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.type-summary li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.2rem 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #f0f2f4;
+}
+.type-summary li:last-child {
+  border-bottom: none;
+}
+.plain-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+@media (max-width: 600px) {
+  .bed-list thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .bed-list,
+  .bed-list tbody,
+  .bed-list td {
+    display: block;
+  }
+  .bed-list tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-bottom: 1px solid var(--border);
+    padding: 0.3rem 0;
+  }
+  .bed-list td {
+    border: none;
+    padding: 0.3rem 0.6rem;
+  }
+  .bed-list td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .bed-list td:last-child {
+    grid-column: 1 / -1;
+  }
+  .bed-list .location-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 800px) {
+  .layout-explorer {
+    grid-template-columns: 1fr;
+  }
+  .layout-tree {
+    position: static;
+    max-height: 340px;
+  }
 }
 
 /* Patient pages (mobile first) */

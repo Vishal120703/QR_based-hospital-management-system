@@ -241,7 +241,7 @@ describe('Phase 2 staff authentication and tenant isolation', () => {
     ).rejects.toMatchObject({ code: 'P2003' });
 
     const hospitalAAdminRole = await database.userRole.findFirstOrThrow({
-      where: { hospitalId: hospitalAId, role: { name: 'Hospital Admin' } },
+      where: { hospitalId: hospitalAId, role: { systemKey: 'HOSPITAL_MANAGER' } },
     });
     await expect(
       database.scopeAssignment.create({
@@ -290,7 +290,7 @@ describe('Phase 2 staff authentication and tenant isolation', () => {
     expect(assigned.status).toBe(201);
 
     const adminRole = await database.role.findFirstOrThrow({
-      where: { hospitalId: hospitalAId, name: 'Hospital Admin' },
+      where: { hospitalId: hospitalAId, systemKey: 'HOSPITAL_MANAGER' },
     });
     const escalation = await request(application)
       .post(`/admin/memberships/${limitedMembershipId}/roles`)

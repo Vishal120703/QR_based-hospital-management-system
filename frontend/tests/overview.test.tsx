@@ -29,7 +29,7 @@ function show(hospitalWide: string[], anywhere: string[] = hospitalWide) {
     me: {
       user: { id: 'user', email: 'user@example.test', displayName: 'Asha' },
       membershipId: 'manager',
-      tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital' },
+      tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital', logoUrl: null },
       permissions: hospitalWide,
       scopedPermissions: anywhere,
     },
@@ -86,7 +86,8 @@ describe('Overview', () => {
     const all = ['hospital.manage', 'bed.read', 'staff.read', 'service.read', 'request.read'];
     show(all);
 
-    const checklist = await screen.findByRole('region', { name: /Finish setting up \(1 of 5/ });
+    const checklist = await screen.findByRole('region', { name: /Finish setting up \(1 of 6/ });
+    expect(checklist.textContent).toContain('Add your hospital logo');
     expect(checklist.textContent).toContain('Add floors, wards, and beds');
     expect(checklist.textContent).toContain('Turn on patient services');
     expect(screen.getByRole('link', { name: /Occupied beds/ }).textContent).toContain('of 1');

@@ -28,7 +28,7 @@ function show(permissions: string[], membershipId = 'manager') {
   const me: Me = {
     user: { id: 'user', email: 'user@example.test', displayName: 'Test User' },
     membershipId,
-    tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital' },
+    tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital', logoUrl: null },
     permissions: [],
     scopedPermissions: permissions,
   };

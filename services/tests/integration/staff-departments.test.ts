@@ -260,7 +260,7 @@ describe('Phase 5 staff', () => {
       .object({ membershipId: uuid })
       .parse((await admin.get('/auth/staff/me')).body).membershipId;
     const adminRole = await database.role.findFirstOrThrow({
-      where: { hospitalId: hospitalA.hospitalId, name: 'Hospital Admin' },
+      where: { hospitalId: hospitalA.hospitalId, systemKey: 'HOSPITAL_MANAGER' },
     });
     expect((await admin.delete(`/admin/memberships/${me}/roles/${adminRole.id}`)).status).toBe(409);
 

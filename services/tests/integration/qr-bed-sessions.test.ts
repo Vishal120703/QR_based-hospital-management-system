@@ -38,6 +38,20 @@ const issueSchema = z.object({
   url: z.string(),
 });
 const qrViewSchema = z.object({ qrCode: issueSchema.shape.qrCode });
+const batchSchema = z.object({
+  issues: z.array(
+    issueSchema.extend({
+      bedId: uuid,
+      bedName: z.string(),
+      bedCode: z.string(),
+      location: z.string(),
+    }),
+  ),
+  totalBeds: z.number(),
+  replaced: z.number(),
+  skippedActive: z.number(),
+  skippedInactive: z.number(),
+});
 const locationSchema = z.object({
   hospitalName: z.string(),
   bed: z.object({ code: z.string(), displayName: z.string() }),
@@ -130,25 +144,19 @@ afterAll(async () => {
 describe('Phase 4 secure QR codes', () => {
   it('bulk-generates one QR per eligible bed in a ward without rotating active codes', async () => {
     const { bedId, wardId } = await createBedFixture(database, hospitalA);
-    const floorId = (await database.ward.findUniqueOrThrow({ where: { id: wardId } })).floorId;
     const secondBed = await database.bed.create({
       data: { hospitalId: hospitalA.hospitalId, wardId, code: '102', displayName: 'Bed 102' },
     });
     const existing = await issueQr(hospitalA, bedId);
-    const batch = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', { floorId, wardId });
+    const ward = { scope: { kind: 'WARD', id: wardId } };
+    const batch = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', ward);
     expect(batch.status, JSON.stringify(batch.body)).toBe(201);
     expect(batch.headers['cache-control']).toBe('no-store');
-    const result = z
-      .object({
-        issues: z.array(issueSchema.extend({ bedName: z.string(), location: z.string() })),
-        totalBeds: z.number(),
-        skippedActive: z.number(),
-        skippedInactive: z.number(),
-      })
-      .parse(batch.body);
+    const result = batchSchema.parse(batch.body);
     expect(result.totalBeds).toBe(2);
     expect(result.skippedActive).toBe(1);
     expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({ bedId: secondBed.id, bedCode: '102' });
     expect(result.issues[0]?.qrCode.bedId).toBe(secondBed.id);
     expect(
       (
@@ -157,22 +165,76 @@ describe('Phase 4 secure QR codes', () => {
         })
       ).tokenHash,
     ).toBe(hashOpaqueToken(existing.token));
-    const repeated = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', {
-      floorId,
-      wardId,
-    });
-    expect(z.object({ issues: z.array(issueSchema) }).parse(repeated.body).issues).toEqual([]);
+    const repeated = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', ward);
+    expect(batchSchema.parse(repeated.body).issues).toEqual([]);
     expect(
       (
         await as(hospitalA.adminToken).post('/admin/qr-codes/batch', {
-          floorId: secondBed.id,
-          wardId,
+          scope: { kind: 'WARD', id: secondBed.id },
         })
       ).status,
     ).toBe(404);
     const ordinary = as(await createStaffToken(database, application, hospitalA, ['qr.generate']));
-    expect((await ordinary.post('/admin/qr-codes/batch', { floorId, wardId })).status).toBe(403);
+    expect((await ordinary.post('/admin/qr-codes/batch', ward)).status).toBe(403);
   });
+
+  it('prints labels for chosen beds in location order and can replace live codes', async () => {
+    const { bedId, wardId } = await createBedFixture(database, hospitalA, '10');
+    const others = await Promise.all(
+      ['2', '1'].map((code) =>
+        database.bed.create({
+          data: { hospitalId: hospitalA.hospitalId, wardId, code, displayName: `Bed ${code}` },
+        }),
+      ),
+    );
+    const bedIds = [bedId, ...others.map((bed) => bed.id)];
+    const chosen = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', {
+      scope: { kind: 'BEDS', bedIds },
+    });
+    expect(chosen.status, JSON.stringify(chosen.body)).toBe(201);
+    const first = batchSchema.parse(chosen.body);
+    // Natural order: 1, 2, 10 — the order labels are stuck on beds.
+    expect(first.issues.map((issue) => issue.bedCode)).toEqual(['1', '2', '10']);
+    expect(first.issues[0]?.location).toContain('Ward');
+
+    // A patient connected through the old label is signed out on replacement.
+    await startSession(hospitalA, bedId);
+    const oldToken = first.issues.find((issue) => issue.bedId === bedId)!.token;
+    const guest = await openGuest(oldToken);
+    const replaced = await as(hospitalA.adminToken).post('/admin/qr-codes/batch', {
+      scope: { kind: 'BEDS', bedIds: [bedId] },
+      replaceExisting: true,
+    });
+    expect(replaced.status, JSON.stringify(replaced.body)).toBe(201);
+    const second = batchSchema.parse(replaced.body);
+    expect(second.replaced).toBe(1);
+    expect(second.issues[0]?.qrCode.version).toBe(2);
+    expect((await guestSession(guest)).status).toBe(401);
+    expect((await resolve(oldToken)).status).toBe(404);
+
+    // Replacing needs the rotate permission as well.
+    const generator = as(
+      await createStaffToken(database, application, hospitalA, ['hospital.manage', 'qr.generate']),
+    );
+    expect(
+      (
+        await generator.post('/admin/qr-codes/batch', {
+          scope: { kind: 'BEDS', bedIds: [bedId] },
+          replaceExisting: true,
+        })
+      ).status,
+    ).toBe(403);
+    // Another hospital's bed is never found.
+    const foreign = await createBedFixture(database, hospitalB);
+    expect(
+      (
+        await as(hospitalA.adminToken).post('/admin/qr-codes/batch', {
+          scope: { kind: 'BEDS', bedIds: [foreign.bedId] },
+        })
+      ).status,
+    ).toBe(404);
+  });
+
   it('issues a QR code once and stores only the SHA-256 hash', async () => {
     const { bedId } = await createBedFixture(database, hospitalA);
     const response = await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr`);

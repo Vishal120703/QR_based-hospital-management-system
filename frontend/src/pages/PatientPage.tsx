@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   ApiError,
+  assetUrl,
   credentials,
   guestApi,
   type GuestLocation,
@@ -419,7 +420,15 @@ export function PatientPage() {
   return (
     <main className="patient" lang={language}>
       <header className="patient-header">
-        <strong>CARE QR</strong>
+        {state.kind === 'ready' && state.location.hospitalLogoUrl ? (
+          <img
+            className="patient-logo"
+            src={assetUrl(state.location.hospitalLogoUrl)}
+            alt={state.location.hospitalName}
+          />
+        ) : (
+          <strong>CARE QR</strong>
+        )}
         <label className="patient-language">
           <span>{t.language}</span>
           <select

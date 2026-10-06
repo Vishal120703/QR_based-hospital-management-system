@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ConflictError } from '../../common/errors/app-error.js';
 import { createPrismaClient } from '../../database/prisma.js';
-import { demoHospital, seedDemoHospital } from './demo-seed.js';
+import { demoHospital, seedDemoHospital, seedDemoPlatformAdmin } from './demo-seed.js';
 
 class DemoSeedInputError extends Error {}
 
@@ -11,6 +11,8 @@ const inputSchema = z.object({
   DEMO_SEED_CONFIRM: z.literal(demoHospital.code),
   DEMO_ADMIN_PASSWORD: z.string().min(12),
   DEMO_STAFF_PASSWORD: z.string().min(12),
+  // Optional: also create platform.demo@careqr.example as a platform admin.
+  DEMO_PLATFORM_PASSWORD: z.string().min(12).optional(),
   DEMO_SHOW_QR_TOKEN: z.enum(['yes', 'no']).default('no'),
   PUBLIC_APP_URL: z.string().url().default('http://localhost:5173'),
 });
@@ -52,6 +54,14 @@ async function main(): Promise<void> {
     process.stdout.write(`Hospital ID: ${result.hospitalId}\n`);
     process.stdout.write(`Admin login email: ${result.adminEmail}\n`);
     process.stdout.write(`Floor manager login email: ${result.managerEmail}\n`);
+    process.stdout.write(`Ward manager login email: ${result.wardManagerEmail}\n`);
+    process.stdout.write(`Pantry supervisor login email: ${result.supervisorEmail}\n`);
+    if (input.DEMO_PLATFORM_PASSWORD) {
+      const platformEmail = await seedDemoPlatformAdmin(database, input.DEMO_PLATFORM_PASSWORD);
+      process.stdout.write(
+        `Platform admin login email: ${platformEmail} (sign in at /platform/login)\n`,
+      );
+    }
     for (const staff of result.staff) {
       process.stdout.write(`${staff.departmentCode} staff login email: ${staff.email}\n`);
     }

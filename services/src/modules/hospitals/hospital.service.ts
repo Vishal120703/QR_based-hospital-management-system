@@ -1,6 +1,8 @@
 import { type PrismaClient } from '@prisma/client';
 import { NotFoundError } from '../../common/errors/app-error.js';
+import { recordStaffAudit } from '../audit/audit-log.js';
 import { type StaffContext } from '../auth/auth.service.js';
+import { logoUrl, storeLogo } from './logo.js';
 
 export class HospitalService {
   public constructor(private readonly database: PrismaClient) {}
@@ -16,12 +18,54 @@ export class HospitalService {
         status: true,
         createdAt: true,
         updatedAt: true,
+        logo: { select: { publicId: true, byteSize: true, updatedAt: true } },
       },
     });
     if (!hospital) {
       throw new NotFoundError();
     }
-    return hospital;
+    const { logo, ...rest } = hospital;
+    return {
+      ...rest,
+      logoUrl: logoUrl(logo?.publicId),
+      logoUpdatedAt: logo?.updatedAt ?? null,
+    };
+  }
+
+  public setLogo(context: StaffContext, bytes: Uint8Array, requestId: string) {
+    const hospitalId = context.tenant.hospitalId;
+    return this.database.$transaction(async (transaction) => {
+      const stored = await storeLogo(transaction, hospitalId, bytes);
+      await recordStaffAudit(transaction, context, requestId, {
+        action: 'hospital.logo.update',
+        targetType: 'Hospital',
+        targetId: hospitalId,
+        metadata: { contentType: stored.contentType, byteSize: stored.byteSize },
+      });
+      return { logoUrl: logoUrl(stored.publicId) };
+    });
+  }
+
+  public removeLogo(context: StaffContext, requestId: string) {
+    const hospitalId = context.tenant.hospitalId;
+    return this.database.$transaction(async (transaction) => {
+      const removed = await transaction.hospitalLogo.deleteMany({ where: { hospitalId } });
+      if (removed.count === 0) throw new NotFoundError('This hospital has no logo.');
+      await recordStaffAudit(transaction, context, requestId, {
+        action: 'hospital.logo.remove',
+        targetType: 'Hospital',
+        targetId: hospitalId,
+        metadata: {},
+      });
+    });
+  }
+
+  // Public read by the unguessable per-upload id; no tenant context needed.
+  public readLogo(publicId: string) {
+    return this.database.hospitalLogo.findUnique({
+      where: { publicId },
+      select: { contentType: true, data: true },
+    });
   }
 
   public async updateCurrent(

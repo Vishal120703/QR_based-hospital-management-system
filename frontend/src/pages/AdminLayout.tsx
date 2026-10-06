@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
-import { ApiError, credentials, staffApi, type Me } from '../api';
+import { ApiError, assetUrl, credentials, staffApi, type Me } from '../api';
 import { ErrorNotice, LoadState } from '../components';
 
 // `anyScope` pages filter their data by floor or ward on the server, so a
@@ -14,7 +14,19 @@ export const adminPages = [
     permissions: ['request.read'],
     anyScope: true,
   },
-  { path: 'beds', label: 'Beds & QR', group: 'Care locations', permissions: ['bed.read'] },
+  {
+    path: 'hospital',
+    label: 'Profile & logo',
+    group: 'Hospital',
+    permissions: ['hospital.manage'],
+  },
+  {
+    path: 'beds',
+    label: 'Beds & QR',
+    group: 'Care locations',
+    permissions: ['bed.read'],
+    anyScope: true,
+  },
   {
     path: 'locations',
     label: 'Location setup',
@@ -32,6 +44,12 @@ export const adminPages = [
     label: 'Staff & coverage',
     group: 'People',
     permissions: ['staff.read', 'staff.manage'],
+  },
+  {
+    path: 'roles',
+    label: 'Roles & access',
+    group: 'People',
+    permissions: ['role.read'],
   },
   {
     path: 'eligibility',
@@ -63,6 +81,8 @@ export interface AdminContext {
   can: (permission: string) => boolean;
   // Held for at least one floor or ward (request work screens).
   canAnywhere: (permission: string) => boolean;
+  // Reloads the signed-in profile, for example after the logo changes.
+  refreshMe?: () => void;
 }
 
 type AdminPage = (typeof adminPages)[number];
@@ -159,6 +179,7 @@ export function AdminLayout() {
     reportSuccess,
     can,
     canAnywhere,
+    refreshMe: () => setVersion((value) => value + 1),
   };
   const available = adminPages.filter((page) => pageAllowed(page, { can, canAnywhere }));
   const current = adminPages.find((page) => location.pathname === `/admin/${page.path}`);
@@ -179,6 +200,9 @@ export function AdminLayout() {
         <span className="topbar-user">
           {me && (
             <>
+              {me.tenant.logoUrl && (
+                <img className="tenant-logo" src={assetUrl(me.tenant.logoUrl)} alt="" />
+              )}
               <span>
                 <strong>{me.tenant.name}</strong>
                 <small>{me.user.displayName}</small>
@@ -194,7 +218,7 @@ export function AdminLayout() {
         <aside className="sidebar">
           <p className="eyebrow">Hospital workspace</p>
           <nav aria-label="Hospital administration">
-            {['Work', 'Care locations', 'People', 'Patient services'].map((group) => {
+            {['Work', 'Hospital', 'Care locations', 'People', 'Patient services'].map((group) => {
               const pages = available.filter((page) => page.group === group);
               return (
                 pages.length > 0 && (

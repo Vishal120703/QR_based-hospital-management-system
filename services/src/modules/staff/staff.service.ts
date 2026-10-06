@@ -4,10 +4,11 @@ import {
   type Prisma,
   type PrismaClient,
 } from '@prisma/client';
-import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/app-error.js';
 import { recordStaffAudit } from '../audit/audit-log.js';
 import { canAccessLocation, revokeStaffSessions, type StaffContext } from '../auth/auth.service.js';
 import { hashPassword } from '../auth/password.js';
+import { lockedRoleKey } from '../roles/built-in-roles.js';
 import { findEligibleStaff } from './eligibility.js';
 
 // A staff member is a HospitalMembership; the User is the global identity.
@@ -23,7 +24,9 @@ const staffSelect = {
     select: { id: true, scopeType: true, floorId: true, wardId: true },
     orderBy: { createdAt: 'asc' },
   },
-  userRoles: { select: { roleId: true } },
+  userRoles: {
+    select: { roleId: true, scopes: { select: { scopeType: true, scopeId: true } } },
+  },
 } satisfies Prisma.HospitalMembershipSelect;
 
 type StaffRow = Prisma.HospitalMembershipGetPayload<{ select: typeof staffSelect }>;
@@ -42,6 +45,11 @@ function toView(row: StaffRow) {
     departmentIds: row.departments.map((item) => item.departmentId),
     coverage: row.locationScopes,
     roleIds: row.userRoles.map((item) => item.roleId),
+    // Where each role applies: the hospital, or specific floors, wards, or departments.
+    roleAssignments: row.userRoles.map((item) => ({
+      roleId: item.roleId,
+      scopes: item.scopes.map((scope) => ({ type: scope.scopeType, id: scope.scopeId })),
+    })),
   };
 }
 
@@ -54,6 +62,32 @@ export interface StaffFilter {
   readonly status?: MembershipStatus | undefined;
   readonly dutyStatus?: DutyStatus | undefined;
   readonly departmentId?: string | undefined;
+}
+
+// Only a Hospital Manager may deactivate another Hospital Manager, and the
+// hospital must keep at least one active one.
+async function requireManagerSafeToDeactivate(
+  transaction: Prisma.TransactionClient,
+  context: StaffContext,
+  membershipId: string,
+): Promise<void> {
+  const hospitalId = context.tenant.hospitalId;
+  const managerRole = { hospitalId, role: { systemKey: lockedRoleKey } };
+  const isManager = await transaction.userRole.count({
+    where: { ...managerRole, membershipId },
+  });
+  if (isManager === 0) return;
+  if (!context.hospitalPermissions.has('role.manage')) throw new ForbiddenError();
+  const others = await transaction.userRole.count({
+    where: {
+      ...managerRole,
+      membershipId: { not: membershipId },
+      membership: { status: 'ACTIVE' },
+    },
+  });
+  if (others === 0) {
+    throw new ConflictError('A hospital must keep at least one active Hospital Manager.');
+  }
 }
 
 export class StaffService {
@@ -87,7 +121,11 @@ export class StaffService {
     });
     if (
       !bed ||
-      !canAccessLocation(context, 'staff.read', { wardId: bed.wardId, floorId: bed.ward.floorId })
+      !canAccessLocation(context, 'staff.read', {
+        wardId: bed.wardId,
+        floorId: bed.ward.floorId,
+        departmentId: query.departmentId,
+      })
     ) {
       throw new NotFoundError();
     }
@@ -133,6 +171,9 @@ export class StaffService {
       async (transaction) => {
         const before = await this.requireMember(transaction, context, id);
         const deactivating = status !== 'ACTIVE';
+        if (deactivating && before.status === 'ACTIVE') {
+          await requireManagerSafeToDeactivate(transaction, context, id);
+        }
         await transaction.hospitalMembership.update({
           where: { hospitalId_id: { hospitalId, id } },
           data: {

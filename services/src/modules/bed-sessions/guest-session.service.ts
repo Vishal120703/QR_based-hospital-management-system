@@ -1,6 +1,7 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
+import { logoUrl } from '../hospitals/logo.js';
 
 const activityWriteIntervalMs = 60_000;
 
@@ -16,6 +17,7 @@ export interface GuestContext {
 
 export interface GuestLocation {
   readonly hospitalName: string;
+  readonly hospitalLogoUrl: string | null;
   readonly bed: { readonly code: string; readonly displayName: string };
   readonly room: string | null;
   readonly ward: string;
@@ -87,7 +89,7 @@ export class GuestSessionService {
     const [hospital, bed] = await Promise.all([
       this.database.hospital.findUniqueOrThrow({
         where: { id: guest.hospitalId },
-        select: { name: true },
+        select: { name: true, logo: { select: { publicId: true } } },
       }),
       this.database.bed.findUniqueOrThrow({
         where: { hospitalId_id: { hospitalId: guest.hospitalId, id: guest.bedId } },
@@ -101,6 +103,7 @@ export class GuestSessionService {
     ]);
     return {
       hospitalName: hospital.name,
+      hospitalLogoUrl: logoUrl(hospital.logo?.publicId),
       bed: { code: bed.code, displayName: bed.displayName },
       room: bed.room?.name ?? null,
       ward: bed.ward.name,

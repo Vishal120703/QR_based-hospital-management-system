@@ -1,16 +1,19 @@
 import {
   type Bed,
   type BedStatus,
+  type BedType,
   type Building,
   type Floor,
   type Prisma,
   type PrismaClient,
   type Room,
+  type RoomType,
   type Ward,
+  type WardType,
 } from '@prisma/client';
-import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
+import { ConflictError, InvalidInputError, NotFoundError } from '../../common/errors/app-error.js';
 import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
+import { bedScopeWhere, type StaffContext } from '../auth/auth.service.js';
 
 type Transaction = Prisma.TransactionClient;
 
@@ -37,17 +40,93 @@ export interface LocationCreate {
 }
 export interface FloorCreate extends LocationCreate {
   readonly buildingId?: string | undefined;
+  readonly level?: number | undefined;
 }
 export interface WardCreate extends LocationCreate {
   readonly floorId: string;
+  readonly unitType?: WardType | undefined;
 }
 export interface RoomCreate extends LocationCreate {
   readonly wardId: string;
+  readonly roomType?: RoomType | undefined;
 }
 export interface LocationUpdate {
   readonly code?: string | undefined;
   readonly name?: string | undefined;
   readonly active?: boolean | undefined;
+}
+export interface FloorUpdate extends LocationUpdate {
+  readonly level?: number | null | undefined;
+}
+export interface WardUpdate extends LocationUpdate {
+  readonly unitType?: WardType | undefined;
+}
+export interface RoomUpdate extends LocationUpdate {
+  readonly roomType?: RoomType | undefined;
+}
+
+// Creates many beds in one ward at once, either as numbered beds or as
+// numbered rooms that each hold the same number of beds.
+export type BulkBedsInput =
+  | {
+      readonly mode: 'BEDS';
+      readonly roomId?: string | undefined;
+      readonly codePrefix: string;
+      readonly namePrefix: string;
+      readonly start: number;
+      readonly count: number;
+      readonly bedType: BedType;
+    }
+  | {
+      readonly mode: 'ROOMS';
+      readonly roomPrefix: string;
+      readonly start: number;
+      readonly count: number;
+      readonly roomType: RoomType;
+      readonly bedsPerRoom: number;
+      readonly bedType: BedType;
+    };
+
+export const maxBulkBeds = 300;
+
+// The rooms and beds a bulk request would create. Kept pure so the numbering
+// rule is easy to test and identical to the preview shown in the browser.
+export function planBulkBeds(input: BulkBedsInput): {
+  rooms: { code: string; name: string }[];
+  beds: { roomCode: string | null; code: string; displayName: string }[];
+} {
+  const last = input.start + input.count - 1;
+  const width = Math.max(2, String(last).length);
+  const numbers = Array.from({ length: input.count }, (_, index) => input.start + index);
+  if (input.mode === 'BEDS') {
+    return {
+      rooms: [],
+      beds: numbers.map((number) => {
+        const label = String(number).padStart(width, '0');
+        return {
+          roomCode: null,
+          code: `${input.codePrefix}${label}`.toUpperCase(),
+          displayName: `${input.namePrefix} ${label}`.trim(),
+        };
+      }),
+    };
+  }
+  // Floor prefix "2" with rooms 1–3 gives 201, 202, 203.
+  const rooms = numbers.map((number) => {
+    const code = `${input.roomPrefix}${String(number).padStart(width, '0')}`.toUpperCase();
+    return { code, name: `Room ${code}` };
+  });
+  return {
+    rooms,
+    beds: rooms.flatMap((room) =>
+      input.bedsPerRoom === 1
+        ? [{ roomCode: room.code, code: room.code, displayName: `Room ${room.code}` }]
+        : Array.from({ length: input.bedsPerRoom }, (_, index) => {
+            const code = `${room.code}-${String.fromCharCode(65 + index)}`;
+            return { roomCode: room.code, code, displayName: `Bed ${code}` };
+          }),
+    ),
+  };
 }
 
 // OCCUPIED is reserved for the BedSession lifecycle and is never set manually.
@@ -58,10 +137,12 @@ export interface BedCreate {
   readonly roomId?: string | undefined;
   readonly code: string;
   readonly displayName: string;
+  readonly bedType?: BedType | undefined;
 }
 export interface BedUpdate {
   readonly code?: string | undefined;
   readonly displayName?: string | undefined;
+  readonly bedType?: BedType | undefined;
   readonly status?: ManualBedStatus | undefined;
   readonly active?: boolean | undefined;
 }
@@ -72,20 +153,29 @@ const snapshot = {
     buildingId: row.buildingId,
     code: row.code,
     name: row.name,
+    level: row.level,
     active: row.active,
   }),
   ward: (row: Ward) => ({
     floorId: row.floorId,
     code: row.code,
     name: row.name,
+    unitType: row.unitType,
     active: row.active,
   }),
-  room: (row: Room) => ({ wardId: row.wardId, code: row.code, name: row.name, active: row.active }),
+  room: (row: Room) => ({
+    wardId: row.wardId,
+    code: row.code,
+    name: row.name,
+    roomType: row.roomType,
+    active: row.active,
+  }),
   bed: (row: Bed) => ({
     wardId: row.wardId,
     roomId: row.roomId,
     code: row.code,
     displayName: row.displayName,
+    bedType: row.bedType,
     status: row.status,
     active: row.active,
   }),
@@ -124,6 +214,26 @@ function requireNoChildren(count: number, label: string): void {
   }
 }
 
+// What a floor- or ward-level role may see: its own floors and wards, their
+// rooms and beds, and the buildings around them. Hospital-wide access adds no
+// filter; a permission held nowhere relevant matches nothing.
+export function areaFilters(context: StaffContext, permission: string) {
+  const area = bedScopeWhere(context, permission);
+  if (area && 'hospitalWide' in area) {
+    return { building: {}, floor: {}, ward: {} };
+  }
+  const floorIds = area?.floorIds ?? [];
+  const wardIds = area?.wardIds ?? [];
+  const floor: Prisma.FloorWhereInput = {
+    OR: [{ id: { in: floorIds } }, { wards: { some: { id: { in: wardIds } } } }],
+  };
+  const ward: Prisma.WardWhereInput = {
+    OR: [{ floorId: { in: floorIds } }, { id: { in: wardIds } }],
+  };
+  const building: Prisma.BuildingWhereInput = { floors: { some: floor } };
+  return { building, floor, ward };
+}
+
 function activeWhere(filter: ActiveFilter) {
   return filter.active === undefined ? {} : { active: filter.active };
 }
@@ -143,13 +253,25 @@ export class LocationService {
 
   public listBuildings(context: StaffContext, filter: ActiveFilter) {
     return this.database.building.findMany({
-      where: { hospitalId: context.tenant.hospitalId, ...activeWhere(filter) },
+      where: {
+        hospitalId: context.tenant.hospitalId,
+        ...activeWhere(filter),
+        AND: [areaFilters(context, 'location.read').building],
+      },
       orderBy: { code: 'asc' },
     });
   }
 
   public async getBuilding(context: StaffContext, id: string) {
-    return found(await this.database.building.findUnique({ where: tenantKey(context, id) }));
+    return found(
+      await this.database.building.findFirst({
+        where: {
+          hospitalId: context.tenant.hospitalId,
+          id,
+          AND: [areaFilters(context, 'location.read').building],
+        },
+      }),
+    );
   }
 
   public createBuilding(context: StaffContext, input: LocationCreate, requestId: string) {
@@ -226,13 +348,22 @@ export class LocationService {
         hospitalId: context.tenant.hospitalId,
         ...(filter.buildingId !== undefined ? { buildingId: filter.buildingId } : {}),
         ...activeWhere(filter),
+        AND: [areaFilters(context, 'location.read').floor],
       },
-      orderBy: { code: 'asc' },
+      orderBy: [{ level: { sort: 'asc', nulls: 'last' } }, { code: 'asc' }],
     });
   }
 
   public async getFloor(context: StaffContext, id: string) {
-    return found(await this.database.floor.findUnique({ where: tenantKey(context, id) }));
+    return found(
+      await this.database.floor.findFirst({
+        where: {
+          hospitalId: context.tenant.hospitalId,
+          id,
+          AND: [areaFilters(context, 'location.read').floor],
+        },
+      }),
+    );
   }
 
   public createFloor(context: StaffContext, input: FloorCreate, requestId: string) {
@@ -249,6 +380,7 @@ export class LocationService {
           buildingId: input.buildingId ?? null,
           code: input.code,
           name: input.name,
+          level: input.level ?? null,
         },
       });
       await recordStaffAudit(transaction, context, requestId, {
@@ -261,7 +393,7 @@ export class LocationService {
     });
   }
 
-  public updateFloor(context: StaffContext, id: string, input: LocationUpdate, requestId: string) {
+  public updateFloor(context: StaffContext, id: string, input: FloorUpdate, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
       const before = found(await transaction.floor.findUnique({ where: tenantKey(context, id) }));
@@ -279,7 +411,10 @@ export class LocationService {
       }
       const after = await transaction.floor.update({
         where: tenantKey(context, id),
-        data: locationChanges(input),
+        data: {
+          ...locationChanges(input),
+          ...(input.level !== undefined ? { level: input.level } : {}),
+        },
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'floor.update',
@@ -317,13 +452,22 @@ export class LocationService {
         hospitalId: context.tenant.hospitalId,
         ...(filter.floorId !== undefined ? { floorId: filter.floorId } : {}),
         ...activeWhere(filter),
+        AND: [areaFilters(context, 'location.read').ward],
       },
       orderBy: { code: 'asc' },
     });
   }
 
   public async getWard(context: StaffContext, id: string) {
-    return found(await this.database.ward.findUnique({ where: tenantKey(context, id) }));
+    return found(
+      await this.database.ward.findFirst({
+        where: {
+          hospitalId: context.tenant.hospitalId,
+          id,
+          AND: [areaFilters(context, 'location.read').ward],
+        },
+      }),
+    );
   }
 
   public createWard(context: StaffContext, input: WardCreate, requestId: string) {
@@ -338,6 +482,7 @@ export class LocationService {
           floorId: input.floorId,
           code: input.code,
           name: input.name,
+          ...(input.unitType ? { unitType: input.unitType } : {}),
         },
       });
       await recordStaffAudit(transaction, context, requestId, {
@@ -350,7 +495,7 @@ export class LocationService {
     });
   }
 
-  public updateWard(context: StaffContext, id: string, input: LocationUpdate, requestId: string) {
+  public updateWard(context: StaffContext, id: string, input: WardUpdate, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
       const before = found(await transaction.ward.findUnique({ where: tenantKey(context, id) }));
@@ -371,7 +516,10 @@ export class LocationService {
       }
       const after = await transaction.ward.update({
         where: tenantKey(context, id),
-        data: locationChanges(input),
+        data: {
+          ...locationChanges(input),
+          ...(input.unitType !== undefined ? { unitType: input.unitType } : {}),
+        },
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'ward.update',
@@ -408,13 +556,22 @@ export class LocationService {
         hospitalId: context.tenant.hospitalId,
         ...(filter.wardId !== undefined ? { wardId: filter.wardId } : {}),
         ...activeWhere(filter),
+        ward: areaFilters(context, 'location.read').ward,
       },
       orderBy: { code: 'asc' },
     });
   }
 
   public async getRoom(context: StaffContext, id: string) {
-    return found(await this.database.room.findUnique({ where: tenantKey(context, id) }));
+    return found(
+      await this.database.room.findFirst({
+        where: {
+          hospitalId: context.tenant.hospitalId,
+          id,
+          ward: areaFilters(context, 'location.read').ward,
+        },
+      }),
+    );
   }
 
   public createRoom(context: StaffContext, input: RoomCreate, requestId: string) {
@@ -429,6 +586,7 @@ export class LocationService {
           wardId: input.wardId,
           code: input.code,
           name: input.name,
+          ...(input.roomType ? { roomType: input.roomType } : {}),
         },
       });
       await recordStaffAudit(transaction, context, requestId, {
@@ -441,7 +599,7 @@ export class LocationService {
     });
   }
 
-  public updateRoom(context: StaffContext, id: string, input: LocationUpdate, requestId: string) {
+  public updateRoom(context: StaffContext, id: string, input: RoomUpdate, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
       const before = found(await transaction.room.findUnique({ where: tenantKey(context, id) }));
@@ -459,7 +617,10 @@ export class LocationService {
       }
       const after = await transaction.room.update({
         where: tenantKey(context, id),
-        data: locationChanges(input),
+        data: {
+          ...locationChanges(input),
+          ...(input.roomType !== undefined ? { roomType: input.roomType } : {}),
+        },
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'room.update',
@@ -496,13 +657,22 @@ export class LocationService {
         ...(filter.roomId !== undefined ? { roomId: filter.roomId } : {}),
         ...(filter.status !== undefined ? { status: filter.status } : {}),
         ...activeWhere(filter),
+        ward: areaFilters(context, 'bed.read').ward,
       },
       orderBy: [{ wardId: 'asc' }, { code: 'asc' }],
     });
   }
 
   public async getBed(context: StaffContext, id: string) {
-    return found(await this.database.bed.findUnique({ where: tenantKey(context, id) }));
+    return found(
+      await this.database.bed.findFirst({
+        where: {
+          hospitalId: context.tenant.hospitalId,
+          id,
+          ward: areaFilters(context, 'bed.read').ward,
+        },
+      }),
+    );
   }
 
   public createBed(context: StaffContext, input: BedCreate, requestId: string) {
@@ -530,6 +700,7 @@ export class LocationService {
           roomId: input.roomId ?? null,
           code: input.code,
           displayName: input.displayName,
+          ...(input.bedType ? { bedType: input.bedType } : {}),
         },
       });
       await recordStaffAudit(transaction, context, requestId, {
@@ -565,6 +736,7 @@ export class LocationService {
         data: {
           ...(input.code !== undefined ? { code: input.code } : {}),
           ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+          ...(input.bedType !== undefined ? { bedType: input.bedType } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
           ...(input.active !== undefined ? { active: input.active } : {}),
         },
@@ -597,6 +769,90 @@ export class LocationService {
         targetId: id,
         metadata: { before: snapshot.bed(before) },
       });
+    });
+  }
+
+  // All-or-nothing: if any generated code already exists in the ward, nothing
+  // is created and the conflicting codes are reported.
+  public bulkCreateBeds(
+    context: StaffContext,
+    wardId: string,
+    input: BulkBedsInput,
+    requestId: string,
+  ) {
+    const hospitalId = context.tenant.hospitalId;
+    const plan = planBulkBeds(input);
+    if (plan.beds.length > maxBulkBeds) {
+      throw new InvalidInputError(`Create at most ${maxBulkBeds} beds at a time.`);
+    }
+    return this.write(async (transaction) => {
+      requireActiveParent(
+        await transaction.ward.findUnique({ where: tenantKey(context, wardId) }),
+        'ward',
+      );
+      if (input.mode === 'BEDS' && input.roomId !== undefined) {
+        requireActiveParent(
+          await transaction.room.findUnique({
+            where: { hospitalId_wardId_id: { hospitalId, wardId, id: input.roomId } },
+          }),
+          'room',
+        );
+      }
+      const [takenBeds, takenRooms] = await Promise.all([
+        transaction.bed.findMany({
+          where: { hospitalId, wardId, code: { in: plan.beds.map((bed) => bed.code) } },
+          select: { code: true },
+        }),
+        transaction.room.findMany({
+          where: { hospitalId, wardId, code: { in: plan.rooms.map((room) => room.code) } },
+          select: { code: true },
+        }),
+      ]);
+      const taken = [...takenRooms, ...takenBeds].map((row) => row.code);
+      if (taken.length > 0) {
+        const sample = [...new Set(taken)].slice(0, 5).join(', ');
+        throw new ConflictError(
+          `These codes already exist in this ward: ${sample}${taken.length > 5 ? ', …' : ''}. Choose another prefix or start number.`,
+        );
+      }
+
+      const rooms =
+        input.mode === 'ROOMS'
+          ? await transaction.room.createManyAndReturn({
+              data: plan.rooms.map((room) => ({
+                hospitalId,
+                wardId,
+                code: room.code,
+                name: room.name,
+                roomType: input.roomType,
+              })),
+            })
+          : [];
+      const roomIdByCode = new Map(rooms.map((room) => [room.code, room.id]));
+      const beds = await transaction.bed.createManyAndReturn({
+        data: plan.beds.map((bed) => ({
+          hospitalId,
+          wardId,
+          roomId:
+            input.mode === 'ROOMS'
+              ? (roomIdByCode.get(bed.roomCode ?? '') ?? null)
+              : (input.roomId ?? null),
+          code: bed.code,
+          displayName: bed.displayName,
+          bedType: input.bedType,
+        })),
+      });
+      await recordStaffAudit(transaction, context, requestId, {
+        action: 'bed.bulk_create',
+        targetType: 'Ward',
+        targetId: wardId,
+        metadata: {
+          mode: input.mode,
+          roomCodes: rooms.map((room) => room.code),
+          bedCodes: beds.map((bed) => bed.code),
+        },
+      });
+      return { rooms, beds };
     });
   }
 

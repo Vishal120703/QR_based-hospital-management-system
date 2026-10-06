@@ -137,6 +137,9 @@ export function LoginPage() {
           </p>
           <Link to="/">Go to patient QR scanner</Link>
         </div>
+        <p className="small muted platform-entry">
+          CARE QR platform team? <Link to="/platform/login">Platform sign in</Link>
+        </p>
       </form>
     </main>
   );

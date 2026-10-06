@@ -39,6 +39,7 @@ export function StaffDialog({
   );
   const [locationId, setLocationId] = useState('');
   const [roleId, setRoleId] = useState('');
+  const [rolePlace, setRolePlace] = useState('');
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [shiftVersion, setShiftVersion] = useState(0);
   const [shiftStart, setShiftStart] = useState('');
@@ -97,9 +98,40 @@ export function StaffDialog({
   const availableDepartments = directory.departments.filter(
     (department) => department.active && !member.departmentIds.includes(department.id),
   );
-  const availableRoles = directory.roles.filter(
-    (role) => role.active && !member.roleIds.includes(role.id),
+  // Each held role with the places it applies to.
+  const assignments =
+    member.roleAssignments ??
+    member.roleIds.map((id) => ({ roleId: id, scopes: [{ type: 'HOSPITAL' as const, id: '' }] }));
+  const chosenRole = directory.roles.find((role) => role.id === roleId);
+  const chosenLevel = chosenRole?.scopeLevel ?? 'HOSPITAL';
+  const heldPlaces = new Set(
+    assignments
+      .filter((assignment) => assignment.roleId === roleId)
+      .flatMap((assignment) => assignment.scopes.map((scope) => scope.id)),
   );
+  const places = (
+    chosenLevel === 'FLOOR'
+      ? directory.floors
+      : chosenLevel === 'WARD'
+        ? directory.wards
+        : chosenLevel === 'DEPARTMENT'
+          ? directory.departments
+          : []
+  ).filter((place) => place.active && !heldPlaces.has(place.id));
+  // A whole-hospital role can be held once; others once per place.
+  const availableRoles = directory.roles.filter(
+    (role) =>
+      role.active &&
+      ((role.scopeLevel ?? 'HOSPITAL') !== 'HOSPITAL' || !member.roleIds.includes(role.id)),
+  );
+  const placeName = (scope: { type: string; id: string }) =>
+    scope.type === 'FLOOR'
+      ? nameOf(directory.floors, scope.id)
+      : scope.type === 'WARD'
+        ? nameOf(directory.wards, scope.id)
+        : scope.type === 'DEPARTMENT'
+          ? nameOf(directory.departments, scope.id)
+          : 'whole hospital';
   const locations =
     coverageType === 'FLOOR' ? directory.floors : coverageType === 'WARD' ? directory.wards : [];
 
@@ -266,10 +298,20 @@ export function StaffDialog({
       {directory.roles.length > 0 && (
         <Panel title="Roles (what they can do in CARE QR)">
           <Chips
-            items={member.roleIds.map((id) => ({ id, label: nameOf(directory.roles, id) }))}
+            items={assignments.flatMap((assignment) =>
+              assignment.scopes.map((scope) => ({
+                id: `${assignment.roleId}:${scope.type === 'HOSPITAL' ? '' : scope.id}`,
+                label: `${nameOf(directory.roles, assignment.roleId)} · ${placeName(scope)}`,
+              })),
+            )}
             empty="No roles: they cannot sign in."
             disabled={busy || isSelf || !canManageRoles}
-            onRemove={(id) => void run(() => staffApi.removeRole(token, member.id, id))}
+            onRemove={(key) => {
+              const [removeRoleId = '', scopeId] = key.split(':');
+              void run(() =>
+                staffApi.removeRole(token, member.id, removeRoleId, scopeId || undefined),
+              );
+            }}
           />
           {canManageRoles ? (
             <div className="inline-form">
@@ -277,7 +319,10 @@ export function StaffDialog({
                 aria-label="Role to add"
                 disabled={busy}
                 value={roleId}
-                onChange={(event) => setRoleId(event.target.value)}
+                onChange={(event) => {
+                  setRoleId(event.target.value);
+                  setRolePlace('');
+                }}
               >
                 <option value="">Choose a role…</option>
                 {availableRoles.map((role) => (
@@ -286,13 +331,43 @@ export function StaffDialog({
                   </option>
                 ))}
               </select>
+              {chosenLevel !== 'HOSPITAL' && (
+                <select
+                  aria-label="Where the role applies"
+                  disabled={busy || !roleId}
+                  value={rolePlace}
+                  onChange={(event) => setRolePlace(event.target.value)}
+                >
+                  <option value="">
+                    {chosenLevel === 'FLOOR'
+                      ? 'Choose the floor…'
+                      : chosenLevel === 'WARD'
+                        ? 'Choose the ward…'
+                        : 'Choose the department…'}
+                  </option>
+                  {places.map((place) => (
+                    <option key={place.id} value={place.id}>
+                      {place.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <button
                 type="button"
-                disabled={busy || !roleId}
+                disabled={busy || !roleId || (chosenLevel !== 'HOSPITAL' && !rolePlace)}
                 onClick={() =>
                   void run(
-                    () => staffApi.assignRole(token, member.id, roleId),
-                    () => setRoleId(''),
+                    () =>
+                      staffApi.assignRole(
+                        token,
+                        member.id,
+                        roleId,
+                        chosenLevel === 'HOSPITAL' ? undefined : rolePlace,
+                      ),
+                    () => {
+                      setRoleId('');
+                      setRolePlace('');
+                    },
                   )
                 }
               >

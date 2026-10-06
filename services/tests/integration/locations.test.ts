@@ -523,4 +523,199 @@ describe('Phase 3 location hierarchy', () => {
       }),
     ).toBe(0);
   });
+
+  it('lets each building have its own floor codes and orders floors by level', async () => {
+    const admin = as(hospitalA.adminToken);
+    const north = await create(hospitalA.adminToken, '/admin/buildings', 'building', {
+      code: 'LVL-N',
+      name: 'North Tower',
+    });
+    const south = await create(hospitalA.adminToken, '/admin/buildings', 'building', {
+      code: 'LVL-S',
+      name: 'South Tower',
+    });
+    for (const building of [north, south]) {
+      await create(hospitalA.adminToken, '/admin/floors', 'floor', {
+        buildingId: building.id,
+        code: 'G',
+        name: 'Ground Floor',
+        level: 0,
+      });
+    }
+    const duplicate = await admin.post('/admin/floors', {
+      buildingId: north.id,
+      code: 'g',
+      name: 'Duplicate',
+    });
+    expect(duplicate.status).toBe(409);
+    // Floors without a building still need unique codes among themselves.
+    await create(hospitalA.adminToken, '/admin/floors', 'floor', { code: 'LVL-X', name: 'Annex' });
+    expect((await admin.post('/admin/floors', { code: 'LVL-X', name: 'Again' })).status).toBe(409);
+
+    await create(hospitalA.adminToken, '/admin/floors', 'floor', {
+      buildingId: north.id,
+      code: 'B1',
+      name: 'Basement',
+      level: -1,
+    });
+    const first = await create(hospitalA.adminToken, '/admin/floors', 'floor', {
+      buildingId: north.id,
+      code: 'AA',
+      name: 'First Floor',
+      level: 1,
+    });
+    const listed = many(await admin.get(`/admin/floors?buildingId=${north.id}`), 'floors');
+    expect(listed.map((floor) => floor.code)).toEqual(['B1', 'G', 'AA']);
+
+    expect((await admin.patch(`/admin/floors/${first.id}`, { level: 999 })).status).toBe(400);
+    const cleared = await admin.patch(`/admin/floors/${first.id}`, { level: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body).toMatchObject({ floor: { level: null } });
+  });
+
+  it('stores unit, room, and bed types', async () => {
+    const owned = await createHierarchy(hospitalA, 'TYPE');
+    const admin = as(hospitalA.adminToken);
+    const icu = await admin.post('/admin/wards', {
+      floorId: owned.floor.id,
+      code: 'ICU',
+      name: 'Medical ICU',
+      unitType: 'ICU',
+    });
+    expect(icu.status).toBe(201);
+    expect(icu.body).toMatchObject({ ward: { unitType: 'ICU' } });
+    expect(
+      (
+        await admin.post('/admin/wards', {
+          floorId: owned.floor.id,
+          code: 'X',
+          name: 'X',
+          unitType: 'SPA',
+        })
+      ).status,
+    ).toBe(400);
+    expect(owned.ward).toMatchObject({ unitType: 'GENERAL' });
+
+    const room = await admin.patch(`/admin/rooms/${owned.room.id}`, { roomType: 'PRIVATE' });
+    expect(room.body).toMatchObject({ room: { roomType: 'PRIVATE' } });
+    const bed = await admin.patch(`/admin/beds/${owned.bed.id}`, { bedType: 'VENTILATOR' });
+    expect(bed.body).toMatchObject({ bed: { bedType: 'VENTILATOR', status: 'AVAILABLE' } });
+  });
+
+  it('creates numbered beds or rooms in bulk, all or nothing', async () => {
+    const owned = await createHierarchy(hospitalA, 'BULK');
+    const admin = as(hospitalA.adminToken);
+
+    const beds = await admin.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+      mode: 'BEDS',
+      codePrefix: 'GW-',
+      namePrefix: 'Bed',
+      start: 1,
+      count: 12,
+      bedType: 'STANDARD',
+    });
+    expect(beds.status, JSON.stringify(beds.body)).toBe(201);
+    const created = z
+      .object({ beds: z.array(z.object({ code: z.string(), displayName: z.string() })) })
+      .parse(beds.body).beds;
+    expect(created).toHaveLength(12);
+    expect(created[0]).toMatchObject({ code: 'GW-01', displayName: 'Bed 01' });
+    expect(created[11]).toMatchObject({ code: 'GW-12', displayName: 'Bed 12' });
+
+    const rooms = await admin.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+      mode: 'ROOMS',
+      roomPrefix: '2',
+      start: 1,
+      count: 3,
+      roomType: 'SEMI_PRIVATE',
+      bedsPerRoom: 2,
+      bedType: 'STANDARD',
+    });
+    expect(rooms.status, JSON.stringify(rooms.body)).toBe(201);
+    const layout = z
+      .object({
+        rooms: z.array(z.object({ id: z.string(), code: z.string(), roomType: z.string() })),
+        beds: z.array(z.object({ code: z.string(), roomId: z.string().nullable() })),
+      })
+      .parse(rooms.body);
+    expect(layout.rooms.map((room) => room.code)).toEqual(['201', '202', '203']);
+    expect(layout.beds.map((bed) => bed.code)).toEqual([
+      '201-A',
+      '201-B',
+      '202-A',
+      '202-B',
+      '203-A',
+      '203-B',
+    ]);
+    expect(layout.beds[0]?.roomId).toBe(layout.rooms[0]?.id);
+
+    // GW-12 already exists, so nothing from 10–14 is created.
+    const before = await database.bed.count({ where: { wardId: owned.ward.id } });
+    const overlap = await admin.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+      mode: 'BEDS',
+      codePrefix: 'GW-',
+      namePrefix: 'Bed',
+      start: 10,
+      count: 5,
+      bedType: 'STANDARD',
+    });
+    expect(overlap.status).toBe(409);
+    expect(JSON.stringify(overlap.body)).toContain('GW-10');
+    expect(await database.bed.count({ where: { wardId: owned.ward.id } })).toBe(before);
+
+    const tooMany = await admin.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+      mode: 'ROOMS',
+      roomPrefix: 'Z',
+      start: 1,
+      count: 100,
+      roomType: 'GENERAL',
+      bedsPerRoom: 4,
+      bedType: 'STANDARD',
+    });
+    expect(tooMany.status).toBe(400);
+
+    const foreign = await createHierarchy(hospitalB, 'BULK');
+    expect(
+      (
+        await admin.post(`/admin/wards/${foreign.ward.id}/bulk-beds`, {
+          mode: 'BEDS',
+          codePrefix: 'X',
+          namePrefix: 'Bed',
+          start: 1,
+          count: 1,
+          bedType: 'STANDARD',
+        })
+      ).status,
+    ).toBe(404);
+  });
+
+  it('needs location.manage to create rooms in bulk', async () => {
+    const owned = await createHierarchy(hospitalA, 'BULKP');
+    const bedManager = as(await createStaffToken(database, application, hospitalA, ['bed.manage']));
+    const body = { start: 1, count: 2, bedType: 'STANDARD' };
+    expect(
+      (
+        await bedManager.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+          ...body,
+          mode: 'ROOMS',
+          roomPrefix: '3',
+          roomType: 'GENERAL',
+          bedsPerRoom: 1,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await bedManager.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+          ...body,
+          mode: 'BEDS',
+          codePrefix: 'P-',
+          namePrefix: 'Bed',
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (await as(readerTokenA).post(`/admin/wards/${owned.ward.id}/bulk-beds`, body)).status,
+    ).toBe(403);
+  });
 });

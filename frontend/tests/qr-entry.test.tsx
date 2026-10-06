@@ -58,6 +58,7 @@ describe('Patient QR entry', () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       location: {
         hospitalName: 'Test Hospital',
+        hospitalLogoUrl: null,
         bed: { code: '101', displayName: 'Bed 101' },
         room: null,
         ward: 'General',
@@ -106,6 +107,7 @@ describe('Patient QR entry', () => {
       expiresAt: '',
       location: {
         hospitalName: 'Test Hospital',
+        hospitalLogoUrl: null,
         bed: { code: '101', displayName: 'Bed 101' },
         room: null,
         ward: 'General',
@@ -156,6 +158,7 @@ describe('Patient QR entry', () => {
       expiresAt: '',
       location: {
         hospitalName: 'Test Hospital',
+        hospitalLogoUrl: null,
         bed: { code: '101', displayName: 'Bed 101' },
         room: null,
         ward: 'General',

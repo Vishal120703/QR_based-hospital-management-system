@@ -11,13 +11,17 @@ const createRoleSchema = z
     name: z.string().trim().min(2).max(100),
     description: z.string().trim().max(500).nullable().optional(),
     active: z.boolean().optional(),
+    scopeLevel: z.enum(['HOSPITAL', 'FLOOR', 'WARD', 'DEPARTMENT']).optional(),
     permissionKeys: z.array(z.string().min(1)).max(100).optional(),
   })
   .strict();
 const updateRoleSchema = createRoleSchema
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required.' });
-const assignRoleSchema = z.object({ roleId: z.string().uuid() }).strict();
+// scopeId is the floor, ward, or department for roles at those levels.
+const assignRoleSchema = z
+  .object({ roleId: z.string().uuid(), scopeId: z.string().uuid().optional() })
+  .strict();
 const emptyBodySchema = z.object({}).strict();
 
 export function createRoleRouter(roles: RoleService): Router {
@@ -72,38 +76,50 @@ export function createRoleRouter(roles: RoleService): Router {
       const context = request.staff;
       if (!context) throw new UnauthorizedError();
       const { id } = membershipIdSchema.parse(request.params);
-      const { roleId } = assignRoleSchema.parse(request.body);
+      const { roleId, scopeId } = assignRoleSchema.parse(request.body);
       const assignment = await roles.assignToMembership(
         context,
         id,
         roleId,
+        scopeId,
         String(response.getHeader('x-request-id')),
       );
       response.status(201).json({ assignment });
     },
   );
 
-  router.delete(
+  // Removes a role everywhere, or (with /scopes/:scopeId) for one place only.
+  for (const path of [
     '/memberships/:id/roles/:roleId',
-    requirePermission('staff.manage'),
-    requirePermission('role.manage'),
-    async (request, response) => {
-      const context = request.staff;
-      if (!context) throw new UnauthorizedError();
-      const { id, roleId } = z
-        .object({ id: z.string().uuid(), roleId: z.string().uuid() })
-        .strict()
-        .parse(request.params);
-      emptyBodySchema.parse(request.body ?? {});
-      await roles.unassignFromMembership(
-        context,
-        id,
-        roleId,
-        String(response.getHeader('x-request-id')),
-      );
-      response.status(204).send();
-    },
-  );
+    '/memberships/:id/roles/:roleId/scopes/:scopeId',
+  ]) {
+    router.delete(
+      path,
+      requirePermission('staff.manage'),
+      requirePermission('role.manage'),
+      async (request, response) => {
+        const context = request.staff;
+        if (!context) throw new UnauthorizedError();
+        const { id, roleId, scopeId } = z
+          .object({
+            id: z.string().uuid(),
+            roleId: z.string().uuid(),
+            scopeId: z.string().uuid().optional(),
+          })
+          .strict()
+          .parse(request.params);
+        emptyBodySchema.parse(request.body ?? {});
+        await roles.unassignFromMembership(
+          context,
+          id,
+          roleId,
+          scopeId,
+          String(response.getHeader('x-request-id')),
+        );
+        response.status(204).send();
+      },
+    );
+  }
 
   return router;
 }

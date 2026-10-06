@@ -42,7 +42,7 @@ If you change `services/.env` (especially `DATABASE_URL`), stop and restart the 
    npm run dev               # http://localhost:3001
    ```
 
-2. Create a hospital and its first administrator, inside `services/`. Set `DATABASE_URL`, `HOSPITAL_NAME`, `HOSPITAL_CODE`, `HOSPITAL_TIMEZONE`, `ADMIN_EMAIL`, `ADMIN_NAME`, and an `ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:hospital`. The password is hashed and never printed.
+2. Create the SaaS **platform admin** (the CARE QR team account that onboards hospitals), inside `services/`: set `PLATFORM_ADMIN_EMAIL`, `PLATFORM_ADMIN_NAME`, and a `PLATFORM_ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:platform-admin`. Sign in at `/platform/login` and use **Add hospital** to create each client hospital with its logo and first Hospital Manager. Alternatively, create a hospital and its first administrator from the command line, inside `services/`. Set `DATABASE_URL`, `HOSPITAL_NAME`, `HOSPITAL_CODE`, `HOSPITAL_TIMEZONE`, `ADMIN_EMAIL`, `ADMIN_NAME`, and an `ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:hospital`. The password is hashed and never printed. To brand a new client hospital at the same time, also set `HOSPITAL_LOGO_PATH` to a PNG, JPEG, or WebP file of up to 1 MB; a bad file stops the command before anything is created. The logo can be added or changed later in **Hospital → Profile & logo**.
 
    For a ready-made **dummy hospital instead of this step**, follow the [one-time demo seed instructions](./services/docs/easy-guide.md#load-dummy-data-once). It creates `CAREQR-DEMO` with beds, staff, catalog, and an active bed session in a local database; it refuses to overwrite an existing demo hospital.
 
@@ -58,7 +58,7 @@ If you change `services/.env` (especially `DATABASE_URL`), stop and restart the 
 ## Try it
 
 1. Open http://localhost:5173. Patients see **Scan QR** first and can use the live camera, take/choose a QR photo, or paste their bedside QR link without signing in. Staff choose **Staff sign in** and enter the hospital code, email, and password from step 2. Staff land on **Overview**, which shows live counts, a setup checklist, and a shortcut to every screen their role can open.
-2. **Locations:** add a floor, a ward, optionally a room, and a bed.
+2. **Location setup:** add a floor (with its level), then a unit such as a General ward or ICU, then add its beds in one step with **Add beds**. Buildings and rooms are optional; use them for multi-block campuses and private/semi-private rooms. Then use **Print QR labels** on any building, floor, unit, or room to download one A4 PDF of labels (large, medium, or sticker size) for every bed in it.
 3. **Beds & QR:** choose **Start session** for an available bed, then **Generate QR**. In the one-time QR dialog, choose **Open patient view** to test on this computer or **Print** for the bedside. If an active QR already exists but its link was lost, choose **Replace QR** to issue a new one; the old code stops working.
 4. On the patient page, choose a service and select **Request service**. The request appears under **Your requests**, where the patient can track or cancel it while eligible.
 5. **Close session**, **Replace QR**, or **Disable QR** ends existing patient access. The patient page rechecks access every 30 seconds and when the tab becomes visible.

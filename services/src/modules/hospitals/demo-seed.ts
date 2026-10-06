@@ -1,6 +1,7 @@
 import { type PrismaClient } from '@prisma/client';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
 import { hashPassword } from '../auth/password.js';
+import { type BuiltInRoleKey } from '../roles/built-in-roles.js';
 import { bootstrapHospital } from './bootstrap.js';
 
 export const demoHospital = {
@@ -10,6 +11,9 @@ export const demoHospital = {
   adminEmail: 'admin.demo@careqr.example',
   adminName: 'Demo Administrator',
   managerEmail: 'floor.manager.demo@careqr.example',
+  wardManagerEmail: 'ward.manager.demo@careqr.example',
+  supervisorEmail: 'pantry.supervisor.demo@careqr.example',
+  platformEmail: 'platform.demo@careqr.example',
 } as const;
 
 const demoStaff = [
@@ -27,19 +31,6 @@ const demoStaff = [
   },
 ] as const;
 
-const staffPermissions = [
-  'hospital.read',
-  'location.read',
-  'bed.read',
-  'service.read',
-  'staff.read',
-  'request.read',
-  'request.accept',
-  'request.start',
-  'request.complete',
-  'request.reject',
-] as const;
-
 export interface DemoSeedInput {
   readonly adminPassword: string;
   readonly staffPassword: string;
@@ -51,6 +42,8 @@ export interface DemoSeedResult {
   readonly hospitalCode: string;
   readonly adminEmail: string;
   readonly managerEmail: string;
+  readonly wardManagerEmail: string;
+  readonly supervisorEmail: string;
   readonly staff: readonly { email: string; departmentCode: string }[];
   readonly occupiedBedId: string;
   readonly availableBedId: string;
@@ -97,6 +90,7 @@ export async function seedDemoHospital(
           buildingId: building.id,
           code: 'F1',
           name: 'First Floor',
+          level: 1,
         },
       });
       const ward = await transaction.ward.create({
@@ -105,6 +99,7 @@ export async function seedDemoHospital(
           floorId: floor.id,
           code: 'WARD-A',
           name: 'General Ward',
+          unitType: 'GENERAL',
         },
       });
       const room = await transaction.room.create({
@@ -156,60 +151,63 @@ export async function seedDemoHospital(
       const departmentIdByCode = new Map(
         departments.map((department) => [department.code, department.id]),
       );
-      const role = await transaction.role.create({
-        data: {
-          hospitalId: created.hospitalId,
-          name: 'Demo Care Staff',
-          description: 'Limited operational access for local manual testing.',
-        },
+      // Demo people use the built-in role hierarchy every hospital gets.
+      const builtIn = await transaction.role.findMany({
+        where: { hospitalId: created.hospitalId, systemKey: { not: null } },
+        select: { id: true, systemKey: true },
       });
-      await transaction.rolePermission.createMany({
-        data: staffPermissions.map((permissionKey) => ({
-          hospitalId: created.hospitalId,
-          roleId: role.id,
-          permissionKey,
-        })),
-      });
-
-      const managerRole = await transaction.role.create({
-        data: {
-          hospitalId: created.hospitalId,
-          name: 'Demo Floor Manager',
-          description: 'Assigns patient requests on the demo floor.',
-        },
-      });
-      await transaction.rolePermission.createMany({
-        data: ['request.read', 'request.assign', 'staff.read'].map((permissionKey) => ({
-          hospitalId: created.hospitalId,
-          roleId: managerRole.id,
-          permissionKey,
-        })),
-      });
-      const managerUser = await transaction.user.create({
-        data: {
+      const roleId = (key: BuiltInRoleKey) => {
+        const found = builtIn.find((role) => role.systemKey === key);
+        if (!found) throw new Error(`Built-in role ${key} is missing.`);
+        return found.id;
+      };
+      const giveRole = async (
+        membershipId: string,
+        key: BuiltInRoleKey,
+        scope: { scopeType: 'HOSPITAL' | 'FLOOR' | 'WARD' | 'DEPARTMENT'; scopeId: string },
+      ) => {
+        const userRole = await transaction.userRole.create({
+          data: { hospitalId: created.hospitalId, membershipId, roleId: roleId(key) },
+        });
+        await transaction.scopeAssignment.create({
+          data: { hospitalId: created.hospitalId, userRoleId: userRole.id, ...scope },
+        });
+      };
+      const pantryId = departmentIdByCode.get('PANTRY');
+      if (!pantryId) throw new Error('Demo department PANTRY was not bootstrapped.');
+      const managers = [
+        {
           email: demoHospital.managerEmail,
-          displayName: 'Demo Floor Manager',
-          passwordHash: managerPasswordHash,
+          name: 'Demo Floor Manager',
+          key: 'FLOOR_MANAGER',
+          scope: { scopeType: 'FLOOR', scopeId: floor.id },
         },
-      });
-      const managerMembership = await transaction.hospitalMembership.create({
-        data: { hospitalId: created.hospitalId, userId: managerUser.id },
-      });
-      const managerUserRole = await transaction.userRole.create({
-        data: {
-          hospitalId: created.hospitalId,
-          membershipId: managerMembership.id,
-          roleId: managerRole.id,
+        {
+          email: demoHospital.wardManagerEmail,
+          name: 'Demo Ward Manager',
+          key: 'WARD_MANAGER',
+          scope: { scopeType: 'WARD', scopeId: ward.id },
         },
-      });
-      await transaction.scopeAssignment.create({
-        data: {
-          hospitalId: created.hospitalId,
-          userRoleId: managerUserRole.id,
-          scopeType: 'FLOOR',
-          scopeId: floor.id,
+        {
+          email: demoHospital.supervisorEmail,
+          name: 'Demo Pantry Supervisor',
+          key: 'DEPARTMENT_SUPERVISOR',
+          scope: { scopeType: 'DEPARTMENT', scopeId: pantryId },
         },
-      });
+      ] as const;
+      for (const manager of managers) {
+        const user = await transaction.user.create({
+          data: {
+            email: manager.email,
+            displayName: manager.name,
+            passwordHash: managerPasswordHash,
+          },
+        });
+        const membership = await transaction.hospitalMembership.create({
+          data: { hospitalId: created.hospitalId, userId: user.id },
+        });
+        await giveRole(membership.id, manager.key, manager.scope);
+      }
 
       for (const [index, staff] of demoStaff.entries()) {
         const departmentId = departmentIdByCode.get(staff.departmentCode);
@@ -246,22 +244,9 @@ export async function seedDemoHospital(
             wardId: ward.id,
           },
         });
-        const userRole = await transaction.userRole.create({
-          data: {
-            hospitalId: created.hospitalId,
-            membershipId: membership.id,
-            roleId: role.id,
-          },
-        });
-        // Staff auth currently requires a hospital authorization scope. This
-        // is distinct from the WARD operational coverage above.
-        await transaction.scopeAssignment.create({
-          data: {
-            hospitalId: created.hospitalId,
-            userRoleId: userRole.id,
-            scopeType: 'HOSPITAL',
-            scopeId: created.hospitalId,
-          },
+        await giveRole(membership.id, 'CARE_STAFF', {
+          scopeType: 'HOSPITAL',
+          scopeId: created.hospitalId,
         });
       }
 
@@ -302,9 +287,28 @@ export async function seedDemoHospital(
     hospitalCode: demoHospital.code,
     adminEmail: demoHospital.adminEmail,
     managerEmail: demoHospital.managerEmail,
+    wardManagerEmail: demoHospital.wardManagerEmail,
+    supervisorEmail: demoHospital.supervisorEmail,
     staff: demoStaff.map(({ email, departmentCode }) => ({ email, departmentCode })),
     ...details,
     qrToken,
     qrUrl: `${input.publicAppUrl.replace(/\/+$/, '')}/q/${qrToken}`,
   };
+}
+
+// Optional demo platform operator (super admin), for trying client onboarding.
+export async function seedDemoPlatformAdmin(
+  database: PrismaClient,
+  password: string,
+): Promise<string> {
+  const email = demoHospital.platformEmail;
+  const passwordHash = await hashPassword(password);
+  await database.$transaction(async (transaction) => {
+    if (await transaction.user.findUnique({ where: { email } })) return;
+    const user = await transaction.user.create({
+      data: { email, displayName: 'Demo Platform Admin', passwordHash },
+    });
+    await transaction.platformAdmin.create({ data: { userId: user.id } });
+  });
+  return email;
 }

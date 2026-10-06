@@ -103,3 +103,33 @@ export async function createBedFixture(
   });
   return { bedId: bed.id, wardId: ward.id };
 }
+
+// Creates a platform operator (super admin) and signs them in.
+export async function createPlatformToken(
+  database: PrismaClient,
+  application: Express,
+): Promise<{ token: string; email: string }> {
+  const email = `operator-${randomUUID().slice(0, 8)}@example.test`;
+  const user = await database.user.create({
+    data: {
+      email,
+      displayName: 'Platform Operator',
+      passwordHash: await hashPassword(fixturePassword),
+    },
+  });
+  await database.platformAdmin.create({ data: { userId: user.id } });
+  const response = await request(application)
+    .post('/auth/platform/login')
+    .send({ email, password: fixturePassword });
+  if (response.status !== 200) {
+    throw new Error(`Platform login failed with status ${response.status}.`);
+  }
+  return { token: loginSchema.parse(response.body).token, email };
+}
+
+// Signs in an existing staff member who uses the shared fixture password.
+export function loginStaff(application: Express, hospitalCode: string, email: string) {
+  return login(application, hospitalCode, email);
+}
+
+export { fixturePassword };

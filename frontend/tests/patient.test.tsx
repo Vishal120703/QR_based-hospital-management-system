@@ -17,6 +17,7 @@ import { LoginPage } from '../src/pages/LoginPage';
 
 const location: GuestLocation = {
   hospitalName: 'Test Hospital',
+  hospitalLogoUrl: null,
   bed: { code: '101', displayName: 'Bed 101' },
   room: null,
   ward: 'General',

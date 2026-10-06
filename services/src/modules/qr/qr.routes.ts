@@ -1,15 +1,30 @@
 import { Router, type Response } from 'express';
 import { z } from 'zod';
+import { ForbiddenError } from '../../common/errors/app-error.js';
 import { rateLimit, type RateLimitOptions } from '../../middleware/rate-limit.js';
 import { getRequestId } from '../../middleware/request-id.js';
-import { getStaffContext, requirePermission } from '../../middleware/staff-auth.js';
+import {
+  getStaffContext,
+  requirePermission,
+  requireScopedPermission,
+} from '../../middleware/staff-auth.js';
 import { type QrCodeService } from './qr.service.js';
 
 const emptyBodySchema = z.object({}).strict();
 const bedParamsSchema = z.object({ id: z.string().uuid() }).strict();
 const listQuerySchema = z.object({ bedId: z.string().uuid().optional() }).strict();
 const resolveSchema = z.object({ token: z.string().min(1).max(256) }).strict();
-const batchSchema = z.object({ floorId: z.string().uuid(), wardId: z.string().uuid() }).strict();
+const uuid = z.string().uuid();
+const batchSchema = z
+  .object({
+    scope: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('HOSPITAL') }).strict(),
+      z.object({ kind: z.enum(['BUILDING', 'FLOOR', 'WARD', 'ROOM']), id: uuid }).strict(),
+      z.object({ kind: z.literal('BEDS'), bedIds: z.array(uuid).min(1).max(300) }).strict(),
+    ]),
+    replaceExisting: z.boolean().default(false),
+  })
+  .strict();
 
 // Responses carrying a raw token must never be cached by browsers or proxies.
 function noStore(response: Response): Response {
@@ -20,7 +35,7 @@ function noStore(response: Response): Response {
 export function createQrAdminRouter(qrCodes: QrCodeService): Router {
   const router = Router();
 
-  router.get('/qr-codes', requirePermission('bed.read'), async (request, response) => {
+  router.get('/qr-codes', requireScopedPermission('bed.read'), async (request, response) => {
     const filter = listQuerySchema.parse(request.query);
     response.status(200).json({ qrCodes: await qrCodes.list(getStaffContext(request), filter) });
   });
@@ -30,11 +45,16 @@ export function createQrAdminRouter(qrCodes: QrCodeService): Router {
     requirePermission('hospital.manage'),
     requirePermission('qr.generate'),
     async (request, response) => {
-      const { floorId, wardId } = batchSchema.parse(request.body);
-      const result = await qrCodes.generateForWard(
-        getStaffContext(request),
-        floorId,
-        wardId,
+      const { scope, replaceExisting } = batchSchema.parse(request.body);
+      const context = getStaffContext(request);
+      // Replacing live labels is a rotation, so it needs that permission too.
+      if (replaceExisting && !context.hospitalPermissions.has('qr.rotate')) {
+        throw new ForbiddenError();
+      }
+      const result = await qrCodes.generateBatch(
+        context,
+        scope,
+        replaceExisting,
         getRequestId(response),
       );
       noStore(response).status(201).json(result);

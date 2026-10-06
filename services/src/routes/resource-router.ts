@@ -2,7 +2,11 @@ import { type Router } from 'express';
 import { type z } from 'zod';
 import { emptySchema, idParamsSchema } from '../common/validation.js';
 import { getRequestId } from '../middleware/request-id.js';
-import { getStaffContext, requirePermission } from '../middleware/staff-auth.js';
+import {
+  getStaffContext,
+  requirePermission,
+  requireScopedPermission,
+} from '../middleware/staff-auth.js';
 import { type StaffContext } from '../modules/auth/auth.service.js';
 import { type PermissionKey } from '../modules/roles/permissions.js';
 
@@ -11,6 +15,9 @@ export interface ResourceDefinition<Filter, Create, Update> {
   readonly singular: string;
   readonly plural: string;
   readonly readPermission: PermissionKey;
+  // Reads are allowed with the permission held for any floor or ward; the
+  // service then returns only what that area covers.
+  readonly readAnyScope?: boolean;
   readonly managePermission: PermissionKey;
   readonly filterSchema: z.ZodType<Filter, z.ZodTypeDef, unknown>;
   readonly createSchema: z.ZodType<Create, z.ZodTypeDef, unknown>;
@@ -28,7 +35,9 @@ export function registerResource<Filter, Create, Update>(
   resource: ResourceDefinition<Filter, Create, Update>,
 ): void {
   const itemPath = `${resource.path}/:id`;
-  const canRead = requirePermission(resource.readPermission);
+  const canRead = resource.readAnyScope
+    ? requireScopedPermission(resource.readPermission)
+    : requirePermission(resource.readPermission);
   const canManage = requirePermission(resource.managePermission);
 
   router.get(resource.path, canRead, async (request, response) => {

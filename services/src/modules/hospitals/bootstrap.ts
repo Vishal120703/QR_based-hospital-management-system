@@ -3,6 +3,7 @@ import { ConflictError } from '../../common/errors/app-error.js';
 import { hashPassword } from '../auth/password.js';
 import { seedExampleCatalog } from '../catalog/examples.js';
 import { exampleDepartments } from '../departments/department.service.js';
+import { createBuiltInRoles } from '../roles/built-in-roles.js';
 import { permissionCatalog } from '../roles/permissions.js';
 
 export interface BootstrapHospitalInput {
@@ -67,21 +68,13 @@ export async function bootstrapHospital(
           }),
         ),
       );
-      const role = await transaction.role.create({
-        data: { hospitalId: hospital.id, name: 'Hospital Admin' },
-      });
-      await transaction.rolePermission.createMany({
-        data: permissionCatalog.map(([permissionKey]) => ({
-          hospitalId: hospital.id,
-          roleId: role.id,
-          permissionKey,
-        })),
-      });
+      // The first administrator is the hospital's Hospital Manager.
+      const roleIds = await createBuiltInRoles(transaction, hospital.id);
       const userRole = await transaction.userRole.create({
         data: {
           hospitalId: hospital.id,
           membershipId: membership.id,
-          roleId: role.id,
+          roleId: roleIds.get('HOSPITAL_MANAGER')!,
         },
       });
       await transaction.scopeAssignment.create({

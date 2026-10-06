@@ -1,17 +1,18 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, credentials, staffApi, type Me } from '../src/api';
 import { AdminIndex, AdminLayout, type AdminContext } from '../src/pages/AdminLayout';
 import { BedsPage } from '../src/pages/BedsPage';
+import * as qrPdf from '../src/qr-pdf';
 import { ServicesPage } from '../src/pages/ServicesPage';
 import { StaffPage } from '../src/pages/StaffPage';
 
 const me: Me = {
   user: { id: 'user', email: 'admin@example.test', displayName: 'Test Admin' },
   membershipId: 'membership',
-  tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital' },
+  tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital', logoUrl: null },
   permissions: ['service.read'],
   scopedPermissions: ['service.read'],
 };
@@ -88,7 +89,7 @@ describe('Permission-aware workspace', () => {
     expect(screen.queryByRole('list', { name: 'Patient request setup' })).toBeNull();
   });
 
-  it('generates printable QR labels for every unissued bed in the chosen ward', async () => {
+  it('creates a PDF of QR labels for every unissued bed in the chosen unit', async () => {
     const user = userEvent.setup();
     vi.spyOn(staffApi, 'list').mockImplementation((_token, resource) =>
       Promise.resolve(
@@ -120,37 +121,56 @@ describe('Permission-aware workspace', () => {
               : [],
       ),
     );
-    const batch = vi.spyOn(staffApi, 'generateWardQrs').mockResolvedValue({
+    const pdf = vi.spyOn(qrPdf, 'downloadLabelsPdf').mockResolvedValue();
+    const batch = vi.spyOn(staffApi, 'generateQrBatch').mockResolvedValue({
       issues: [
         {
           qrCode: { id: 'qr-1', bedId: 'bed-1', status: 'ACTIVE', version: 1, issuedAt: '' },
           token: 'secret-1',
           url: 'https://example.test/q/secret-1',
+          bedId: 'bed-1',
           bedName: 'Bed 01',
+          bedCode: '01',
           location: 'Floor 1 · Ward 1',
         },
         {
           qrCode: { id: 'qr-2', bedId: 'bed-2', status: 'ACTIVE', version: 1, issuedAt: '' },
           token: 'secret-2',
           url: 'https://example.test/q/secret-2',
+          bedId: 'bed-2',
           bedName: 'Bed 02',
+          bedCode: '02',
           location: 'Floor 1 · Ward 1',
         },
       ],
       totalBeds: 2,
+      replaced: 0,
       skippedActive: 0,
       skippedInactive: 0,
     });
     renderPage(<BedsPage />, ['bed.read', 'location.read', 'hospital.manage', 'qr.generate']);
+    // The whole hospital is offered first; narrowing to a unit changes the scope.
+    expect(await screen.findByRole('button', { name: 'Create 2 QR labels' })).toBeTruthy();
     await user.selectOptions(
-      await screen.findByRole('combobox', { name: 'Floor for QR codes' }),
+      screen.getByRole('combobox', { name: 'Floor for QR labels' }),
       'floor-1',
     );
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Ward for QR codes' }), 'ward-1');
-    await user.click(screen.getByRole('button', { name: 'Generate 2 QR codes' }));
-    expect(batch).toHaveBeenCalledWith('test-token', 'floor-1', 'ward-1');
-    expect(await screen.findByRole('dialog', { name: 'Print 2 bedside QR codes' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Print' })).toBeTruthy();
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Unit for QR labels' }),
+      'ward-1',
+    );
+    await user.click(screen.getByRole('button', { name: 'Create 2 QR labels' }));
+    expect(batch).toHaveBeenCalledWith('test-token', { kind: 'WARD', id: 'ward-1' }, false);
+    const dialog = await screen.findByRole('dialog', { name: '2 QR labels ready' });
+    await user.click(within(dialog).getByRole('radio', { name: /Small/ }));
+    await user.click(within(dialog).getByRole('button', { name: /Download PDF \(1 page\)/ }));
+    expect(pdf).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ bedName: 'Bed 01', bedCode: '01' })]),
+      expect.objectContaining({ size: 'small', hospitalName: 'Test Hospital' }),
+    );
+    expect(pdf.mock.calls[0]?.[1].fileName).toMatch(
+      /^careqr-labels-floor-1-ward-1-\d{4}-\d{2}-\d{2}\.pdf$/,
+    );
   });
 
   it('opens the overview first and hides inaccessible links', async () => {

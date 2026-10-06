@@ -93,19 +93,23 @@ export class RequestService {
     );
     const floorIds = scopes.filter((scope) => scope.type === 'FLOOR').map((scope) => scope.id);
     const wardIds = scopes.filter((scope) => scope.type === 'WARD').map((scope) => scope.id);
-    if (!hospitalWide && floorIds.length === 0 && wardIds.length === 0) return [];
+    const departmentIds = scopes
+      .filter((scope) => scope.type === 'DEPARTMENT')
+      .map((scope) => scope.id);
+    if (!hospitalWide && floorIds.length + wardIds.length + departmentIds.length === 0) return [];
 
+    // A request is visible when its bed is in one of the caller's floors or
+    // wards, or it belongs to one of the caller's departments.
     const where: Prisma.ServiceRequestWhereInput = {
       hospitalId,
       ...(hospitalWide
         ? {}
         : {
-            bed: {
-              OR: [
-                ...(floorIds.length > 0 ? [{ ward: { floorId: { in: floorIds } } }] : []),
-                ...(wardIds.length > 0 ? [{ wardId: { in: wardIds } }] : []),
-              ],
-            },
+            OR: [
+              ...(floorIds.length > 0 ? [{ bed: { ward: { floorId: { in: floorIds } } } }] : []),
+              ...(wardIds.length > 0 ? [{ bed: { wardId: { in: wardIds } } }] : []),
+              ...(departmentIds.length > 0 ? [{ departmentId: { in: departmentIds } }] : []),
+            ],
           }),
       ...(!context.permissions.has('request.assign') ? { assigneeId: context.membershipId } : {}),
     };
@@ -354,7 +358,11 @@ export class RequestService {
     }
     const { bed, ...visible } = request;
     if (
-      !canAccessLocation(context, 'request.read', { wardId: bed.wardId, floorId: bed.ward.floorId })
+      !canAccessLocation(context, 'request.read', {
+        wardId: bed.wardId,
+        floorId: bed.ward.floorId,
+        departmentId: request.departmentId,
+      })
     ) {
       throw new NotFoundError();
     }
@@ -413,6 +421,7 @@ export class RequestService {
         !canAccessLocation(context, commandPermissions[action], {
           wardId: current.bed.wardId,
           floorId: current.bed.ward.floorId,
+          departmentId: current.departmentId,
         })
       ) {
         throw new NotFoundError();

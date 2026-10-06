@@ -24,11 +24,18 @@ The current version provides a testable foundation for tracking requests and res
 
 ## 2. Who uses it?
 
-| Person | What they do | Where |
+CARE QR is a SaaS platform: one CARE QR team serves many client hospitals, and each hospital's data is completely separate.
+
+| Person | What they do | Where they sign in |
 |---|---|---|
-| **Hospital admin** | Sets up the hospital: floors, wards, beds, staff, services, QR codes | Admin website (sign in) |
-| **Staff** (nurse, pantry, housekeeping…) | Receive and complete requests | *Staff screens come in a later phase* |
+| **Platform admin** (the CARE QR team) | Adds client hospitals with their logo and first Hospital Manager; suspends or reactivates a hospital. Never sees patients or requests. | `/platform/login` (email + password) |
+| **Hospital Manager** | Runs one hospital: layout, beds, QR labels, staff, departments, services, and **Roles & access** | Staff sign-in (hospital code + email + password) |
+| **Floor Manager** / **Ward Manager** | Admit and discharge patients and assign requests, only on their own floor or ward | Staff sign-in |
+| **Department Supervisor** | Assigns and closes one department's requests (for example Pantry) across the hospital | Staff sign-in |
+| **Care Staff** (nurse, pantry, housekeeping…) | Accept, start, and complete the requests assigned to them | Staff sign-in |
 | **Patient / family** | Scan the QR, request help, track it | Phone browser, no login |
+
+Every hospital starts with these five built-in roles. A Hospital Manager can add departments and create **their own roles** in **People → Roles & access**: tick what the role may do, and choose whether it applies to the whole hospital, one floor, one ward, or one department. Then, in **Staff & coverage → Manage**, they give the role to a person *for a specific place* (for example "Floor Manager · First Floor"). The Hospital Manager role itself always has every permission and cannot be edited, and a hospital can never lose its last active Hospital Manager.
 
 ---
 
@@ -37,8 +44,9 @@ The current version provides a testable foundation for tracking requests and res
 | Word | Simple meaning |
 |---|---|
 | **Hospital** | One customer. Each hospital's data is completely separate from others. |
-| **Location** | Building → Floor → Ward → Room → Bed. Building and Room are optional. |
-| **Bed** | A bed position. It can be *Available* or *Occupied*. |
+| **Location** | Building → Floor → Unit/Ward → Room → Bed. Building and Room are optional. |
+| **Unit / ward** | Any care area: General ward, Private or Semi-private rooms, ICU, HDU, CCU, NICU, PICU, Emergency, Day care, Maternity, Labour room, Pediatric, Isolation, Burns, Dialysis, Post-op recovery, Psychiatry, or Other. |
+| **Bed** | Any place a patient is cared for: a bed, ICU or ventilator bed, cot, incubator, dialysis or day-care chair, or emergency trolley. It can be *Available*, *Occupied*, or *Under maintenance*. |
 | **Bed session** | "A patient is in this bed right now." Admin **starts** it on admission and **closes** it on discharge. The QR only works while a session is active. |
 | **QR code** | The secret link printed on the bed. Can be **replaced** (old one stops working) or **disabled**. |
 | **Guest session** | The patient's temporary access after scanning (about 2 hours). Ends when the bed session closes or the QR is replaced. |
@@ -74,7 +82,7 @@ The current version provides a testable foundation for tracking requests and res
 | Done ✅ (Phases 0–8) | Not yet ⏳ (Phases 9–25) |
 |---|---|
 | Admin sign-in, hospital setup, **Overview** home page | Automatic routing of requests to staff |
-| Floors, wards, rooms, beds | Full manager dashboard (charts, reports) |
+| Buildings, floors, 19 unit types (ICU, NICU, ER…), rooms, beds/chairs/cots, bulk bed creation | Full manager dashboard (charts, reports) |
 | QR codes + bed sessions; manual manager assignment and staff completion | Dedicated mobile task app and automatic routing |
 | Departments, staff, duty, coverage | SLA alerts & escalation actually firing |
 | Service catalog + SLA versions | Notifications (push/SMS/WhatsApp), live updates |
@@ -213,13 +221,29 @@ To stop: press `Ctrl + C` in each window.
 
 | Who | Hospital code | Email | Password |
 |---|---|---|---|
-| Admin | `CAREQR-DEMO` | `admin.demo@careqr.example` | the private `DEMO_ADMIN_PASSWORD` chosen when seeding |
+| Platform admin | — (use `/platform/login`) | `platform.demo@careqr.example` | the private `DEMO_PLATFORM_PASSWORD` (see below) |
+| Hospital Manager | `CAREQR-DEMO` | `admin.demo@careqr.example` | the private `DEMO_ADMIN_PASSWORD` chosen when seeding |
 | Floor manager (fresh seed only) | `CAREQR-DEMO` | `floor.manager.demo@careqr.example` | the private `DEMO_STAFF_PASSWORD` chosen when seeding |
+| Ward manager, Pantry supervisor (fresh seed only) | `CAREQR-DEMO` | `ward.manager.demo@careqr.example`, `pantry.supervisor.demo@careqr.example` | the private `DEMO_STAFF_PASSWORD` |
 | Staff | `CAREQR-DEMO` | `nurse.demo@careqr.example` (also `pantry.demo`, `housekeeping.demo`, `transport.demo`) | the private `DEMO_STAFF_PASSWORD` chosen when seeding |
 
 Your passwords may be in your local `.env` or only in the terminal/password manager, depending on how you set them. Never paste them into ChatGPT or commit them. The script stores **password hashes** in PostgreSQL, not the original passwords.
 
 After a successful seed, the demo hospital has: Demo Wing → First Floor → General Ward → Room 101 with **Bed 01** (occupied, active QR and bed session) and **Bed 02** (available, no QR), 7 departments, 4 on-duty ward-covered staff, 4 services, and 2 SLA policies. Staff members share a limited `Demo Care Staff` role; admin has the full setup role. Request, QR, and session records made during testing are also stored in PostgreSQL. No real patient information is seeded.
+
+---
+
+### Platform admin (super user)
+
+Create the first platform admin once, from `services/`, with a private password of at least 12 characters:
+
+```bash
+PLATFORM_ADMIN_EMAIL=you@yourcompany.com PLATFORM_ADMIN_NAME="Your Name" PLATFORM_ADMIN_PASSWORD='choose-a-long-password' npm run bootstrap:platform-admin
+```
+
+A fresh demo seed can also create `platform.demo@careqr.example` if you set `DEMO_PLATFORM_PASSWORD` before `npm run seed:demo`.
+
+**Try the SaaS flow:** sign in at `http://localhost:5173/platform/login` → **Add hospital** (name, code, time zone, optional logo, first manager) → sign in as that manager at the staff sign-in page with the new hospital code → **Departments**: add a department → **Roles & access**: create a role → **Staff & coverage**: add a person and give them **Floor Manager** for one floor → sign in as them: they see only Overview, Requests, and Beds & QR for their floor. Back in the platform, **Suspend hospital** signs everyone in that hospital out and stops its QR codes; **Reactivate hospital** restores access. No data is deleted.
 
 ---
 
@@ -233,59 +257,69 @@ Do these in order. ✔ = what you should see.
 
 **B. Look at the hospital layout**
 2. Click **Location setup**.
-   ✔ First Floor → General Ward → Room 101 → Bed 01, Bed 02.
+   ✔ On the left is a tree: Demo Wing → First Floor → General Ward. On the right, **Whole hospital** shows totals and beds by unit type.
+3. Click **General Ward** in the tree.
+   ✔ Bed counts, an **Add beds** box, and Room 101 with Bed 01 and Bed 02.
+4. (Optional) In **Add beds**, set **How many beds** to 4. The preview shows exactly which beds will be created (numbering continues after the existing beds). Click **Add 4 beds**.
+   ✔ Four new beds appear under **Open bay (no room)**. Use **Edit**, **Deactivate**, or **Delete** on a new bed to try those. A bed that has had a QR or patient can only be deactivated, not deleted.
+5. (Optional) Click **First Floor**, choose **ICU (intensive care)** in **Add a unit or ward** and click **Add unit**.
+   ✔ The new unit opens straight away with ICU beds suggested. Try **Rooms with beds** to see how rooms 1–10 with 2 beds each would be numbered.
+
+**Your hospital's logo.** Each hospital (each client) has its own logo. Open **Hospital → Profile & logo**, choose **Upload logo** (PNG, JPEG, WebP, or SVG), check the preview, then **Save logo**. It appears in the top bar for staff, at the top of the patient page, and on every QR label printed after that. When onboarding a new client from the command line, set `HOSPITAL_LOGO_PATH` before `npm run bootstrap:hospital`.
+
+**Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Every building, floor, unit, and room also has a **Print QR labels (N)** button, and **Beds & QR → Print QR labels** lets you pick any area. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”). Each QR is shown only once: download the PDF straight away, keep it private, and delete it after printing. To reprint a lost label, use **Beds & QR → Print QR labels → Also reprint the existing labels**; the old label stops working.
 
 **C. Make a QR code and test it like a patient**
-3. Click **Beds & QR**. On **Bed 02**, click **Generate QR**.
+6. Click **Beds & QR**. On **Bed 02**, click **Generate QR**.
    ✔ A QR picture appears with buttons Print / Open patient view.
-4. Click **Open patient view** (opens a new tab).
+7. Click **Open patient view** (opens a new tab).
    ✔ "We couldn't connect" — because no patient is admitted yet. Correct!
-5. Go back, click **Done**, then **Start session** on Bed 02.
-6. Open the **privately saved** Bed 02 patient link again, or paste it into the **Scan QR** screen at `http://localhost:5173`. If you did not save it, use **Replace QR** and open that new link. An old link stops working after replacement.
+8. Go back, click **Done**, then **Start session** on Bed 02.
+9. Open the **privately saved** Bed 02 patient link again, or paste it into the **Scan QR** screen at `http://localhost:5173`. If you did not save it, use **Replace QR** and open that new link. An old link stops working after replacement.
    ✔ "You are connected to Bed 02" with service buttons and a red "Not for emergencies" box.
 
 **D. Send a request as the patient**
-7. In the patient tab, tap **Request service** under Drinking Water.
+10. In the patient tab, tap **Request service** under Drinking Water.
    ✔ A request appears under "Your requests" with a `CR-...` reference, status **Submitted**, and a progress bar with the first step filled.
-8. Change **Language** to हिन्दी.
+11. Change **Language** to हिन्दी.
    ✔ The page switches to Hindi. Switch back to English.
-9. Click **Cancel request** → **Yes, cancel request**.
+12. Click **Cancel request** → **Yes, cancel request**.
    ✔ Status becomes **Cancelled**.
 
 **D2. Handle the request as staff**
 
-10. Submit Drinking Water again in the patient tab.
-11. In the staff tab, sign in as `floor.manager.demo@careqr.example` (fresh seed) or stay as the admin, and open **Requests**.
+13. Submit Drinking Water again in the patient tab.
+14. In the staff tab, sign in as `floor.manager.demo@careqr.example` (fresh seed) or stay as the admin, and open **Requests**.
     ✔ The request is on the **Open** tab with "Accept by …" or, after 3 minutes, a red "Accept overdue by …".
-12. Click **Choose staff**. When only one person is eligible they are selected for you; otherwise pick **Demo Pantry Staff**. Click **Assign request**.
+15. Click **Choose staff**. When only one person is eligible they are selected for you; otherwise pick **Demo Pantry Staff**. Click **Assign request**.
     ✔ The card shows "Assigned to Demo Pantry Staff". The patient's progress bar moves to **Assigned** (within 30 seconds, or press **Refresh status**).
-13. Sign out, sign in as `pantry.demo@careqr.example` with the staff password, open **Requests**, then click **Accept**, **Start work**, and **Mark complete**.
+16. Sign out, sign in as `pantry.demo@careqr.example` with the staff password, open **Requests**, then click **Accept**, **Start work**, and **Mark complete**.
     ✔ The patient's progress bar fills up to **Completed**.
-14. Sign back in as the manager/admin → **Requests** → **Ready to close** tab → **Close request**.
+17. Sign back in as the manager/admin → **Requests** → **Ready to close** tab → **Close request**.
     ✔ The request moves to **History**. Also try **Cancel…** on another new request: you must choose a reason first.
 
 On an older demo database without the floor-manager account, the Hospital Admin can do the manager steps. Do not re-run the seed against that existing hospital.
 
 **E. Check which staff can respond**
-15. Admin tab → **Who can respond?** → choose Bed 01 and **Pantry** → Check.
+18. Admin tab → **Who can respond?** → choose Bed 01 and **Pantry** → Check.
     ✔ "Demo Pantry Staff".
-16. Choose **Billing**.
+19. Choose **Billing**.
     ✔ "Nobody is eligible" (no billing staff).
 
 **F. Add a staff member**
-17. **Staff & coverage** → fill "Add staff member" (any name, an email ending `@careqr.example`, a 12+ character password).
-18. In the **Manage** box add department **Pantry** and coverage **Ward → General Ward**. In the **Duty** column click **Set on duty** (the badge above it shows the current state).
-19. Repeat step 15.
+20. **Staff & coverage** → fill "Add staff member" (any name, an email ending `@careqr.example`, a 12+ character password).
+21. In the **Manage** box add department **Pantry** and coverage **Ward → General Ward**. In the **Duty** column click **Set on duty** (the badge above it shows the current state).
+22. Repeat step 18.
     ✔ Your new person now appears too. Set them off duty → they disappear.
 
 **G. Change the services**
-20. **Service catalog** → **Deactivate** under Drinking Water's **Active** badge. Reload the patient tab.
+23. **Service catalog** → **Deactivate** under Drinking Water's **Active** badge. Reload the patient tab.
     ✔ Drinking Water is gone. Activate it again.
-21. **Response targets (SLA)** → change Quick response to 4 and 12 → **Save as vN** (the next version).
+24. **Response targets (SLA)** → change Quick response to 4 and 12 → **Save as vN** (the next version).
     ✔ History keeps the earlier version as well as the new one. On a fresh seed, those are v1 (3/10) and v2 (4/12).
 
 **H. Discharge**
-22. **Beds & QR** → **Close session** on Bed 02. Reload the patient tab.
+25. **Beds & QR** → **Close session** on Bed 02. Reload the patient tab.
     ✔ "Your session has ended." The QR no longer works.
 
 If all ✔ appeared, this **browser tour** passed; the API/security/concurrency tests in the full plan still need to run before Phase 9.
