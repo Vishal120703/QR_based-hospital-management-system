@@ -170,25 +170,36 @@ export class QrCodeService {
   public async resolve(
     token: string,
   ): Promise<{ guestToken: string; guest: GuestContext; location: GuestLocation }> {
-    const qrCode = await this.database.bedQrCode.findUnique({
-      where: { tokenHash: hashOpaqueToken(token) },
-      include: {
-        hospital: { select: { status: true } },
-        bed: { select: { active: true } },
-      },
+    const issued = await this.database.$transaction(async (transaction) => {
+      const tokenHash = hashOpaqueToken(token);
+      // Credential resolution is the pre-tenant lookup. Rotation and revocation
+      // update this same row, so they cannot miss a guest issued from an old QR
+      // between checking its token and committing the guest session.
+      const locked = await transaction.$queryRaw<Array<{ id: string; hospitalId: string }>>`
+        SELECT "id", "hospitalId" FROM "BedQrCode"
+        WHERE "tokenHash" = ${tokenHash} AND "status" = 'ACTIVE'
+        FOR UPDATE
+      `;
+      const key = locked[0];
+      if (!key) {
+        throw new QrUnavailableError();
+      }
+      const qrCode = await transaction.bedQrCode.findUnique({
+        where: { hospitalId_id: { hospitalId: key.hospitalId, id: key.id } },
+        include: {
+          hospital: { select: { status: true } },
+          bed: { select: { active: true } },
+        },
+      });
+      if (!qrCode || qrCode.hospital.status !== 'ACTIVE' || !qrCode.bed.active) {
+        throw new QrUnavailableError();
+      }
+      const session = await this.guestSessions.issue(transaction, qrCode.hospitalId, qrCode.bedId);
+      if (!session) {
+        throw new QrUnavailableError();
+      }
+      return session;
     });
-    if (
-      !qrCode ||
-      qrCode.status !== 'ACTIVE' ||
-      qrCode.hospital.status !== 'ACTIVE' ||
-      !qrCode.bed.active
-    ) {
-      throw new QrUnavailableError();
-    }
-    const issued = await this.guestSessions.issue(qrCode.hospitalId, qrCode.bedId);
-    if (!issued) {
-      throw new QrUnavailableError();
-    }
     return {
       guestToken: issued.token,
       guest: issued.context,

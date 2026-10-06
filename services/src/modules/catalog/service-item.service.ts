@@ -115,21 +115,24 @@ export class ServiceItemService {
   public update(context: StaffContext, id: string, input: ServiceItemInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     const where = { hospitalId_id: { hospitalId, id } };
-    return this.database.$transaction(async (transaction) => {
-      const before = await transaction.serviceItem.findUnique({ where });
-      if (!before) {
-        throw new NotFoundError();
-      }
-      await requireReferences(transaction, hospitalId, input);
-      const after = await transaction.serviceItem.update({ where, data: changes(input) });
-      await recordStaffAudit(transaction, context, requestId, {
-        action: 'service.update',
-        targetType: 'ServiceItem',
-        targetId: id,
-        metadata: { before: snapshot(before), after: snapshot(after) },
-      });
-      return after;
-    });
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = await transaction.serviceItem.findUnique({ where });
+        if (!before) {
+          throw new NotFoundError();
+        }
+        await requireReferences(transaction, hospitalId, input);
+        const after = await transaction.serviceItem.update({ where, data: changes(input) });
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'service.update',
+          targetType: 'ServiceItem',
+          targetId: id,
+          metadata: { before: snapshot(before), after: snapshot(after) },
+        });
+        return after;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {

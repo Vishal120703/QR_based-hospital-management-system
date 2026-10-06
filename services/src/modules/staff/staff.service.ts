@@ -118,57 +118,63 @@ export class StaffService {
       throw new ConflictError('You cannot change your own status.');
     }
     const hospitalId = context.tenant.hospitalId;
-    return this.database.$transaction(async (transaction) => {
-      const before = await this.requireMember(transaction, context, id);
-      const deactivating = status !== 'ACTIVE';
-      await transaction.hospitalMembership.update({
-        where: { hospitalId_id: { hospitalId, id } },
-        data: {
-          status,
-          // Staff who are not active cannot be on duty or keep signed-in sessions.
-          ...(deactivating && before.dutyStatus === 'ON_DUTY'
-            ? { dutyStatus: 'OFF_DUTY', dutyChangedAt: new Date() }
-            : {}),
-        },
-      });
-      const revokedSessions = deactivating
-        ? await revokeStaffSessions(transaction, hospitalId, id)
-        : 0;
-      await recordStaffAudit(transaction, context, requestId, {
-        action: 'staff.status',
-        targetType: 'HospitalMembership',
-        targetId: id,
-        metadata: { from: before.status, to: status, revokedSessions },
-      });
-      return toView(await this.requireMember(transaction, context, id));
-    });
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = await this.requireMember(transaction, context, id);
+        const deactivating = status !== 'ACTIVE';
+        await transaction.hospitalMembership.update({
+          where: { hospitalId_id: { hospitalId, id } },
+          data: {
+            status,
+            // Staff who are not active cannot be on duty or keep signed-in sessions.
+            ...(deactivating && before.dutyStatus === 'ON_DUTY'
+              ? { dutyStatus: 'OFF_DUTY', dutyChangedAt: new Date() }
+              : {}),
+          },
+        });
+        const revokedSessions = deactivating
+          ? await revokeStaffSessions(transaction, hospitalId, id)
+          : 0;
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'staff.status',
+          targetType: 'HospitalMembership',
+          targetId: id,
+          metadata: { from: before.status, to: status, revokedSessions },
+        });
+        return toView(await this.requireMember(transaction, context, id));
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public setDuty(context: StaffContext, id: string, dutyStatus: DutyStatus, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
-    return this.database.$transaction(async (transaction) => {
-      const before = await this.requireMember(transaction, context, id);
-      if (before.dutyStatus === dutyStatus) {
-        return toView(before);
-      }
-      if (
-        dutyStatus === 'ON_DUTY' &&
-        (before.status !== 'ACTIVE' || before.user.status !== 'ACTIVE')
-      ) {
-        throw new ConflictError('Only active staff can go on duty.');
-      }
-      await transaction.hospitalMembership.update({
-        where: { hospitalId_id: { hospitalId, id } },
-        data: { dutyStatus, dutyChangedAt: new Date() },
-      });
-      await recordStaffAudit(transaction, context, requestId, {
-        action: 'staff.duty',
-        targetType: 'HospitalMembership',
-        targetId: id,
-        metadata: { from: before.dutyStatus, to: dutyStatus },
-      });
-      return toView(await this.requireMember(transaction, context, id));
-    });
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = await this.requireMember(transaction, context, id);
+        if (before.dutyStatus === dutyStatus) {
+          return toView(before);
+        }
+        if (
+          dutyStatus === 'ON_DUTY' &&
+          (before.status !== 'ACTIVE' || before.user.status !== 'ACTIVE')
+        ) {
+          throw new ConflictError('Only active staff can go on duty.');
+        }
+        await transaction.hospitalMembership.update({
+          where: { hospitalId_id: { hospitalId, id } },
+          data: { dutyStatus, dutyChangedAt: new Date() },
+        });
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'staff.duty',
+          targetType: 'HospitalMembership',
+          targetId: id,
+          metadata: { from: before.dutyStatus, to: dutyStatus },
+        });
+        return toView(await this.requireMember(transaction, context, id));
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public addDepartment(context: StaffContext, id: string, departmentId: string, requestId: string) {

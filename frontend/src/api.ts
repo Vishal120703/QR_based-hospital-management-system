@@ -14,24 +14,48 @@ export class ApiError extends Error {
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 async function call<T>(method: Method, path: string, token: string | null, body?: object) {
-  const response = await fetch(`/api${path}`, {
-    method,
-    headers: {
-      ...(body ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20_000);
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      method,
+      signal: controller.signal,
+      headers: {
+        ...(body ? { 'content-type': 'application/json' } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      controller.signal.aborted
+        ? 'The hospital system took too long to respond. Please try again.'
+        : 'Cannot reach the hospital system. Check your connection and try again.',
+    );
+  } finally {
+    window.clearTimeout(timeout);
+  }
   const payload: unknown = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
-    const error =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? (payload.error as { code?: string; message?: string })
-        : {};
+    const candidate =
+      payload && typeof payload === 'object' && 'error' in payload ? payload.error : null;
+    const error = candidate && typeof candidate === 'object' ? candidate : {};
     throw new ApiError(
       response.status,
-      error.code ?? 'UNKNOWN',
-      error.message ?? `Request failed (${response.status}).`,
+      'code' in error && typeof error.code === 'string' ? error.code : 'UNKNOWN',
+      'message' in error && typeof error.message === 'string'
+        ? error.message
+        : `Request failed (${response.status}).`,
+    );
+  }
+  if (response.status !== 204 && payload === null) {
+    throw new ApiError(
+      502,
+      'INVALID_RESPONSE',
+      'The hospital system returned an unreadable response. Please try again.',
     );
   }
   // Response shapes are defined by the backend routes; this is the one place
@@ -44,28 +68,37 @@ async function call<T>(method: Method, path: string, token: string | null, body?
 const staffKey = 'careqr.staffToken';
 const guestKey = 'careqr.guestToken';
 
-function read(storage: Storage, key: string): string | null {
+const memory = new Map<string, string>();
+const volatileKeys = new Set<string>();
+
+function read(storage: () => Storage, key: string): string | null {
+  if (volatileKeys.has(key)) return memory.get(key) ?? null;
   try {
-    return storage.getItem(key);
+    return storage().getItem(key);
   } catch {
-    return null;
+    return memory.get(key) ?? null;
   }
 }
 
-function write(storage: Storage, key: string, value: string | null): void {
+function write(storage: () => Storage, key: string, value: string | null): void {
+  if (value === null) memory.delete(key);
+  else memory.set(key, value);
   try {
-    if (value === null) storage.removeItem(key);
-    else storage.setItem(key, value);
+    if (value === null) storage().removeItem(key);
+    else storage().setItem(key, value);
+    volatileKeys.delete(key);
   } catch {
-    // Storage can be unavailable (private mode); the user signs in again.
+    volatileKeys.add(key);
+    // Private browsers can block storage. Keep access only in memory until
+    // refresh, rather than sending a successful login into a redirect loop.
   }
 }
 
 export const credentials = {
-  staff: () => read(localStorage, staffKey),
-  setStaff: (token: string | null) => write(localStorage, staffKey, token),
-  guest: () => read(sessionStorage, guestKey),
-  setGuest: (token: string | null) => write(sessionStorage, guestKey, token),
+  staff: () => read(() => localStorage, staffKey),
+  setStaff: (token: string | null) => write(() => localStorage, staffKey, token),
+  guest: () => read(() => sessionStorage, guestKey),
+  setGuest: (token: string | null) => write(() => sessionStorage, guestKey, token),
 };
 
 // Shapes returned by the backend.
@@ -231,6 +264,22 @@ export interface PublicCategory {
   emergencyNotice: boolean;
   services: { id: string; name: string; description: string | null }[];
 }
+export type PublicRequestStatus =
+  | 'SUBMITTED'
+  | 'ASSIGNED'
+  | 'ACCEPTED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CLOSED'
+  | 'CANCELLED'
+  | 'REJECTED';
+export interface PublicRequest {
+  publicId: string;
+  serviceId: string;
+  serviceName: string;
+  status: PublicRequestStatus;
+  submittedAt: string;
+}
 
 // Each list endpoint returns { <key>: [...] }.
 const listKeys = {
@@ -365,4 +414,22 @@ export const guestApi = {
   services: async (guestToken: string) =>
     (await call<{ categories: PublicCategory[] }>('GET', '/public/services', guestToken))
       .categories,
+  requests: async (guestToken: string) =>
+    (await call<{ serviceRequests: PublicRequest[] }>('GET', '/public/requests', guestToken))
+      .serviceRequests,
+  submitRequest: async (guestToken: string, serviceId: string) =>
+    (
+      await call<{ serviceRequest: PublicRequest }>('POST', '/public/requests', guestToken, {
+        serviceId,
+      })
+    ).serviceRequest,
+  cancelRequest: async (guestToken: string, publicId: string, reason: string) =>
+    (
+      await call<{ serviceRequest: PublicRequest }>(
+        'POST',
+        `/public/requests/${encodeURIComponent(publicId)}/cancel`,
+        guestToken,
+        { reason },
+      )
+    ).serviceRequest,
 };

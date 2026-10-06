@@ -115,50 +115,53 @@ export class SlaPolicyService {
     requestId: string,
   ) {
     const hospitalId = context.tenant.hospitalId;
-    return this.database.$transaction(async (transaction) => {
-      const before = toView(await this.require(transaction, context, id));
-      const timings = {
-        acceptMinutes: input.acceptMinutes ?? before.acceptMinutes,
-        completeMinutes: input.completeMinutes ?? before.completeMinutes,
-      };
-      assertValidTimings(timings);
-      const timingsChanged =
-        timings.acceptMinutes !== before.acceptMinutes ||
-        timings.completeMinutes !== before.completeMinutes;
-      const nextVersion = timingsChanged ? before.currentVersion + 1 : before.currentVersion;
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = toView(await this.require(transaction, context, id));
+        const timings = {
+          acceptMinutes: input.acceptMinutes ?? before.acceptMinutes,
+          completeMinutes: input.completeMinutes ?? before.completeMinutes,
+        };
+        assertValidTimings(timings);
+        const timingsChanged =
+          timings.acceptMinutes !== before.acceptMinutes ||
+          timings.completeMinutes !== before.completeMinutes;
+        const nextVersion = timingsChanged ? before.currentVersion + 1 : before.currentVersion;
 
-      // The version guard makes concurrent edits fail instead of both
-      // claiming the same next version.
-      const updated = await transaction.slaPolicy.updateMany({
-        where: { hospitalId, id, currentVersion: before.currentVersion },
-        data: {
-          currentVersion: nextVersion,
-          ...(input.name !== undefined ? { name: input.name } : {}),
-        },
-      });
-      if (updated.count !== 1) {
-        throw new ConflictError('This SLA policy was changed by someone else. Please retry.');
-      }
-      if (timingsChanged) {
-        await transaction.slaPolicyVersion.create({
+        // The version guard makes concurrent edits fail instead of both
+        // claiming the same next version.
+        const updated = await transaction.slaPolicy.updateMany({
+          where: { hospitalId, id, currentVersion: before.currentVersion },
           data: {
-            hospitalId,
-            slaPolicyId: id,
-            version: nextVersion,
-            ...timings,
-            createdByMembershipId: context.membershipId,
+            currentVersion: nextVersion,
+            ...(input.name !== undefined ? { name: input.name } : {}),
           },
         });
-      }
-      const after = toView(await this.require(transaction, context, id));
-      await recordStaffAudit(transaction, context, requestId, {
-        action: 'sla.update',
-        targetType: 'SlaPolicy',
-        targetId: id,
-        metadata: { before: snapshot(before), after: snapshot(after) },
-      });
-      return after;
-    });
+        if (updated.count !== 1) {
+          throw new ConflictError('This SLA policy was changed by someone else. Please retry.');
+        }
+        if (timingsChanged) {
+          await transaction.slaPolicyVersion.create({
+            data: {
+              hospitalId,
+              slaPolicyId: id,
+              version: nextVersion,
+              ...timings,
+              createdByMembershipId: context.membershipId,
+            },
+          });
+        }
+        const after = toView(await this.require(transaction, context, id));
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'sla.update',
+          targetType: 'SlaPolicy',
+          targetId: id,
+          metadata: { before: snapshot(before), after: snapshot(after) },
+        });
+        return after;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {

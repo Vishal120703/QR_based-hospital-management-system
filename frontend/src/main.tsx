@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
-import { AdminLayout } from './pages/AdminLayout';
+import { AdminIndex, AdminLayout } from './pages/AdminLayout';
 import { BedsPage } from './pages/BedsPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
 import { EligibilityPage } from './pages/EligibilityPage';
@@ -26,7 +26,7 @@ createRoot(root).render(
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="beds" replace />} />
+          <Route index element={<AdminIndex />} />
           <Route path="beds" element={<BedsPage />} />
           <Route path="locations" element={<LocationsPage />} />
           <Route path="departments" element={<DepartmentsPage />} />

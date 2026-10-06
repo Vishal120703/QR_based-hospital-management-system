@@ -5,7 +5,7 @@ Status: Accepted by user direction
 
 ## Decision
 
-CARE QR V1 uses `backend/`, `frontend/`, and `docs/` as its only application-level directories. The backend is one deployable service with internal domain modules. The frontend is one app with patient, staff, and administration routes added in their planned phases.
+CARE QR V1 uses one deployable backend service with internal domain modules and one frontend app. The original simplified layout used `backend/`, `frontend/`, and `docs/`; the amendment below records the current `services/` and `frontend/` layout. Patient, staff, and administration routes share the same frontend.
 
 The Phase 1 split into three web apps, an API service, a worker service, and a shared package is superseded. Background jobs may run within the backend process initially. A separate worker process or microservice is added only after a concrete operational need and a new decision record.
 
@@ -15,7 +15,7 @@ The user requested one service, one frontend, and a small root structure. Intern
 
 ## Consequences
 
-- Root scripts, CI, and deployment instructions target `backend/` and `frontend/`.
+- In the original simplified layout, scripts and deployment instructions targeted `backend/` and `frontend/`; current commands run inside `services/` and `frontend/`.
 - Feature folders are created when their phase begins; placeholder directories are not kept.
 - Redis, BullMQ, and Socket.IO are infrastructure choices for later functionality, not additional services or authoritative stores.
 - The migration history is preserved while moving Prisma from `services/api/prisma` to `backend/prisma`.
@@ -27,5 +27,5 @@ At the user's direction the repository root contains only `frontend/` and `servi
 - `backend/` was renamed `services/`. It is still one deployable backend service.
 - Each folder is self-contained, with its own `package.json` and lockfile. The npm workspace root, shared `tsconfig.base.json`, and root ESLint config were folded into `services/`.
 - Architecture docs moved to `services/docs/architecture`.
-- `frontend/` holds only a README until its first screens are built in Phase 8.
+- `frontend/` is the single React app. Phases 4–6 added staff administration, QR scanning, bed/guest sessions, and a patient catalog preview. Request submission and tracking belong to Phase 8 and are not implemented yet.
 - The unused Docker Compose file and `.editorconfig` were removed; local PostgreSQL and Redis can come from any installation.

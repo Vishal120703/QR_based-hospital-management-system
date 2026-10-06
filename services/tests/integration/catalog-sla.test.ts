@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { z } from 'zod';
@@ -531,6 +532,80 @@ describe('Phase 6 escalation policies', () => {
 });
 
 describe('Phase 6 configuration safety', () => {
+  it('preserves the real before/after audit chain during concurrent configuration edits', async () => {
+    const admin = as(hospitalA.adminToken);
+    const originalName = `Concurrent audit ${randomUUID().slice(0, 8)}`;
+    const category = await database.serviceCategory.create({
+      data: { hospitalId: hospitalA.hospitalId, name: originalName },
+    });
+    let releaseLock = () => {};
+    let lockReady = () => {};
+    const release = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      lockReady = resolve;
+    });
+    const blocker = database.$transaction(async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT "id" FROM "ServiceCategory"
+        WHERE "hospitalId" = ${hospitalA.hospitalId}::uuid AND "id" = ${category.id}::uuid
+        FOR UPDATE
+      `;
+      lockReady();
+      await release;
+    });
+    await ready;
+    const names = [`${originalName} first`, `${originalName} second`];
+    const changes = names.map((name) =>
+      admin
+        .patch(`/admin/service-categories/${category.id}`, { name })
+        .then((response) => response),
+    );
+    try {
+      // Both edits have read the old value before either can write it.
+      const deadline = Date.now() + 2000;
+      while (true) {
+        const [state] = await database.$queryRaw<Array<{ waiting: number }>>`
+          SELECT count(*)::int AS waiting FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND wait_event_type = 'Lock'
+            AND query LIKE '%UPDATE%"ServiceCategory"%'
+        `;
+        if (state && state.waiting >= 2) break;
+        if (Date.now() >= deadline) throw new Error('Category writes did not reach the row lock.');
+        await delay(10);
+      }
+    } finally {
+      releaseLock();
+      await blocker;
+    }
+    const responses = await Promise.all(changes);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const retryName = names[responses.findIndex((response) => response.status === 409)];
+    expect(
+      (await admin.patch(`/admin/service-categories/${category.id}`, { name: retryName })).status,
+    ).toBe(200);
+
+    const edits = await database.auditLog.findMany({
+      where: {
+        hospitalId: hospitalA.hospitalId,
+        targetId: category.id,
+        action: 'serviceCategory.update',
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    const snapshots = z
+      .array(
+        z.object({ before: z.object({ name: z.string() }), after: z.object({ name: z.string() }) }),
+      )
+      .parse(edits.map((edit) => edit.metadata));
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots[0]?.before.name).toBe(originalName);
+    expect(snapshots[1]?.before).toEqual(snapshots[0]?.after);
+    expect(snapshots[1]?.after.name).toBe(retryName);
+  });
+
   it('protects configuration that is in use from deletion', async () => {
     const hospital = await createHospitalFixture(database, application, 'CAT-D');
     const admin = as(hospital.adminToken);

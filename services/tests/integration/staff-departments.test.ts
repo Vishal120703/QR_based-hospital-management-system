@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { z } from 'zod';
@@ -317,6 +318,70 @@ describe('Phase 5 staff', () => {
     expect((await admin.post(`/admin/staff/${me}/status`, { status: 'INACTIVE' })).status).toBe(
       409,
     );
+  });
+
+  it('keeps suspended staff off duty when status and duty change concurrently', async () => {
+    const admin = as(hospitalA.adminToken);
+    const member = await createStaff(hospitalA, 'Concurrent');
+    let releaseLock = () => {};
+    let lockReady = () => {};
+    const release = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      lockReady = resolve;
+    });
+    const blocker = database.$transaction(async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT "id" FROM "HospitalMembership"
+        WHERE "hospitalId" = ${hospitalA.hospitalId}::uuid AND "id" = ${member.id}::uuid
+        FOR UPDATE
+      `;
+      lockReady();
+      await release;
+    });
+    await ready;
+    // Both operations can read the original ACTIVE/OFF_DUTY state, but must
+    // wait for this lock before writing. This forces the conflicting reads.
+    const statusChange = admin
+      .post(`/admin/staff/${member.id}/status`, { status: 'SUSPENDED' })
+      .then((response) => response);
+    const dutyChange = admin
+      .post(`/admin/staff/${member.id}/duty`, { dutyStatus: 'ON_DUTY' })
+      .then((response) => response);
+    try {
+      const deadline = Date.now() + 2000;
+      while (true) {
+        const [state] = await database.$queryRaw<Array<{ waiting: number }>>`
+          SELECT count(*)::int AS waiting FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND wait_event_type = 'Lock'
+            AND query LIKE '%UPDATE%"HospitalMembership"%'
+        `;
+        if (state && state.waiting >= 2) break;
+        if (Date.now() >= deadline) throw new Error('Staff writes did not reach the row lock.');
+        await delay(10);
+      }
+    } finally {
+      releaseLock();
+      await blocker;
+    }
+    const results = await Promise.all([statusChange, dutyChange]);
+    expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
+    const stored = await database.hospitalMembership.findUniqueOrThrow({
+      where: { hospitalId_id: { hospitalId: hospitalA.hospitalId, id: member.id } },
+    });
+    expect(stored.status !== 'ACTIVE' && stored.dutyStatus === 'ON_DUTY').toBe(false);
+
+    // Retrying suspension after the conflict must leave the staff member off duty.
+    const suspended = await admin.post(`/admin/staff/${member.id}/status`, {
+      status: 'SUSPENDED',
+    });
+    expect(suspended.status).toBe(200);
+    expect(staffResponse.parse(suspended.body).staff).toMatchObject({
+      status: 'SUSPENDED',
+      dutyStatus: 'OFF_DUTY',
+    });
   });
 
   it('validates departments and coverage, in the API and the database', async () => {

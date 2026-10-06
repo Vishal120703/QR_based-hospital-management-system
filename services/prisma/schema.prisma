@@ -69,6 +69,42 @@ enum EscalationTarget {
   ROLE
 }
 
+enum RequestStatus {
+  SUBMITTED
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  CANCELLED
+  REJECTED
+}
+
+enum AssignmentMode {
+  MANUAL
+  POOL
+  DIRECT
+  AUTO_ASSIGN
+}
+
+enum RequestActorType {
+  GUEST
+  STAFF
+  SYSTEM
+}
+
+enum RequestEventType {
+  SUBMITTED
+  ASSIGNED
+  ACCEPTED
+  STARTED
+  COMPLETED
+  CLOSED
+  CANCELLED
+  REJECTED
+  TRANSFERRED
+}
+
 model Hospital {
   id                 String               @id @default(uuid()) @db.Uuid
   name               String
@@ -91,6 +127,7 @@ model Hospital {
   serviceCategories  ServiceCategory[]
   slaPolicies        SlaPolicy[]
   escalationPolicies EscalationPolicy[]
+  serviceRequests    ServiceRequest[]
 }
 
 model HospitalSetting {
@@ -135,6 +172,7 @@ model HospitalMembership {
   departments    StaffDepartment[]
   locationScopes StaffLocationScope[]
   shifts         Shift[]
+  assignedRequests ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, userId])
@@ -327,6 +365,7 @@ model Bed {
   room        Room?        @relation(fields: [hospitalId, wardId, roomId], references: [hospitalId, wardId, id], onDelete: Restrict, onUpdate: Restrict)
   qrCode      BedQrCode?
   sessions    BedSession[]
+  serviceRequests ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, wardId, code])
@@ -370,6 +409,7 @@ model BedSession {
   hospital              Hospital         @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
   bed                   Bed              @relation(fields: [hospitalId, bedId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
   guestSessions         GuestSession[]
+  serviceRequests       ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, bedId, id])
@@ -411,6 +451,7 @@ model Department {
   staff      StaffDepartment[]
   shifts     Shift[]
   services   ServiceItem[]
+  serviceRequests ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, code])
@@ -510,6 +551,7 @@ model ServiceItem {
   department         Department        @relation(fields: [hospitalId, departmentId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
   slaPolicy          SlaPolicy         @relation(fields: [hospitalId, slaPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
   escalationPolicy   EscalationPolicy? @relation(fields: [hospitalId, escalationPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  serviceRequests    ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, name])
@@ -531,6 +573,7 @@ model SlaPolicy {
   hospital       Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
   versions       SlaPolicyVersion[]
   services       ServiceItem[]
+  serviceRequests ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, name])
@@ -548,6 +591,7 @@ model SlaPolicyVersion {
   createdByMembershipId String?   @db.Uuid
   createdAt             DateTime  @default(now())
   slaPolicy             SlaPolicy @relation(fields: [hospitalId, slaPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  serviceRequests       ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, slaPolicyId, version])
@@ -564,6 +608,7 @@ model EscalationPolicy {
   hospital   Hospital          @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
   levels     EscalationLevel[]
   services   ServiceItem[]
+  serviceRequests ServiceRequest[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, name])
@@ -584,4 +629,80 @@ model EscalationLevel {
 
   @@unique([hospitalId, escalationPolicyId, level])
   @@index([hospitalId, roleId])
+}
+
+// Request configuration is snapshotted at submission. All parent references
+// are tenant-scoped; future routing modes are represented but not enabled yet.
+model ServiceRequest {
+  id                  String             @id @default(uuid()) @db.Uuid
+  publicId            String             @unique
+  hospitalId          String             @db.Uuid
+  bedId               String             @db.Uuid
+  bedSessionId        String             @db.Uuid
+  serviceId           String             @db.Uuid
+  serviceName         String
+  categoryName        String
+  departmentId        String             @db.Uuid
+  assigneeId          String?            @db.Uuid
+  priority            RequestPriority
+  status              RequestStatus      @default(SUBMITTED)
+  assignmentMode      AssignmentMode     @default(MANUAL)
+  routingRuleId       String?            @db.Uuid
+  slaPolicyId         String             @db.Uuid
+  slaPolicyVersionId  String             @db.Uuid
+  slaPolicyVersion    Int
+  acceptMinutes       Int
+  completeMinutes     Int
+  escalationPolicyId  String?            @db.Uuid
+  isEscalated         Boolean            @default(false)
+  escalationLevel     Int                @default(0)
+  acceptDueAt         DateTime
+  completeDueAt       DateTime
+  submittedAt         DateTime           @default(now())
+  assignedAt          DateTime?
+  acceptedAt          DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  closedAt            DateTime?
+  cancelledAt         DateTime?
+  rejectedAt          DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  version             Int                @default(1)
+  hospital            Hospital           @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  bed                 Bed                @relation(fields: [hospitalId, bedId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  bedSession          BedSession         @relation(fields: [hospitalId, bedId, bedSessionId], references: [hospitalId, bedId, id], onDelete: Restrict, onUpdate: Restrict)
+  service             ServiceItem        @relation(fields: [hospitalId, serviceId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  department          Department         @relation(fields: [hospitalId, departmentId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  assignee            HospitalMembership? @relation(fields: [hospitalId, assigneeId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  slaPolicy           SlaPolicy          @relation(fields: [hospitalId, slaPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  slaPolicyVersionRow SlaPolicyVersion   @relation(fields: [hospitalId, slaPolicyVersionId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  escalationPolicy    EscalationPolicy?  @relation(fields: [hospitalId, escalationPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  events              RequestEvent[]
+
+  @@unique([hospitalId, id])
+  @@index([hospitalId, status, submittedAt])
+  @@index([hospitalId, bedSessionId, submittedAt])
+  @@index([hospitalId, assigneeId, status])
+}
+
+// Append-only history. The migration protects this with a database trigger.
+model RequestEvent {
+  id             String           @id @default(uuid()) @db.Uuid
+  hospitalId     String           @db.Uuid
+  requestId      String           @db.Uuid
+  type           RequestEventType
+  previousStatus RequestStatus?
+  resultingStatus RequestStatus
+  actorType      RequestActorType
+  actorId        String?          @db.Uuid
+  occurredAt     DateTime         @default(now())
+  reason         String?
+  metadata       Json             @default("{}")
+  requestVersion Int
+  correlationId  String?
+  request        ServiceRequest   @relation(fields: [hospitalId, requestId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, requestId, requestVersion])
+  @@index([hospitalId, requestId, occurredAt])
 }

@@ -4,14 +4,21 @@
   "private": true,
   "description": "CARE QR backend service: Express API, domain modules, and Prisma",
   "type": "module",
+  "overrides": {
+    "@prisma/config@6.19.0": {
+      "effect": "3.20.0",
+      "deepmerge-ts": "8.0.2"
+    }
+  },
   "main": "dist/src/server.js",
   "engines": {
-    "node": ">=20.19.0",
+    "node": ">=24.0.0",
     "npm": ">=10.0.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "bootstrap:hospital": "tsx src/modules/hospitals/bootstrap.cli.ts",
+    "seed:demo": "node --env-file=.env --import tsx src/modules/hospitals/demo-seed.cli.ts",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsx watch --env-file=.env src/server.ts",
     "format": "prettier --write src tests",
@@ -24,7 +31,7 @@
     "prisma:validate": "cross-env DATABASE_URL=postgresql://careqr:careqr@localhost:5432/careqr prisma validate",
     "start": "node dist/src/server.js",
     "test": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration",
+    "test:integration": "vitest run tests/integration --maxWorkers=1",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "prettier": {
@@ -54,6 +61,6 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.1",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   }
 }

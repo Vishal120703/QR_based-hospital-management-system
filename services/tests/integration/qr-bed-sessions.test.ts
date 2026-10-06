@@ -1,12 +1,16 @@
 import { randomBytes } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { type Express } from 'express';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { z } from 'zod';
 import { createApp } from '../../src/app.js';
 import { hashOpaqueToken } from '../../src/common/opaque-token.js';
 import { createLogger } from '../../src/config/logger.js';
 import { createPrismaClient } from '../../src/database/prisma.js';
+import { StaffAuthService } from '../../src/modules/auth/auth.service.js';
+import { GuestSessionService } from '../../src/modules/bed-sessions/guest-session.service.js';
+import { QrCodeService } from '../../src/modules/qr/qr.service.js';
 import {
   createBedFixture,
   createHospitalFixture,
@@ -106,6 +110,14 @@ function randomToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
+function signal() {
+  let release = () => {};
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+
 beforeAll(async () => {
   hospitalA = await createHospitalFixture(database, application, 'QR-A');
   hospitalB = await createHospitalFixture(database, application, 'QR-B');
@@ -178,6 +190,57 @@ describe('Phase 4 secure QR codes', () => {
     expect((await resolve('x'.repeat(257))).status).toBe(400);
     expect((await request(application).post('/public/qr/resolve').send({})).status).toBe(400);
   });
+
+  it.each(['rotate', 'revoke'] as const)(
+    'does not leave a usable guest token when resolution overlaps QR %s',
+    async (operation) => {
+      const bed = await occupiedBed(hospitalA);
+      const guests = new GuestSessionService(database, 120);
+      const qrCodes = new QrCodeService(database, guests, publicAppUrl);
+      const context = await new StaffAuthService(database).authenticate(hospitalA.adminToken);
+      const issuing = signal();
+      const resumeIssuing = signal();
+      const issue = guests.issue.bind(guests);
+      const pausedIssue = vi.spyOn(guests, 'issue').mockImplementationOnce(async (...args) => {
+        issuing.release();
+        await resumeIssuing.promise;
+        return issue(...args);
+      });
+      const resolution = qrCodes.resolve(bed.qr.token);
+      await issuing.promise;
+
+      let changeSettled = false;
+      const change = qrCodes[operation](context, bed.bedId, `qr-race-${operation}`).finally(() => {
+        changeSettled = true;
+      });
+      try {
+        // Wait until the change has either committed (the old unsafe behavior)
+        // or reached the QR row lock. This forces the vulnerable interleaving
+        // without assuming a particular database response time.
+        const deadline = Date.now() + 2000;
+        while (!changeSettled) {
+          const [state] = await database.$queryRaw<Array<{ waiting: boolean }>>`
+            SELECT EXISTS (
+              SELECT 1 FROM pg_stat_activity
+              WHERE datname = current_database()
+                AND wait_event_type = 'Lock'
+                AND query LIKE '%UPDATE%"BedQrCode"%'
+            ) AS waiting
+          `;
+          if (state?.waiting) break;
+          if (Date.now() >= deadline) throw new Error('QR change did not reach the row lock.');
+          await delay(10);
+        }
+      } finally {
+        resumeIssuing.release();
+        pausedIssue.mockRestore();
+      }
+
+      const [resolved] = await Promise.all([resolution, change]);
+      expect((await guestSession(resolved.guestToken)).status).toBe(401);
+      expect((await resolve(bed.qr.token)).status).toBe(404);
+    },
+  );
 
   it('denies resolution for an inactive bed or a suspended hospital', async () => {
     const { bedId } = await createBedFixture(database, hospitalA);

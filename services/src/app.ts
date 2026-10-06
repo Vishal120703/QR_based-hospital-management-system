@@ -37,6 +37,11 @@ import {
 import { SlaPolicyService } from './modules/sla/sla-policy.service.js';
 import { EscalationPolicyService } from './modules/sla/escalation-policy.service.js';
 import { createSlaRouter } from './modules/sla/sla.routes.js';
+import { RequestService } from './modules/requests/request.service.js';
+import {
+  createPublicRequestRouter,
+  createRequestRouter,
+} from './modules/requests/request.routes.js';
 import { type RateLimitOptions } from './middleware/rate-limit.js';
 import { z } from 'zod';
 
@@ -78,6 +83,7 @@ export function createApp(options: CreateAppOptions): Express {
     const auth = new StaffAuthService(database);
     const guestSessions = new GuestSessionService(database, options.guestSessionTtlMinutes ?? 120);
     const serviceItems = new ServiceItemService(database);
+    const requests = new RequestService(database);
     const qrCodes = new QrCodeService(
       database,
       guestSessions,
@@ -99,6 +105,7 @@ export function createApp(options: CreateAppOptions): Express {
     admin.use(
       createSlaRouter(new SlaPolicyService(database), new EscalationPolicyService(database)),
     );
+    admin.use(createRequestRouter(requests));
     application.use('/admin', admin);
 
     // Patient/attendant routes. Guest authentication is applied per route.
@@ -108,6 +115,7 @@ export function createApp(options: CreateAppOptions): Express {
     );
     publicRoutes.use(createGuestSessionRouter(guestSessions));
     publicRoutes.use(createPublicCatalogRouter(serviceItems, guestSessions));
+    publicRoutes.use(createPublicRequestRouter(requests, guestSessions));
     application.use('/public', publicRoutes);
   }
   options.configureRoutes?.(application);

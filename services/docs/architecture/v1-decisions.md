@@ -11,8 +11,8 @@ CARE QR V1 is a **modular monolith**, not a set of microservices.
 
 - The backend is deployed as one service. Background processing lives inside this service until scale or reliability requirements justify a separate process.
 - Domain code is split into cohesive modules with explicit public interfaces.
-- A module owns its business rules and persistence access. Controllers, jobs, and other modules must not query its tables directly.
-- Cross-module calls use exported application services. Asynchronous side effects use typed domain/application events after the source transaction commits.
+- A module owns its business rules and persistence writes. Controllers and jobs call exported application services instead of querying Prisma directly. Another domain module may make tenant-scoped reads for validation or display, but writes must go through the owning module's exported interface.
+- Cross-module commands use exported application services; an operation joining an existing transaction accepts a `Prisma.TransactionClient`. Asynchronous side effects use typed domain/application events after the source transaction commits.
 - PostgreSQL is the authoritative store. Redis, BullMQ, and Socket.IO are replaceable infrastructure and never hold authoritative state.
 - No network calls, distributed transactions, service discovery, or duplicated databases are introduced between internal modules.
 

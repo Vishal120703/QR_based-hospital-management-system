@@ -10,26 +10,39 @@ export function ScanPage() {
   const { token } = useParams();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const started = useRef(false);
+  const [attempt, setAttempt] = useState(0);
+  const started = useRef<{ key: string; promise: ReturnType<typeof guestApi.resolve> } | null>(
+    null,
+  );
 
   useEffect(() => {
-    // StrictMode runs effects twice in development; resolve the QR only once.
-    if (started.current || !token) return;
-    started.current = true;
-    guestApi.resolve(token).then(
+    if (!token) return;
+    let cancelled = false;
+    // Share the in-flight operation across StrictMode's effect replay, but
+    // resolve a different QR when the route token changes.
+    const key = `${token}:${attempt}`;
+    if (started.current?.key !== key) started.current = { key, promise: guestApi.resolve(token) };
+    started.current.promise.then(
       (result) => {
+        if (cancelled) return;
         credentials.setGuest(result.guestToken);
         void navigate('/patient', { replace: true });
       },
       (cause: unknown) => {
+        if (cancelled) return;
         setError(
           cause instanceof ApiError && cause.status === 429
             ? 'Too many attempts. Please wait a minute and scan again.'
-            : 'This QR code is not active right now. Please ask a nurse or staff member for help.',
+            : cause instanceof ApiError && (cause.status === 0 || cause.status >= 500)
+              ? cause.message
+              : 'This QR code is not active right now. Please ask a nurse or staff member for help.',
         );
       },
     );
-  }, [token, navigate]);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, navigate, attempt]);
 
   return (
     <main className="patient">
@@ -41,6 +54,16 @@ export function ScanPage() {
           <>
             <h1>We couldn’t connect</h1>
             <p>{error}</p>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setError(null);
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Try again
+            </button>
           </>
         ) : (
           <p className="muted">Connecting to your bed…</p>

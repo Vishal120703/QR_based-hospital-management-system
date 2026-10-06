@@ -65,30 +65,33 @@ export class EscalationPolicyService {
     requestId: string,
   ) {
     const hospitalId = context.tenant.hospitalId;
-    return this.database.$transaction(async (transaction) => {
-      const before = await this.require(transaction, context, id);
-      if (input.name !== undefined) {
-        await transaction.escalationPolicy.update({
-          where: { hospitalId_id: { hospitalId, id } },
-          data: { name: input.name },
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = await this.require(transaction, context, id);
+        if (input.name !== undefined) {
+          await transaction.escalationPolicy.update({
+            where: { hospitalId_id: { hospitalId, id } },
+            data: { name: input.name },
+          });
+        }
+        if (input.levels !== undefined) {
+          await this.requireRoles(transaction, hospitalId, input.levels);
+          await transaction.escalationLevel.deleteMany({
+            where: { hospitalId, escalationPolicyId: id },
+          });
+          await this.writeLevels(transaction, hospitalId, id, input.levels);
+        }
+        const after = await this.require(transaction, context, id);
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'escalation.update',
+          targetType: 'EscalationPolicy',
+          targetId: id,
+          metadata: { before: snapshot(before), after: snapshot(after) },
         });
-      }
-      if (input.levels !== undefined) {
-        await this.requireRoles(transaction, hospitalId, input.levels);
-        await transaction.escalationLevel.deleteMany({
-          where: { hospitalId, escalationPolicyId: id },
-        });
-        await this.writeLevels(transaction, hospitalId, id, input.levels);
-      }
-      const after = await this.require(transaction, context, id);
-      await recordStaffAudit(transaction, context, requestId, {
-        action: 'escalation.update',
-        targetType: 'EscalationPolicy',
-        targetId: id,
-        metadata: { before: snapshot(before), after: snapshot(after) },
-      });
-      return after;
-    });
+        return after;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {

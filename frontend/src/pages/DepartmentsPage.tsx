@@ -1,22 +1,34 @@
-import { useEffect, useState } from 'react';
-import { staffApi, type Department } from '../api';
-import { CreateForm } from '../components';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, staffApi, type Department } from '../api';
+import { CreateForm, LoadState, PageHeading } from '../components';
 import { useAdmin } from './AdminLayout';
 
 export function DepartmentsPage() {
-  const { token, me, reportError } = useAdmin();
+  const { token, reportError, reportSuccess, can } = useAdmin();
   const [departments, setDepartments] = useState<Department[] | null>(null);
   const [version, setVersion] = useState(0);
-  const canManage = me.permissions.includes('staff.manage');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const pending = useRef(false);
+  const canManage = can('staff.manage');
 
   useEffect(() => {
     let cancelled = false;
     staffApi.list<Department>(token, 'departments').then(
       (result) => {
-        if (!cancelled) setDepartments(result);
+        if (!cancelled) {
+          setDepartments(result);
+          setLoading(false);
+          setLoadError(null);
+        }
       },
       (cause: unknown) => {
-        if (!cancelled) reportError(cause);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadError(cause instanceof Error ? cause.message : 'Unable to load departments.');
+          if (cause instanceof ApiError && cause.status === 401) reportError(cause);
+        }
       },
     );
     return () => {
@@ -24,28 +36,53 @@ export function DepartmentsPage() {
     };
   }, [token, version, reportError]);
 
-  const reload = () => setVersion((value) => value + 1);
+  const reload = () => {
+    setLoading(true);
+    setLoadError(null);
+    setVersion((value) => value + 1);
+  };
 
   async function toggle(department: Department) {
+    if (pending.current) return;
+    if (
+      department.active &&
+      !window.confirm(
+        `Deactivate ${department.name}? Its services will be hidden from patients and its staff will not be eligible for that department.`,
+      )
+    )
+      return;
+    pending.current = true;
+    setBusyId(department.id);
     try {
       await staffApi.updateDepartment(token, department.id, { active: !department.active });
+      reportSuccess(`${department.name} is now ${department.active ? 'inactive' : 'active'}.`);
       reload();
     } catch (cause) {
       reportError(cause);
+    } finally {
+      pending.current = false;
+      setBusyId(null);
     }
   }
 
   if (!departments) {
-    return <p className="muted">Loading departments…</p>;
+    return (
+      <LoadState
+        loading={loading}
+        error={loadError}
+        onRetry={reload}
+        label="Loading departments…"
+      />
+    );
   }
 
   return (
     <>
-      <h1>Departments</h1>
-      <p className="muted">
-        Teams that respond to requests. A staff member can belong to several departments. Inactive
-        departments receive no requests.
-      </p>
+      <PageHeading
+        title="Departments"
+        description="Departments group the teams responsible for services, such as Nursing or Housekeeping. A staff member may belong to several teams. Inactive departments are hidden from the patient catalog."
+      />
+      <LoadState loading={false} error={loadError} onRetry={reload} />
       <div className="split">
         <div className="table-wrap">
           <table>
@@ -58,6 +95,13 @@ export function DepartmentsPage() {
               </tr>
             </thead>
             <tbody>
+              {departments.length === 0 && (
+                <tr>
+                  <td colSpan={canManage ? 4 : 3} className="muted">
+                    No departments yet. Add the first team to begin staff and service setup.
+                  </td>
+                </tr>
+              )}
               {departments.map((department) => (
                 <tr key={department.id}>
                   <td className="code">{department.code}</td>
@@ -72,9 +116,14 @@ export function DepartmentsPage() {
                       <button
                         type="button"
                         className="secondary"
+                        disabled={busyId !== null}
                         onClick={() => void toggle(department)}
                       >
-                        {department.active ? 'Deactivate' : 'Activate'}
+                        {busyId === department.id
+                          ? 'Saving…'
+                          : department.active
+                            ? 'Deactivate'
+                            : 'Activate'}
                       </button>
                     </td>
                   )}
@@ -99,6 +148,7 @@ export function DepartmentsPage() {
                   name: values.name,
                 });
                 reload();
+                reportSuccess(`${values.name} was added.`);
               }}
             />
           </section>

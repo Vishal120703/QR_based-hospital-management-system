@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  ApiError,
   staffApi,
   type Bed,
   type Department,
@@ -7,6 +8,7 @@ import {
   type Floor,
   type Ward,
 } from '../api';
+import { LoadState, PageHeading } from '../components';
 import { useAdmin } from './AdminLayout';
 
 interface Options {
@@ -42,48 +44,93 @@ export function EligibilityPage() {
   const [bedId, setBedId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [result, setResult] = useState<EligibleStaff[] | null>(null);
+  const [version, setVersion] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(false);
+  const requestVersion = useRef(0);
+  const pending = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     loadOptions(token).then(
       (loaded) => {
-        if (!cancelled) setOptions(loaded);
+        if (!cancelled) {
+          setOptions(loaded);
+          setLoading(false);
+          setLoadError(null);
+        }
       },
       (cause: unknown) => {
-        if (!cancelled) reportError(cause);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadError(
+            cause instanceof Error ? cause.message : 'Unable to load beds and departments.',
+          );
+          if (cause instanceof ApiError && cause.status === 401) reportError(cause);
+        }
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [token, reportError]);
+  }, [token, version, reportError]);
+
+  const reload = () => {
+    setLoading(true);
+    setLoadError(null);
+    setVersion((value) => value + 1);
+  };
 
   async function check() {
+    if (pending.current || !bedId || !departmentId) return;
+    pending.current = true;
+    setChecking(true);
+    setResult(null);
+    const current = ++requestVersion.current;
     try {
-      setResult(await staffApi.eligible(token, bedId, departmentId));
+      const staff = await staffApi.eligible(token, bedId, departmentId);
+      if (current === requestVersion.current) setResult(staff);
     } catch (cause) {
       reportError(cause);
+    } finally {
+      pending.current = false;
+      setChecking(false);
     }
   }
 
   if (!options) {
-    return <p className="muted">Loading…</p>;
+    return (
+      <LoadState
+        loading={loading}
+        error={loadError}
+        onRetry={reload}
+        label="Loading beds and departments…"
+      />
+    );
   }
 
   return (
     <>
-      <h1>Who can respond?</h1>
-      <p className="muted">
-        Staff are eligible when they are active, on duty, in the department, and their coverage
-        includes the bed’s ward, its floor, or the whole hospital.
-      </p>
+      <PageHeading
+        title="Who can respond?"
+        description="Check eligibility for one bed and department. Staff must be active, on duty, belong to that department, and cover the bed’s location. This check does not send a request."
+      />
+      <LoadState loading={false} error={loadError} onRetry={reload} />
       <section className="card">
+        {(options.beds.length === 0 || options.departments.length === 0) && (
+          <p className="muted">
+            Add at least one bed and department before checking staff eligibility.
+          </p>
+        )}
         <div className="inline-form">
           <select
             value={bedId}
+            disabled={checking}
             aria-label="Bed"
             onChange={(event) => {
               setBedId(event.target.value);
+              requestVersion.current += 1;
               setResult(null);
             }}
           >
@@ -96,9 +143,11 @@ export function EligibilityPage() {
           </select>
           <select
             value={departmentId}
+            disabled={checking}
             aria-label="Department"
             onChange={(event) => {
               setDepartmentId(event.target.value);
+              requestVersion.current += 1;
               setResult(null);
             }}
           >
@@ -110,13 +159,17 @@ export function EligibilityPage() {
               </option>
             ))}
           </select>
-          <button type="button" disabled={!bedId || !departmentId} onClick={() => void check()}>
-            Check
+          <button
+            type="button"
+            disabled={checking || !bedId || !departmentId}
+            onClick={() => void check()}
+          >
+            {checking ? 'Checking…' : 'Check eligibility'}
           </button>
         </div>
 
         {result && (
-          <div className="result">
+          <div className="result" role="status">
             {result.length === 0 ? (
               <p>
                 <strong>Nobody</strong> is eligible right now. Check duty, departments, and coverage
@@ -126,7 +179,7 @@ export function EligibilityPage() {
               <>
                 <p>
                   <strong>{result.length}</strong> staff member{result.length === 1 ? '' : 's'}{' '}
-                  would receive this request:
+                  eligible for this bed and department:
                 </p>
                 <ul>
                   {result.map((member) => (

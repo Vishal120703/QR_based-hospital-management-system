@@ -1,7 +1,7 @@
 # Request State Machine
 
 Status: Frozen for V1  
-Last reviewed: 2026-10-05
+Last reviewed: 2026-10-06
 
 ## States
 
@@ -94,3 +94,18 @@ Tests must cover every allowed transition and representative forbidden transitio
 - Simultaneous acceptance produces exactly one winner and one transition event.
 - A forced persistence failure rolls back both the state change and event.
 
+## Phase 7 implementation contract
+
+- `RequestService.submit(guest, serviceId)` is the core creation use case. It rechecks the server-side GuestSession and active BedSession, snapshots the catalog and SLA version, and writes the `SUBMITTED` event in one transaction. Phase 8 exposes it through a public adapter that returns an existing active request on retry.
+- A partial unique database index permits at most one active request for the same hospital, BedSession, and ServiceItem. Active means `SUBMITTED`, `ASSIGNED`, `ACCEPTED`, or `IN_PROGRESS`; `COMPLETED`, `CLOSED`, `CANCELLED`, and `REJECTED` do not block a later submission.
+- Staff can read `GET /admin/requests/:id` and `GET /admin/requests/:id/events` with `request.read`. Each transition is `POST /admin/requests/:id/<command>` with `expectedVersion`; assignment commands also require `assigneeId`, and cancel/reject/transfer require a reason. An outdated version or forbidden state returns HTTP 409. A replay does not write another event.
+- Only `MANUAL` assignments are enabled. Assign/transfer validate the current staff eligibility for the request's snapshotted department and bed. Accept also rechecks eligibility and only the assigned staff member can accept, start, complete, or reject. A scoped staff member with the appropriate permission can close or cancel. Pool, direct, and auto-assignment behavior remains for later phases.
+- A transfer replaces `assigneeId`, sets a new `assignedAt`, and records both assignees in the event. `acceptedAt` and `startedAt` retain their first occurrence; the full sequence remains in RequestEvents.
+- RequestEvents are protected by an append-only database trigger. Assignment, transfer, cancellation, and rejection also write a privileged AuditLog entry inside the same transition transaction.
+
+## Phase 8 public contract
+
+- `POST /public/requests` accepts only `{ "serviceId": "<uuid>" }` and returns a safe `serviceRequest` view. It sends 201 for a new request or 200 with the existing active request for a duplicate from the same BedSession and service. It does not require or accept client-supplied hospital, bed, or session identifiers.
+- `GET /public/requests` returns up to 100 requests from the authenticated guest's BedSession, newest first. `POST /public/requests/:publicId/cancel` accepts a reason and can cancel only `SUBMITTED` or `ASSIGNED` requests from that same BedSession. A missing or inaccessible public ID returns 404; a changed or non-cancellable state returns 409.
+- Every public route requires a live GuestSession. Request operations recheck the BedSession and credential inside their transaction, and lock them against closure or QR-driven guest-session revocation. Public responses exclude tenant, bed, session, assignee, routing, and SLA identifiers and use `Cache-Control: no-store`.
+- `GET /public/session` remains the guest context endpoint. Feedback collection is deferred to Phase 16; Phase 8 does not expose a placeholder feedback action. Newly submitted requests remain `SUBMITTED` until operational routing/workflow phases process them.

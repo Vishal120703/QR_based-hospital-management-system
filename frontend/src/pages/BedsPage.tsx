@@ -1,5 +1,5 @@
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import {
   staffApi,
@@ -12,6 +12,7 @@ import {
   type Ward,
 } from '../api';
 import { useAdmin } from './AdminLayout';
+import { LoadState, Modal, PageHeading } from '../components';
 
 interface BedRow {
   bed: Bed;
@@ -26,12 +27,12 @@ interface Issued {
   location: string;
 }
 
-async function loadRows(token: string): Promise<BedRow[]> {
+async function loadRows(token: string, canReadLocations: boolean): Promise<BedRow[]> {
   const [beds, wards, floors, rooms, qrCodes, sessions] = await Promise.all([
     staffApi.list<Bed>(token, 'beds'),
-    staffApi.list<Ward>(token, 'wards'),
-    staffApi.list<Floor>(token, 'floors'),
-    staffApi.list<Room>(token, 'rooms'),
+    canReadLocations ? staffApi.list<Ward>(token, 'wards') : Promise.resolve([]),
+    canReadLocations ? staffApi.list<Floor>(token, 'floors') : Promise.resolve([]),
+    canReadLocations ? staffApi.list<Room>(token, 'rooms') : Promise.resolve([]),
     staffApi.list<QrCode>(token, 'qr-codes'),
     staffApi.list<BedSession>(token, 'bed-sessions', '?status=ACTIVE'),
   ]);
@@ -49,39 +50,57 @@ async function loadRows(token: string): Promise<BedRow[]> {
 }
 
 export function BedsPage() {
-  const { token, me, reportError } = useAdmin();
+  const { token, me, reportError, reportSuccess } = useAdmin();
   const [rows, setRows] = useState<BedRow[] | null>(null);
   const [version, setVersion] = useState(0);
   const [busyBedId, setBusyBedId] = useState<string | null>(null);
   const [issued, setIssued] = useState<Issued | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('ALL');
+  const pending = useRef(false);
+  const canReadLocations = me.permissions.includes('location.read');
 
   useEffect(() => {
     let cancelled = false;
-    loadRows(token).then(
+    loadRows(token, canReadLocations).then(
       (result) => {
         if (!cancelled) setRows(result);
       },
       (cause: unknown) => {
-        if (!cancelled) reportError(cause);
+        if (!cancelled) {
+          setLoadError(cause instanceof Error ? cause.message : 'Could not load beds.');
+          reportError(cause);
+        }
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [token, version, reportError]);
+  }, [token, version, reportError, canReadLocations]);
 
   const can = (permission: string) => me.permissions.includes(permission);
 
   async function act(row: BedRow, action: () => Promise<unknown>, confirmText?: string) {
+    if (pending.current) return;
     if (confirmText && !window.confirm(confirmText)) return;
+    pending.current = true;
     setBusyBedId(row.bed.id);
     try {
       await action();
-      setVersion((value) => value + 1);
+      reportSuccess(`Updated ${row.bed.displayName}.`);
+      try {
+        setRows(await loadRows(token, canReadLocations));
+      } catch (cause) {
+        setRows(null);
+        setLoadError(cause instanceof Error ? cause.message : 'Could not refresh beds.');
+        reportError(cause);
+      }
     } catch (cause) {
       reportError(cause);
     } finally {
       setBusyBedId(null);
+      pending.current = false;
     }
   }
 
@@ -92,16 +111,82 @@ export function BedsPage() {
   };
 
   if (!rows) {
-    return <p className="muted">Loading beds…</p>;
+    return (
+      <LoadState
+        loading={!loadError}
+        error={loadError}
+        label="Loading beds…"
+        onRetry={() => {
+          setLoadError(null);
+          setVersion((value) => value + 1);
+        }}
+      />
+    );
   }
+
+  const visible = rows.filter(
+    (row) =>
+      `${row.bed.displayName} ${row.bed.code} ${row.location}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()) &&
+      (filter === 'ALL' || (filter === 'ACTIVE' ? Boolean(row.session) : !row.session)),
+  );
 
   return (
     <>
-      <h1>Beds &amp; QR codes</h1>
-      <p className="muted">
-        Start a bed session when a patient is admitted. A QR code works only while its bed has an
-        active session.
-      </p>
+      <PageHeading
+        title="Beds & QR codes"
+        description="Start a session on admission, then generate and print the bedside QR. Close the session on discharge."
+      >
+        <button
+          type="button"
+          className="secondary"
+          disabled={busyBedId !== null}
+          onClick={() => {
+            setRows(null);
+            setLoadError(null);
+            setVersion((value) => value + 1);
+          }}
+        >
+          Refresh
+        </button>
+      </PageHeading>
+      <div className="summary-grid">
+        <div className="card">
+          <span>Total beds</span>
+          <strong>{rows.length}</strong>
+        </div>
+        <div className="card">
+          <span>Active admissions</span>
+          <strong>{rows.filter((row) => row.session).length}</strong>
+        </div>
+        <div className="card">
+          <span>Active QR codes</span>
+          <strong>{rows.filter((row) => row.qrCode?.status === 'ACTIVE').length}</strong>
+        </div>
+      </div>
+      <div className="toolbar">
+        <label className="search-field">
+          <span>Find a bed</span>
+          <input
+            type="search"
+            placeholder="Search bed, ward, or floor…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>Sessions</span>
+          <select value={filter} onChange={(event) => setFilter(event.target.value)}>
+            <option value="ALL">All beds</option>
+            <option value="ACTIVE">Active sessions</option>
+            <option value="NONE">No active session</option>
+          </select>
+        </label>
+        <span className="muted small" role="status">
+          {visible.length} of {rows.length} beds
+        </span>
+      </div>
 
       {rows.length === 0 ? (
         <div className="card">
@@ -111,7 +196,7 @@ export function BedsPage() {
         </div>
       ) : (
         <div className="table-wrap">
-          <table>
+          <table className="bed-table">
             <thead>
               <tr>
                 <th>Bed</th>
@@ -122,23 +207,30 @@ export function BedsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {visible.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="empty-state">
+                    No beds match your filters. Try another search or choose all beds.
+                  </td>
+                </tr>
+              )}
+              {visible.map((row) => {
                 const { bed, qrCode, session } = row;
-                const busy = busyBedId === bed.id;
+                const busy = busyBedId !== null;
                 return (
                   <tr key={bed.id}>
-                    <td>
+                    <td data-label="Bed">
                       <strong>{bed.displayName}</strong>
                       <div className="muted code">{bed.code}</div>
                     </td>
-                    <td>{row.location}</td>
-                    <td>
+                    <td data-label="Location">{row.location || 'Location details unavailable'}</td>
+                    <td data-label="Status">
                       <span className={`badge badge-${bed.status.toLowerCase()}`}>
-                        {bed.status}
+                        {bed.status.charAt(0) + bed.status.slice(1).toLowerCase()}
                       </span>
                       {!bed.active && <span className="badge badge-muted">inactive</span>}
                     </td>
-                    <td>
+                    <td data-label="Admission session">
                       {session ? (
                         <>
                           <div className="muted">
@@ -180,7 +272,7 @@ export function BedsPage() {
                         )
                       )}
                     </td>
-                    <td>
+                    <td data-label="QR code">
                       {qrCode?.status === 'ACTIVE' ? (
                         <>
                           <div className="muted">Active · version {qrCode.version}</div>
@@ -198,7 +290,7 @@ export function BedsPage() {
                                   )
                                 }
                               >
-                                Rotate
+                                Replace QR
                               </button>
                             )}
                             {can('qr.revoke') && (
@@ -214,7 +306,7 @@ export function BedsPage() {
                                   )
                                 }
                               >
-                                Revoke
+                                Disable QR
                               </button>
                             )}
                           </div>
@@ -253,33 +345,48 @@ export function BedsPage() {
 }
 
 function QrDialog({ issued, onClose }: { issued: Issued; onClose: () => void }) {
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(issued.issue.url);
+      setCopyMessage('Patient link copied. Keep it private.');
+    } catch {
+      setCopyMessage('Could not copy. Use Open patient view or print the QR instead.');
+    }
+  }
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="New QR code">
-      <div className="card dialog">
-        <p className="notice notice-warning no-print">
-          This QR code is shown only once. Print it now; to get another, rotate the code.
+    <Modal title="Print your new bedside QR" onClose={onClose}>
+      <p className="notice notice-warning no-print">
+        This QR code is shown only once. Print it now; to get another, rotate the code.
+      </p>
+      <div className="print-area">
+        <QRCodeSVG value={issued.issue.url} size={240} marginSize={2} />
+        <h2>{issued.bedName}</h2>
+        <p className="muted">{issued.location}</p>
+        <p>Scan to view hospital services.</p>
+        <p className="small">
+          <strong>Not for emergencies.</strong> Use the nurse-call button.
         </p>
-        <div className="print-area">
-          <QRCodeSVG value={issued.issue.url} size={240} marginSize={2} />
-          <h2>{issued.bedName}</h2>
-          <p className="muted">{issued.location}</p>
-          <p>Scan to request help from hospital staff.</p>
-          <p className="small">
-            <strong>Not for emergencies.</strong> Use the nurse-call button.
-          </p>
-        </div>
-        <div className="actions no-print">
-          <button type="button" onClick={() => window.print()}>
-            Print
-          </button>
-          <a className="button secondary" href={issued.issue.url} target="_blank" rel="noreferrer">
-            Open patient view
-          </a>
-          <button type="button" className="secondary" onClick={onClose}>
-            Done
-          </button>
-        </div>
       </div>
-    </div>
+      <div className="actions no-print">
+        <button type="button" onClick={() => window.print()}>
+          Print
+        </button>
+        <a className="button secondary" href={issued.issue.url} target="_blank" rel="noreferrer">
+          Open patient view
+        </a>
+        <button type="button" className="secondary" onClick={() => void copy()}>
+          Copy patient link
+        </button>
+        <button type="button" className="secondary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+      {copyMessage && (
+        <p className="small no-print" role="status">
+          {copyMessage}
+        </p>
+      )}
+    </Modal>
   );
 }

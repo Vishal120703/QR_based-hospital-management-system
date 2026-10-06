@@ -11,11 +11,25 @@ services/   Backend: Express API, domain modules, Prisma, tests, architecture do
 
 Architecture decisions are in [`services/docs/architecture`](./services/docs/architecture). Module boundaries are described in [`services/src/modules/README.md`](./services/src/modules/README.md).
 
+## Current progress
+
+Phases **0–8 are implemented** (nine phases including Phase 0). Next is **Phase 9: Manual Routing**. See the [phase-by-phase status and audit results](./services/docs/project-status.md).
+
+Before Phase 9, use the [Phase 0–8 manual test plan](./services/docs/manual-test-plan-phases-0-8.md). It includes a one-time, isolated demo-hospital seed and a one-test-at-a-time prompt for a separate testing chat.
+
+For a plain-language walkthrough of the architecture, demo data, and local setup, read the [easy project guide](./services/docs/easy-guide.md).
+
+Patients can now submit, track, and cancel eligible service requests from an active QR session. Requests remain `SUBMITTED` until staff handle them; routing, dashboards, and notifications are later phases. This is not ready for hospital production use.
+
 ## Prerequisites
 
-- Node.js 20.19 or newer and npm 10 or newer
+- Node.js 24 or newer and npm 10 or newer (`.nvmrc` pins the tested version)
 - PostgreSQL 17 or newer (for example Postgres.app)
 - Redis 7 or newer (for example `brew install redis`, then `brew services start redis`). The server waits for Redis at startup; tests do not need it.
+
+If you use nvm, run `nvm use` from the repository root before running either app. `.nvmrc` pins Node 24.19.0.
+
+If you change `services/.env` (especially `DATABASE_URL`), stop and restart the backend: a running process keeps its old connection. Check the **new** database with `npm run prisma:status`, apply its migrations if needed, and seed the demo hospital only if it is absent. Never reset an existing database just to make sign-in work.
 
 ## Run the app
 
@@ -23,29 +37,31 @@ Architecture decisions are in [`services/docs/architecture`](./services/docs/arc
 
    ```bash
    cp .env.example .env      # then set DATABASE_URL and REDIS_URL
-   npm install
+   npm ci
    npm run prisma:migrate
-   npm run dev               # http://localhost:3000
+   npm run dev               # http://localhost:3001
    ```
 
 2. Create a hospital and its first administrator, inside `services/`. Set `DATABASE_URL`, `HOSPITAL_NAME`, `HOSPITAL_CODE`, `HOSPITAL_TIMEZONE`, `ADMIN_EMAIL`, `ADMIN_NAME`, and an `ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:hospital`. The password is hashed and never printed.
 
+   For a ready-made **dummy hospital instead of this step**, follow the [one-time demo seed instructions](./services/docs/easy-guide.md#load-dummy-data-once). It creates `CAREQR-DEMO` with beds, staff, catalog, and an active bed session in a local database; it refuses to overwrite an existing demo hospital.
+
 3. Frontend, inside `frontend/`:
 
    ```bash
-   npm install
+   npm ci
    npm run dev               # http://localhost:5173
    ```
 
-   The frontend forwards `/api` to the backend on port 3000.
+   The frontend forwards `/api` to the backend on port 3001.
 
 ## Try it
 
 1. Open http://localhost:5173 and sign in with the hospital code, email, and password from step 2.
 2. **Locations:** add a floor, a ward, optionally a room, and a bed.
 3. **Beds & QR:** generate a QR code for the bed. Choose **Open patient view**: it is refused, because the bed has no active session.
-4. Choose **Start session**, then open the patient view again: it shows the bed, the service buttons from the catalog, and the emergency notice.
-5. **Close session** or **Rotate** the QR code: the patient view ends and the old code stops working.
+4. Choose **Start session**, then open the patient view again: it shows the bed, service catalog, and emergency notice. Choose a service to submit a request, then track or cancel it from **Your requests**.
+5. **Close session** or **Replace QR**: connected patients lose access; the patient page rechecks access every 30 seconds and when the tab becomes visible. **Replace QR** and **Disable QR** also invalidate the old code.
 6. **Staff:** add a staff member, then **Manage** them: add a department (for example Housekeeping) and coverage (a ward). Turn them **On duty**.
 7. **Services** and **SLA:** hide a service and it disappears from the patient view. Change an SLA's minutes and it saves a new version; the history keeps every earlier version.
 8. **Who can respond?:** pick a bed and a department. Only staff who are active, on duty, in that department, and covering that bed's ward, floor, or the whole hospital are listed.
@@ -73,6 +89,7 @@ Inside `frontend/`:
 npm run format:check
 npm run lint
 npm run typecheck
+npm test
 npm run build
 ```
 

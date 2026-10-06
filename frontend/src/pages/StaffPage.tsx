@@ -1,62 +1,118 @@
-import { useEffect, useState } from 'react';
-import { staffApi, type StaffMember } from '../api';
-import { CreateForm } from '../components';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ApiError,
+  staffApi,
+  type Department,
+  type Floor,
+  type Role,
+  type StaffMember,
+  type Ward,
+} from '../api';
+import { CreateForm, LoadState, PageHeading } from '../components';
 import { useAdmin } from './AdminLayout';
 import { StaffDialog } from './StaffDialog';
-import { coverageLabel, loadDirectory, nameOf, type Directory } from './staff-directory';
+import { coverageLabel, nameOf, type Directory } from './staff-directory';
 
 export function StaffPage() {
-  const { token, me, reportError } = useAdmin();
+  const { token, me, reportError, reportSuccess, can } = useAdmin();
   const [directory, setDirectory] = useState<Directory | null>(null);
   const [version, setVersion] = useState(0);
   const [managing, setManaging] = useState<string | null>(null);
-  const can = (permission: string) => me.permissions.includes(permission);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const pending = useRef(false);
   const canManage = can('staff.manage');
   const canReadRoles = can('role.read');
+  const canManageRoles = can('role.manage') && canReadRoles;
+  const canReadLocations = can('location.read');
 
   useEffect(() => {
     let cancelled = false;
-    loadDirectory(token, canReadRoles).then(
-      (result) => {
-        if (!cancelled) setDirectory(result);
+    Promise.all([
+      staffApi.list<StaffMember>(token, 'staff'),
+      staffApi.list<Department>(token, 'departments'),
+      canReadRoles ? staffApi.list<Role>(token, 'roles') : Promise.resolve([]),
+      canReadLocations ? staffApi.list<Floor>(token, 'floors') : Promise.resolve([]),
+      canReadLocations ? staffApi.list<Ward>(token, 'wards') : Promise.resolve([]),
+    ]).then(
+      ([staff, departments, roles, floors, wards]) => {
+        if (!cancelled) {
+          setDirectory({ staff, departments, roles, floors, wards });
+          setLoading(false);
+          setLoadError(null);
+        }
       },
       (cause: unknown) => {
-        if (!cancelled) reportError(cause);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadError(cause instanceof Error ? cause.message : 'Unable to load staff.');
+          if (cause instanceof ApiError && cause.status === 401) reportError(cause);
+        }
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [token, version, canReadRoles, reportError]);
+  }, [token, version, canReadRoles, canReadLocations, reportError]);
 
-  const reload = () => setVersion((value) => value + 1);
+  const reload = () => {
+    setLoadError(null);
+    setLoading(true);
+    setVersion((value) => value + 1);
+  };
 
   async function toggleDuty(member: StaffMember) {
+    if (pending.current) return;
+    pending.current = true;
+    setBusyMemberId(member.id);
     try {
       await staffApi.setDuty(
         token,
         member.id,
         member.dutyStatus === 'ON_DUTY' ? 'OFF_DUTY' : 'ON_DUTY',
       );
+      reportSuccess(
+        `${member.displayName} is now ${member.dutyStatus === 'ON_DUTY' ? 'off' : 'on'} duty.`,
+      );
       reload();
     } catch (cause) {
       reportError(cause);
+    } finally {
+      pending.current = false;
+      setBusyMemberId(null);
     }
   }
 
   if (!directory) {
-    return <p className="muted">Loading staff…</p>;
+    return (
+      <LoadState loading={loading} error={loadError} onRetry={reload} label="Loading staff…" />
+    );
   }
 
   const managed = directory.staff.find((member) => member.id === managing);
+  const query = search.trim().toLowerCase();
+  const staff = directory.staff.filter((member) =>
+    `${member.displayName} ${member.email}`.toLowerCase().includes(query),
+  );
 
   return (
     <>
-      <h1>Staff</h1>
-      <p className="muted">
-        A staff member receives requests only when they are active, on duty, in the request’s
-        department, and their coverage includes the bed’s ward, floor, or the whole hospital.
-      </p>
+      <PageHeading
+        title="Staff"
+        description="Set up each person’s department, coverage, and duty. These decide who will be eligible to respond when request routing is enabled."
+      />
+      <LoadState loading={false} error={loadError} onRetry={reload} />
+      <label className="search-field">
+        <span>Find a staff member</span>
+        <input
+          type="search"
+          placeholder="Search name or email"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </label>
 
       <div className="table-wrap">
         <table>
@@ -72,7 +128,16 @@ export function StaffPage() {
             </tr>
           </thead>
           <tbody>
-            {directory.staff.map((member) => (
+            {staff.length === 0 && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  {directory.staff.length === 0
+                    ? 'No staff members yet. Add a person below to get started.'
+                    : 'No staff match your search.'}
+                </td>
+              </tr>
+            )}
+            {staff.map((member) => (
               <tr key={member.id}>
                 <td>
                   <strong>{member.displayName}</strong>
@@ -91,16 +156,26 @@ export function StaffPage() {
                     <button
                       type="button"
                       className={member.dutyStatus === 'ON_DUTY' ? '' : 'secondary'}
-                      disabled={member.status !== 'ACTIVE' && member.dutyStatus === 'OFF_DUTY'}
+                      disabled={
+                        busyMemberId !== null ||
+                        (member.status !== 'ACTIVE' && member.dutyStatus === 'OFF_DUTY')
+                      }
                       onClick={() => void toggleDuty(member)}
                     >
-                      {member.dutyStatus === 'ON_DUTY' ? 'On duty' : 'Off duty'}
+                      {busyMemberId === member.id
+                        ? 'Saving…'
+                        : member.dutyStatus === 'ON_DUTY'
+                          ? 'Set off duty'
+                          : 'Set on duty'}
                     </button>
                   ) : (
                     <span className="badge">{member.dutyStatus === 'ON_DUTY' ? 'on' : 'off'}</span>
                   )}
                 </td>
                 <td>
+                  {member.departmentIds.length === 0 && (
+                    <span className="muted small">Not assigned</span>
+                  )}
                   {member.departmentIds.map((id) => (
                     <span key={id} className="badge">
                       {nameOf(directory.departments, id)}
@@ -108,16 +183,22 @@ export function StaffPage() {
                   ))}
                 </td>
                 <td>
+                  {member.coverage.length === 0 && <span className="muted small">No coverage</span>}
                   {member.coverage.map((scope) => (
                     <span key={scope.id} className="badge">
-                      {coverageLabel(scope, directory)}
+                      {scope.scopeType !== 'HOSPITAL' && !canReadLocations
+                        ? `${scope.scopeType.toLowerCase()} coverage`
+                        : coverageLabel(scope, directory)}
                     </span>
                   ))}
                 </td>
                 <td>
+                  {member.roleIds.length === 0 && (
+                    <span className="muted small">Needs a role to sign in</span>
+                  )}
                   {member.roleIds.map((id) => (
                     <span key={id} className="badge">
-                      {nameOf(directory.roles, id)}
+                      {canReadRoles ? nameOf(directory.roles, id) : 'Assigned role'}
                     </span>
                   ))}
                 </td>
@@ -151,15 +232,20 @@ export function StaffPage() {
                 name: 'password',
                 label: 'Temporary password (12+ characters)',
                 type: 'password',
+                minLength: 12,
               },
-              {
-                name: 'roleId',
-                label: 'Role',
-                optional: true,
-                options: directory.roles
-                  .filter((role) => role.active)
-                  .map((role) => ({ value: role.id, label: role.name })),
-              },
+              ...(canManageRoles
+                ? [
+                    {
+                      name: 'roleId',
+                      label: 'Role',
+                      optional: true,
+                      options: directory.roles
+                        .filter((role) => role.active)
+                        .map((role) => ({ value: role.id, label: role.name })),
+                    },
+                  ]
+                : []),
             ]}
             onCreate={async (values) => {
               const { staff } = await staffApi.createStaff(token, {
@@ -168,11 +254,34 @@ export function StaffPage() {
                 password: values.password ?? '',
               });
               if (values.roleId) {
-                await staffApi.assignRole(token, staff.id, values.roleId);
+                try {
+                  await staffApi.assignRole(token, staff.id, values.roleId);
+                } catch (cause) {
+                  reload();
+                  setManaging(staff.id);
+                  if (cause instanceof ApiError && cause.status === 401) reportError(cause);
+                  else
+                    reportError(
+                      new Error(
+                        `${staff.displayName} was created, but their role was not assigned. Do not create them again; use Manage to finish setup. ${cause instanceof Error ? cause.message : ''}`,
+                      ),
+                    );
+                  return;
+                }
               }
               reload();
+              setManaging(staff.id);
+              reportSuccess(
+                `${staff.displayName} was created. Add departments and coverage to finish setup.`,
+              );
             }}
           />
+          {!canManageRoles && (
+            <p className="muted small">
+              Role assignment needs role management access. A role administrator can finish sign-in
+              setup after you create this person.
+            </p>
+          )}
         </section>
       )}
 

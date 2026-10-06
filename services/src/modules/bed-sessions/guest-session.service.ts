@@ -31,17 +31,18 @@ export class GuestSessionService {
 
   // Returns null when the bed has no active BedSession.
   public async issue(
+    transaction: Prisma.TransactionClient,
     hospitalId: string,
     bedId: string,
   ): Promise<{ token: string; context: GuestContext } | null> {
-    const bedSession = await this.database.bedSession.findFirst({
+    const bedSession = await transaction.bedSession.findFirst({
       where: { hospitalId, bedId, status: 'ACTIVE' },
     });
     if (!bedSession) {
       return null;
     }
     const token = createOpaqueToken();
-    const session = await this.database.guestSession.create({
+    const session = await transaction.guestSession.create({
       data: {
         hospitalId,
         bedId,

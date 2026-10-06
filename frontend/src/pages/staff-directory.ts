@@ -1,5 +1,4 @@
 import {
-  staffApi,
   type Coverage,
   type Department,
   type Floor,
@@ -15,17 +14,6 @@ export interface Directory {
   roles: Role[];
   floors: Floor[];
   wards: Ward[];
-}
-
-export async function loadDirectory(token: string, canReadRoles: boolean): Promise<Directory> {
-  const [staff, departments, roles, floors, wards] = await Promise.all([
-    staffApi.list<StaffMember>(token, 'staff'),
-    staffApi.list<Department>(token, 'departments'),
-    canReadRoles ? staffApi.list<Role>(token, 'roles') : Promise.resolve([]),
-    staffApi.list<Floor>(token, 'floors'),
-    staffApi.list<Ward>(token, 'wards'),
-  ]);
-  return { staff, departments, roles, floors, wards };
 }
 
 export function nameOf(items: { id: string; name: string }[], id: string): string {

@@ -69,20 +69,23 @@ export class CategoryService {
 
   public update(context: StaffContext, id: string, input: CategoryInput, requestId: string) {
     const where = { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } };
-    return this.database.$transaction(async (transaction) => {
-      const before = await transaction.serviceCategory.findUnique({ where });
-      if (!before) {
-        throw new NotFoundError();
-      }
-      const after = await transaction.serviceCategory.update({ where, data: changes(input) });
-      await recordStaffAudit(transaction, context, requestId, {
-        action: 'serviceCategory.update',
-        targetType: 'ServiceCategory',
-        targetId: id,
-        metadata: { before: snapshot(before), after: snapshot(after) },
-      });
-      return after;
-    });
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = await transaction.serviceCategory.findUnique({ where });
+        if (!before) {
+          throw new NotFoundError();
+        }
+        const after = await transaction.serviceCategory.update({ where, data: changes(input) });
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'serviceCategory.update',
+          targetType: 'ServiceCategory',
+          targetId: id,
+          metadata: { before: snapshot(before), after: snapshot(after) },
+        });
+        return after;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  ApiError,
   staffApi,
   type Department,
   type EscalationPolicy,
@@ -8,7 +9,7 @@ import {
   type ServiceItem,
   type SlaPolicy,
 } from '../api';
-import { CreateForm } from '../components';
+import { CreateForm, LoadState, PageHeading } from '../components';
 import { useAdmin } from './AdminLayout';
 
 interface Catalog {
@@ -21,11 +22,11 @@ interface Catalog {
 
 const priorities: Priority[] = ['NORMAL', 'HIGH', 'URGENT'];
 
-async function loadCatalog(token: string): Promise<Catalog> {
+async function loadCatalog(token: string, canReadDepartments: boolean): Promise<Catalog> {
   const [categories, services, departments, slaPolicies, escalationPolicies] = await Promise.all([
     staffApi.list<ServiceCategory>(token, 'service-categories'),
     staffApi.list<ServiceItem>(token, 'services'),
-    staffApi.list<Department>(token, 'departments'),
+    canReadDepartments ? staffApi.list<Department>(token, 'departments') : Promise.resolve([]),
     staffApi.list<SlaPolicy>(token, 'sla-policies'),
     staffApi.list<EscalationPolicy>(token, 'escalation-policies'),
   ]);
@@ -37,50 +38,98 @@ function byId<T extends { id: string }>(items: T[], id: string | null): T | unde
 }
 
 export function ServicesPage() {
-  const { token, me, reportError } = useAdmin();
+  const { token, reportError, reportSuccess, can } = useAdmin();
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [version, setVersion] = useState(0);
-  const canManage = me.permissions.includes('service.manage');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const pending = useRef(false);
+  const canManage = can('service.manage');
+  const canReadDepartments = can('staff.read');
 
   useEffect(() => {
     let cancelled = false;
-    loadCatalog(token).then(
+    loadCatalog(token, canReadDepartments).then(
       (result) => {
-        if (!cancelled) setCatalog(result);
+        if (!cancelled) {
+          setCatalog(result);
+          setLoading(false);
+          setLoadError(null);
+        }
       },
       (cause: unknown) => {
-        if (!cancelled) reportError(cause);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadError(
+            cause instanceof Error ? cause.message : 'Unable to load the service catalog.',
+          );
+          if (cause instanceof ApiError && cause.status === 401) reportError(cause);
+        }
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [token, version, reportError]);
+  }, [token, version, canReadDepartments, reportError]);
 
-  const reload = () => setVersion((value) => value + 1);
-  async function change(action: () => Promise<unknown>) {
+  const reload = () => {
+    setLoading(true);
+    setLoadError(null);
+    setVersion((value) => value + 1);
+  };
+  async function change(key: string, action: () => Promise<unknown>) {
+    if (pending.current) return;
+    pending.current = true;
+    setBusyKey(key);
     try {
       await action();
       reload();
+      reportSuccess('Catalog settings were updated.');
     } catch (cause) {
       reportError(cause);
+    } finally {
+      pending.current = false;
+      setBusyKey(null);
     }
   }
 
   if (!catalog) {
-    return <p className="muted">Loading catalog…</p>;
+    return (
+      <LoadState loading={loading} error={loadError} onRetry={reload} label="Loading catalog…" />
+    );
   }
 
   const options = <T extends { id: string; name: string }>(items: T[]) =>
     items.map((item) => ({ value: item.id, label: item.name }));
+  const query = search.trim().toLowerCase();
+  const services = catalog.services.filter((service) =>
+    `${service.name} ${byId(catalog.categories, service.categoryId)?.name ?? ''}`
+      .toLowerCase()
+      .includes(query),
+  );
+  const readyForService =
+    catalog.categories.some((item) => item.active) &&
+    catalog.departments.some((item) => item.active) &&
+    catalog.slaPolicies.length > 0;
 
   return (
     <>
-      <h1>Service catalog</h1>
-      <p className="muted">
-        The buttons patients see after scanning a QR code. A service is shown only when it, its
-        category, and its department are active. Changes apply to new requests only.
-      </p>
+      <PageHeading
+        title="Service catalog"
+        description="Configure the services patients can request after scanning a bed QR. A service, its category, and its department must all be active."
+      />
+      <LoadState loading={false} error={loadError} onRetry={reload} />
+      <label className="search-field">
+        <span>Find a service</span>
+        <input
+          type="search"
+          value={search}
+          placeholder="Search service or category"
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </label>
 
       <div className="table-wrap">
         <table>
@@ -96,7 +145,16 @@ export function ServicesPage() {
             </tr>
           </thead>
           <tbody>
-            {catalog.services.map((service) => {
+            {services.length === 0 && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  {catalog.services.length === 0
+                    ? 'No services yet. Create a category, department, and SLA policy, then add your first service.'
+                    : 'No services match your search.'}
+                </td>
+              </tr>
+            )}
+            {services.map((service) => {
               const sla = byId(catalog.slaPolicies, service.slaPolicyId);
               const department = byId(catalog.departments, service.departmentId);
               const category = byId(catalog.categories, service.categoryId);
@@ -110,7 +168,8 @@ export function ServicesPage() {
                     {category && !category.active && <span className="badge"> inactive</span>}
                   </td>
                   <td>
-                    {department?.name}
+                    {department?.name ??
+                      (canReadDepartments ? 'Unavailable department' : 'Department assigned')}
                     {department && !department.active && <span className="badge"> inactive</span>}
                   </td>
                   <td>
@@ -138,17 +197,28 @@ export function ServicesPage() {
                       <button
                         type="button"
                         className={service.active ? '' : 'secondary'}
+                        disabled={busyKey !== null}
                         onClick={() =>
-                          void change(() =>
+                          void change(service.id, () =>
                             staffApi.updateService(token, service.id, { active: !service.active }),
                           )
                         }
                       >
-                        {service.active ? 'Shown' : 'Hidden'}
+                        {busyKey === service.id
+                          ? 'Saving…'
+                          : service.active
+                            ? 'Deactivate service'
+                            : 'Activate service'}
                       </button>
                     ) : (
-                      <span className="badge">{service.active ? 'shown' : 'hidden'}</span>
+                      <span className="badge">{service.active ? 'active' : 'inactive'}</span>
                     )}
+                    {service.active &&
+                      ((!category?.active && category) || (!department?.active && department)) && (
+                        <div className="muted small">
+                          Hidden: category or department is inactive.
+                        </div>
+                      )}
                   </td>
                 </tr>
               );
@@ -165,6 +235,11 @@ export function ServicesPage() {
             warning beside the group.
           </p>
           <ul className="location-list">
+            {catalog.categories.length === 0 && (
+              <li className="muted">
+                No categories yet. Add a group such as Comfort or Housekeeping.
+              </li>
+            )}
             {catalog.categories.map((category) => (
               <li key={category.id} className="category-row">
                 <span>
@@ -179,8 +254,9 @@ export function ServicesPage() {
                     <button
                       type="button"
                       className="secondary"
+                      disabled={busyKey !== null}
                       onClick={() =>
-                        void change(() =>
+                        void change(category.id, () =>
                           staffApi.updateCategory(token, category.id, {
                             emergencyNotice: !category.emergencyNotice,
                           }),
@@ -192,8 +268,9 @@ export function ServicesPage() {
                     <button
                       type="button"
                       className="secondary"
+                      disabled={busyKey !== null}
                       onClick={() =>
-                        void change(() =>
+                        void change(category.id, () =>
                           staffApi.updateCategory(token, category.id, { active: !category.active }),
                         )
                       }
@@ -224,6 +301,7 @@ export function ServicesPage() {
                   emergencyNotice: values.emergencyNotice === 'yes',
                 });
                 reload();
+                reportSuccess(`${values.name} was added.`);
               }}
             />
           )}
@@ -232,58 +310,73 @@ export function ServicesPage() {
         {canManage && (
           <section className="card">
             <h2>Add service</h2>
-            <CreateForm
-              submitLabel="Add service"
-              onError={reportError}
-              fields={() => [
-                { name: 'name', label: 'Name', placeholder: 'Extra Blanket' },
-                {
-                  name: 'categoryId',
-                  label: 'Category',
-                  options: options(catalog.categories.filter((item) => item.active)),
-                },
-                {
-                  name: 'departmentId',
-                  label: 'Department that responds',
-                  options: options(catalog.departments.filter((item) => item.active)),
-                },
-                {
-                  name: 'priority',
-                  label: 'Priority',
-                  options: priorities.map((value) => ({ value, label: value.toLowerCase() })),
-                },
-                {
-                  name: 'slaPolicyId',
-                  label: 'SLA policy',
-                  options: catalog.slaPolicies.map((policy) => ({
-                    value: policy.id,
-                    label: `${policy.name} (${policy.acceptMinutes} / ${policy.completeMinutes} min)`,
-                  })),
-                },
-                {
-                  name: 'escalationPolicyId',
-                  label: 'Escalation policy',
-                  optional: true,
-                  options: options(catalog.escalationPolicies),
-                },
-              ]}
-              onCreate={async (values) => {
-                await staffApi.createService(token, {
-                  name: values.name ?? '',
-                  categoryId: values.categoryId ?? '',
-                  departmentId: values.departmentId ?? '',
-                  slaPolicyId: values.slaPolicyId ?? '',
-                  priority: priorities.find((value) => value === values.priority) ?? 'NORMAL',
-                  ...(values.escalationPolicyId
-                    ? { escalationPolicyId: values.escalationPolicyId }
-                    : {}),
-                });
-                reload();
-              }}
-            />
-            <p className="muted small">
-              “Urgent” means operationally urgent, never a medical emergency.
-            </p>
+            {!canReadDepartments ? (
+              <p className="muted">
+                Creating a service needs staff read access to choose the department responsible. You
+                can still manage categories and existing services.
+              </p>
+            ) : !readyForService ? (
+              <p className="muted">
+                First add an active category, an active department, and an SLA policy. Then you can
+                create a service here.
+              </p>
+            ) : (
+              <>
+                <CreateForm
+                  submitLabel="Add service"
+                  onError={reportError}
+                  fields={() => [
+                    { name: 'name', label: 'Name', placeholder: 'Extra Blanket' },
+                    {
+                      name: 'categoryId',
+                      label: 'Category',
+                      options: options(catalog.categories.filter((item) => item.active)),
+                    },
+                    {
+                      name: 'departmentId',
+                      label: 'Department that responds',
+                      options: options(catalog.departments.filter((item) => item.active)),
+                    },
+                    {
+                      name: 'priority',
+                      label: 'Priority',
+                      options: priorities.map((value) => ({ value, label: value.toLowerCase() })),
+                    },
+                    {
+                      name: 'slaPolicyId',
+                      label: 'SLA policy',
+                      options: catalog.slaPolicies.map((policy) => ({
+                        value: policy.id,
+                        label: `${policy.name} (${policy.acceptMinutes} / ${policy.completeMinutes} min)`,
+                      })),
+                    },
+                    {
+                      name: 'escalationPolicyId',
+                      label: 'Escalation policy',
+                      optional: true,
+                      options: options(catalog.escalationPolicies),
+                    },
+                  ]}
+                  onCreate={async (values) => {
+                    await staffApi.createService(token, {
+                      name: values.name ?? '',
+                      categoryId: values.categoryId ?? '',
+                      departmentId: values.departmentId ?? '',
+                      slaPolicyId: values.slaPolicyId ?? '',
+                      priority: priorities.find((value) => value === values.priority) ?? 'NORMAL',
+                      ...(values.escalationPolicyId
+                        ? { escalationPolicyId: values.escalationPolicyId }
+                        : {}),
+                    });
+                    reload();
+                    reportSuccess(`${values.name} was added to the catalog.`);
+                  }}
+                />
+                <p className="muted small">
+                  “Urgent” means operationally urgent, never a medical emergency.
+                </p>
+              </>
+            )}
           </section>
         )}
       </div>

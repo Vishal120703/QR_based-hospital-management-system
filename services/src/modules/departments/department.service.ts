@@ -63,27 +63,30 @@ export class DepartmentService {
 
   public update(context: StaffContext, id: string, input: DepartmentInput, requestId: string) {
     const where = { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } };
-    return this.database.$transaction(async (transaction) => {
-      const before = await transaction.department.findUnique({ where });
-      if (!before) {
-        throw new NotFoundError();
-      }
-      const after = await transaction.department.update({
-        where,
-        data: {
-          ...(input.code !== undefined ? { code: input.code } : {}),
-          ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.active !== undefined ? { active: input.active } : {}),
-        },
-      });
-      await recordStaffAudit(transaction, context, requestId, {
-        action: 'department.update',
-        targetType: 'Department',
-        targetId: id,
-        metadata: { before: snapshot(before), after: snapshot(after) },
-      });
-      return after;
-    });
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = await transaction.department.findUnique({ where });
+        if (!before) {
+          throw new NotFoundError();
+        }
+        const after = await transaction.department.update({
+          where,
+          data: {
+            ...(input.code !== undefined ? { code: input.code } : {}),
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.active !== undefined ? { active: input.active } : {}),
+          },
+        });
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'department.update',
+          targetType: 'Department',
+          targetId: id,
+          metadata: { before: snapshot(before), after: snapshot(after) },
+        });
+        return after;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {
