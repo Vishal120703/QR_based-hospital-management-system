@@ -1,38 +1,17 @@
-import {
-  type Prisma,
-  type PrismaClient,
-  type RequestPriority,
-  type ServiceItem,
-} from '@prisma/client';
+import { type Prisma, type PrismaClient, type ServiceItem } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
-import { type GuestContext } from '../bed-sessions/guest-session.service.js';
+import { recordStaffAudit } from '../audit/index.js';
+import { type StaffContext } from '../auth/index.js';
+import { type GuestContext } from '../bed-sessions/index.js';
+import {
+  type CreateServiceItemInput,
+  type ServiceItemFilter,
+  type UpdateServiceItemInput,
+} from './catalog.schemas.js';
+import { ServiceItemRepository } from './service-item.repository.js';
 
-export interface ServiceItemInput {
-  readonly categoryId?: string | undefined;
-  readonly departmentId?: string | undefined;
-  readonly slaPolicyId?: string | undefined;
-  readonly escalationPolicyId?: string | null | undefined;
-  readonly name?: string | undefined;
-  readonly description?: string | null | undefined;
-  readonly priority?: RequestPriority | undefined;
-  readonly sortOrder?: number | undefined;
-  readonly active?: boolean | undefined;
-}
-
-export type ServiceItemCreate = ServiceItemInput & {
-  readonly categoryId: string;
-  readonly departmentId: string;
-  readonly slaPolicyId: string;
-  readonly name: string;
-};
-
-export interface ServiceItemFilter {
-  readonly categoryId?: string | undefined;
-  readonly departmentId?: string | undefined;
-  readonly active?: boolean | undefined;
-}
+type ServiceItemInput = UpdateServiceItemInput;
+const repository = new ServiceItemRepository();
 
 const snapshot = (row: ServiceItem) => ({
   categoryId: row.categoryId,
@@ -63,43 +42,34 @@ function changes(input: ServiceItemInput) {
 }
 
 export class ServiceItemService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly services = repository,
+  ) {}
 
   public list(context: StaffContext, filter: ServiceItemFilter) {
-    return this.database.serviceItem.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.categoryId !== undefined ? { categoryId: filter.categoryId } : {}),
-        ...(filter.departmentId !== undefined ? { departmentId: filter.departmentId } : {}),
-        ...(filter.active !== undefined ? { active: filter.active } : {}),
-      },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-    });
+    return this.services.list(this.database, context.tenant.hospitalId, filter);
   }
 
   public async get(context: StaffContext, id: string) {
-    const item = await this.database.serviceItem.findUnique({
-      where: { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } },
-    });
+    const item = await this.services.findById(this.database, context.tenant.hospitalId, id);
     if (!item) {
       throw new NotFoundError();
     }
     return item;
   }
 
-  public create(context: StaffContext, input: ServiceItemCreate, requestId: string) {
+  public create(context: StaffContext, input: CreateServiceItemInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
       await requireReferences(transaction, hospitalId, input);
-      const item = await transaction.serviceItem.create({
-        data: {
-          hospitalId,
-          ...changes(input),
-          categoryId: input.categoryId,
-          departmentId: input.departmentId,
-          slaPolicyId: input.slaPolicyId,
-          name: input.name,
-        },
+      const item = await this.services.create(transaction, {
+        hospitalId,
+        ...changes(input),
+        categoryId: input.categoryId,
+        departmentId: input.departmentId,
+        slaPolicyId: input.slaPolicyId,
+        name: input.name,
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'service.create',
@@ -114,15 +84,14 @@ export class ServiceItemService {
   // Edits affect only future requests: each request snapshots its service.
   public update(context: StaffContext, id: string, input: ServiceItemInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
-    const where = { hospitalId_id: { hospitalId, id } };
     return this.database.$transaction(
       async (transaction) => {
-        const before = await transaction.serviceItem.findUnique({ where });
+        const before = await this.services.findById(transaction, hospitalId, id);
         if (!before) {
           throw new NotFoundError();
         }
         await requireReferences(transaction, hospitalId, input);
-        const after = await transaction.serviceItem.update({ where, data: changes(input) });
+        const after = await this.services.update(transaction, hospitalId, id, changes(input));
         await recordStaffAudit(transaction, context, requestId, {
           action: 'service.update',
           targetType: 'ServiceItem',
@@ -135,18 +104,16 @@ export class ServiceItemService {
     );
   }
 
-  public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {
+  public async remove(context: StaffContext, id: string, requestId: string): Promise<void> {
     const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(async (transaction) => {
-      const before = await transaction.serviceItem.findUnique({
-        where: { hospitalId_id: { hospitalId, id } },
-      });
+      const before = await this.services.findById(transaction, hospitalId, id);
       if (!before) {
         throw new NotFoundError();
       }
       // Requests (a later phase) reference services through RESTRICT foreign
       // keys, so a used service is protected from deletion automatically.
-      await transaction.serviceItem.delete({ where: { hospitalId_id: { hospitalId, id } } });
+      await this.services.delete(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'service.delete',
         targetType: 'ServiceItem',
@@ -159,21 +126,7 @@ export class ServiceItemService {
   // What a patient sees: active services whose category and department are
   // active, grouped by category. Internal routing and SLA details are omitted.
   public async catalogFor(guest: GuestContext) {
-    const categories = await this.database.serviceCategory.findMany({
-      where: { hospitalId: guest.hospitalId, active: true },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        emergencyNotice: true,
-        items: {
-          where: { active: true, department: { active: true } },
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-          select: { id: true, name: true, description: true },
-        },
-      },
-    });
+    const categories = await this.services.findPatientCatalog(this.database, guest.hospitalId);
     return categories
       .filter((category) => category.items.length > 0)
       .map(({ items, ...category }) => ({ ...category, services: items }));
@@ -186,27 +139,26 @@ async function requireReferences(
   hospitalId: string,
   input: ServiceItemInput,
 ): Promise<void> {
-  const key = (id: string) => ({ hospitalId_id: { hospitalId, id } });
   if (input.categoryId !== undefined) {
-    const category = await transaction.serviceCategory.findUnique({
-      where: key(input.categoryId),
-    });
-    requireActive(category, 'category');
+    requireActive(
+      await repository.findCategory(transaction, hospitalId, input.categoryId),
+      'category',
+    );
   }
   if (input.departmentId !== undefined) {
-    const department = await transaction.department.findUnique({
-      where: key(input.departmentId),
-    });
-    requireActive(department, 'department');
+    requireActive(
+      await repository.findDepartment(transaction, hospitalId, input.departmentId),
+      'department',
+    );
   }
   if (input.slaPolicyId !== undefined) {
-    if (!(await transaction.slaPolicy.findUnique({ where: key(input.slaPolicyId) }))) {
+    if (!(await repository.findSlaPolicy(transaction, hospitalId, input.slaPolicyId))) {
       throw new NotFoundError('The referenced SLA policy was not found.');
     }
   }
   if (input.escalationPolicyId) {
     if (
-      !(await transaction.escalationPolicy.findUnique({ where: key(input.escalationPolicyId) }))
+      !(await repository.findEscalationPolicy(transaction, hospitalId, input.escalationPolicyId))
     ) {
       throw new NotFoundError('The referenced escalation policy was not found.');
     }

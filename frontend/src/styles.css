@@ -677,12 +677,6 @@ button.link:hover:not(:disabled) {
   margin-top: 0;
 }
 
-.location-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-  gap: 1rem;
-}
-
 .count {
   color: var(--muted);
   font-weight: 400;
@@ -750,15 +744,6 @@ tr:last-child td {
   border-bottom: none;
 }
 
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgb(15 23 32 / 45%);
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-}
-
 .dialog {
   width: min(100%, 420px);
   max-height: calc(100dvh - 2rem);
@@ -774,33 +759,6 @@ body:has(dialog[open]) {
 }
 .dialog > .dialog-header {
   margin-bottom: 1rem;
-}
-
-.print-area {
-  text-align: center;
-  padding: 0.5rem 0 1rem;
-}
-
-.print-area h2 {
-  margin: 0.75rem 0 0.1rem;
-  font-size: 1.3rem;
-}
-
-.print-area p {
-  margin: 0.25rem 0;
-}
-
-.print-sheet {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1rem;
-}
-
-.print-label {
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  break-inside: avoid;
 }
 
 .request-card-head {
@@ -1243,11 +1201,6 @@ button.tree-item.inactive .tree-name {
 }
 .topbar-user {
   align-items: center;
-}
-.patient-logo {
-  height: 40px;
-  max-width: 200px;
-  object-fit: contain;
 }
 .profile-grid {
   display: grid;
@@ -2264,76 +2217,10 @@ body:has(.qr-entry) {
   font-size: 0.9rem;
 }
 
-.patient-language {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.patient-language select {
-  width: auto;
-  padding: 0.35rem 0.5rem;
-  color: var(--text);
-}
-
-.patient-section-help {
-  margin: 0.25rem 0 0;
-}
-
-.patient-section-heading,
-.patient-request-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: start;
-  gap: 0.75rem;
-}
-
-.patient-section-heading button {
-  flex-shrink: 0;
-}
-
 .request-list {
   display: grid;
   gap: 0.7rem;
   margin-top: 0.8rem;
-}
-
-.patient-request-card:target {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.patient-request-title h3 {
-  font-size: 1rem;
-  margin: 0;
-}
-
-.patient-request-title .badge {
-  margin: 0;
-  white-space: nowrap;
-}
-
-.patient-request-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem 1.4rem;
-  margin: 0.75rem 0 0;
-  font-size: 0.85rem;
-}
-
-.patient-request-meta dt {
-  color: var(--muted);
-}
-
-.patient-request-meta dd {
-  margin: 0.1rem 0 0;
-  overflow-wrap: anywhere;
-}
-
-.patient-cancel-area {
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
 }
 
 .patient-cancel-confirm {
@@ -2356,10 +2243,6 @@ body:has(.qr-entry) {
 
 .patient .card .patient-access-help {
   margin-top: 0.75rem;
-}
-
-.bed-card {
-  border-left: 4px solid var(--primary);
 }
 
 .split {
@@ -2500,10 +2383,6 @@ input.minutes {
   width: 5.5rem;
 }
 
-.save-version {
-  margin-left: 0.5rem;
-}
-
 tr.history td {
   background: #f8fafb;
 }
@@ -2533,46 +2412,6 @@ tr.history td {
 
 .section-title {
   margin: 0.5rem 0 0.1rem;
-}
-
-.service-group .emergency {
-  margin: 0.25rem 0 0.75rem;
-  font-size: 0.9rem;
-}
-
-.service-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
-}
-
-.service-tile {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.9rem 0.75rem;
-  text-align: center;
-  font-weight: 600;
-  background: #f8fbfa;
-}
-.service-tile p {
-  margin-top: 0.4rem !important;
-  font-weight: 400;
-}
-
-.service-tile button,
-.service-tile .button {
-  margin-top: 0.75rem;
-  width: 100%;
-}
-
-@media (max-width: 480px) {
-  .service-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .patient-section-heading {
-    flex-wrap: wrap;
-  }
 }
 
 @media (max-width: 760px) {
@@ -2753,10 +2592,6 @@ tr.history td {
   .dialog {
     width: calc(100% - 1rem);
   }
-  .print-area svg {
-    max-width: 100%;
-    height: auto;
-  }
 }
 
 @media print {
@@ -2782,27 +2617,6 @@ tr.history td {
     border: none;
     box-shadow: none;
     overflow: visible;
-  }
-  body * {
-    visibility: hidden;
-  }
-
-  .print-area,
-  .print-area * {
-    visibility: visible;
-  }
-
-  .print-area {
-    position: static;
-  }
-
-  .print-sheet {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .print-label {
-    border-color: #999;
-    page-break-inside: avoid;
   }
 
   .no-print {
@@ -3555,4 +3369,371 @@ div.stat.stat-warning {
 }
 .audit-table td:first-child {
   white-space: nowrap;
+}
+
+/* "Powered by Healio Healthtech": small and quiet, never competing with the hospital's own brand. */
+.powered-by {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+.powered-by strong {
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+.login .powered-by {
+  margin-top: 0.25rem;
+}
+.sidebar .powered-by {
+  margin: 0.9rem 0 0;
+  padding: 0 0.8rem;
+  text-align: left;
+}
+
+/* =========================================================================
+   Design refresh: typeface, tokens, and shared components.
+   Kept last so it refines the rules above without reordering them.
+   ========================================================================= */
+
+:root {
+  --bg: #f3f6f5;
+  --surface-muted: #f7faf9;
+  --text: #13202b;
+  --muted: #5a6876;
+  --border: #e0e6ea;
+  --border-strong: #c9d3da;
+  --primary-soft: #e7f3f0;
+  --ring: rgb(15 118 110 / 26%);
+  --shadow: 0 1px 2px rgb(16 24 40 / 4%), 0 1px 3px rgb(16 24 40 / 5%);
+  --shadow-lg: 0 10px 30px rgb(16 24 40 / 14%);
+  font-family:
+    'Inter Variable',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-feature-settings: 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+h2 {
+  letter-spacing: -0.01em;
+}
+
+/* Counters keep label, number, and caption at the top, so a card without a
+   caption lines up with its neighbours. */
+a.stat,
+div.stat {
+  align-content: start;
+}
+
+/* Numbers line up in counters and tables. */
+a.stat strong,
+div.stat strong,
+.stat-row dd,
+td {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus is always visible, never a hard black outline. */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+button:focus-visible,
+a:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+input:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-strong);
+}
+input::placeholder {
+  color: #94a1ad;
+}
+button,
+.button {
+  font-weight: 600;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+button.link {
+  font-weight: 500;
+}
+
+/* Cards */
+.card {
+  border-color: var(--border);
+}
+a.card:hover,
+a.stat:hover,
+a.shortcut:hover {
+  box-shadow: var(--shadow-lg);
+}
+a.stat,
+a.shortcut {
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+a.stat:hover,
+a.shortcut:hover {
+  transform: translateY(-1px);
+}
+
+/* Badges read as sentence case ("Active", "On duty"). */
+.badge::first-letter {
+  text-transform: uppercase;
+}
+
+/* Tables */
+.table-wrap {
+  box-shadow: var(--shadow);
+}
+th {
+  background: var(--surface-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+tbody tr {
+  transition: background-color 0.12s ease;
+}
+tbody tr:hover td {
+  background: #fafcfb;
+}
+
+/* Counter grids never leave a lonely card on the last row. */
+.stat-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.stat-grid.report-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.shortcut-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1440px) {
+  .stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1100px) {
+  .shortcut-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .stat-grid,
+  .stat-grid.report-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 420px) {
+  .stat-grid,
+  .shortcut-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Reports: the person column stays readable and in view while scrolling. */
+.report-table th:first-child,
+.report-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 210px;
+  max-width: 280px;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--border);
+}
+.report-table th:first-child {
+  background: var(--surface-muted);
+}
+.report-table td:first-child .muted.small {
+  margin-top: 0.2rem;
+  line-height: 1.35;
+}
+.report-table td,
+.report-table th {
+  white-space: nowrap;
+}
+.report-table td:first-child,
+.audit-table td {
+  white-space: normal;
+}
+.audit-table td:first-child {
+  min-width: 150px;
+}
+
+/* Location tree: names wrap instead of being cut off; details give way. */
+.layout-explorer {
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+}
+.tree-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tree-detail {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Staff workspace shell */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+.sidebar .sidebar-footer .powered-by {
+  padding: 0 0.25rem;
+}
+.main-powered {
+  display: none;
+}
+.topbar-identity strong {
+  max-width: 320px;
+}
+
+/* Results of an action stay in view at the top while scrolling. */
+.notice-stack {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+.notice-stack .notice {
+  margin: 0;
+  box-shadow: var(--shadow-lg);
+  align-items: center;
+}
+.notice-success {
+  border: 1px solid #bfe5cf;
+}
+.notice-error {
+  border: 1px solid #f5c2bc;
+}
+
+/* Tables marked .responsive-table become one card per row on phones; each
+   cell shows its column name from data-label. */
+@media (max-width: 760px) {
+  .responsive-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .table-wrap:has(> .responsive-table) {
+    background: none;
+    border: none;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .responsive-table,
+  .responsive-table tbody {
+    display: block;
+  }
+  .responsive-table tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.1rem 0.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+  }
+  .responsive-table td {
+    display: block;
+    border: none;
+    padding: 0.45rem 0.5rem;
+  }
+  .responsive-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+  .responsive-table td:first-child,
+  .responsive-table td[colspan],
+  .responsive-table td:last-child {
+    grid-column: 1 / -1;
+  }
+  .responsive-table td:first-child::before,
+  .responsive-table td[data-label='Actions']::before {
+    display: none;
+  }
+  tbody tr:hover td {
+    background: none;
+  }
+
+  /* On phones the mark sits at the end of the page, not under the menu. */
+  .sidebar-footer {
+    display: none;
+  }
+  .main-powered {
+    display: block;
+    margin: 2rem 0 0.5rem;
+  }
+}
+
+.route-loading {
+  padding: 2rem 1.25rem;
+  text-align: center;
+}
+
+/* Super admin client and hospital headers on phones: smaller title, badge
+   under the name instead of floating beside a three-line heading. */
+@media (max-width: 600px) {
+  h1 {
+    font-size: 1.35rem;
+  }
+  .platform-hospital-title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .platform-hospital-title > div {
+    flex: 1 1 calc(100% - 44px - 0.9rem);
+    min-width: 0;
+  }
+  .platform-hospital-title > .badge {
+    margin: -0.4rem 0 0 calc(44px + 0.9rem);
+  }
 }

@@ -1,22 +1,9 @@
 import { type PrismaClient, type Shift } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
-
-const listLimit = 200;
-
-export interface ShiftFilter {
-  readonly membershipId?: string | undefined;
-  readonly from?: Date | undefined;
-  readonly to?: Date | undefined;
-}
-
-export interface ShiftInput {
-  readonly membershipId: string;
-  readonly departmentId?: string | undefined;
-  readonly startsAt: Date;
-  readonly endsAt: Date;
-}
+import { recordStaffAudit } from '../audit/index.js';
+import { type StaffContext } from '../auth/index.js';
+import { ShiftRepository } from './shift.repository.js';
+import { type CreateShiftInput, type ShiftFilter } from './shift.schemas.js';
 
 const snapshot = (shift: Shift) => ({
   membershipId: shift.membershipId,
@@ -27,31 +14,25 @@ const snapshot = (shift: Shift) => ({
 
 // Scheduled work periods. Informational in V1: eligibility uses duty status.
 export class ShiftService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly shifts = new ShiftRepository(),
+  ) {}
 
-  // Shifts overlapping [from, to), earliest first, at most 200.
   public list(context: StaffContext, filter: ShiftFilter) {
-    return this.database.shift.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.membershipId !== undefined ? { membershipId: filter.membershipId } : {}),
-        ...(filter.from !== undefined ? { endsAt: { gt: filter.from } } : {}),
-        ...(filter.to !== undefined ? { startsAt: { lt: filter.to } } : {}),
-      },
-      orderBy: { startsAt: 'asc' },
-      take: listLimit,
-    });
+    return this.shifts.list(this.database, context.tenant.hospitalId, filter);
   }
 
-  public create(context: StaffContext, input: ShiftInput, requestId: string) {
+  public create(context: StaffContext, input: CreateShiftInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     // Serializable so two overlapping shifts for one person cannot both commit.
     return this.database.$transaction(
       async (transaction) => {
-        const member = await transaction.hospitalMembership.findUnique({
-          where: { hospitalId_id: { hospitalId, id: input.membershipId } },
-          select: { id: true, departments: { select: { departmentId: true } } },
-        });
+        const member = await this.shifts.findMemberDepartments(
+          transaction,
+          hospitalId,
+          input.membershipId,
+        );
         if (!member) {
           throw new NotFoundError('The referenced staff member was not found.');
         }
@@ -61,26 +42,22 @@ export class ShiftService {
         ) {
           throw new ConflictError('The staff member does not belong to that department.');
         }
-        const overlapping = await transaction.shift.count({
-          where: {
-            hospitalId,
-            membershipId: input.membershipId,
-            startsAt: { lt: input.endsAt },
-            endsAt: { gt: input.startsAt },
-          },
-        });
+        const overlapping = await this.shifts.countOverlapping(
+          transaction,
+          hospitalId,
+          input.membershipId,
+          input,
+        );
         if (overlapping > 0) {
           throw new ConflictError('This shift overlaps another shift for the same staff member.');
         }
-        const shift = await transaction.shift.create({
-          data: {
-            hospitalId,
-            membershipId: input.membershipId,
-            departmentId: input.departmentId ?? null,
-            startsAt: input.startsAt,
-            endsAt: input.endsAt,
-            createdByMembershipId: context.membershipId,
-          },
+        const shift = await this.shifts.create(transaction, {
+          hospitalId,
+          membershipId: input.membershipId,
+          departmentId: input.departmentId ?? null,
+          startsAt: input.startsAt,
+          endsAt: input.endsAt,
+          createdByMembershipId: context.membershipId,
         });
         await recordStaffAudit(transaction, context, requestId, {
           action: 'shift.create',
@@ -94,16 +71,14 @@ export class ShiftService {
     );
   }
 
-  public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {
+  public async remove(context: StaffContext, id: string, requestId: string): Promise<void> {
     const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(async (transaction) => {
-      const shift = await transaction.shift.findUnique({
-        where: { hospitalId_id: { hospitalId, id } },
-      });
+      const shift = await this.shifts.findById(transaction, hospitalId, id);
       if (!shift) {
         throw new NotFoundError();
       }
-      await transaction.shift.delete({ where: { hospitalId_id: { hospitalId, id } } });
+      await this.shifts.delete(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'shift.delete',
         targetType: 'Shift',

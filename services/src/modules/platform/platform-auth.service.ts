@@ -1,12 +1,13 @@
 import { type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
-import { verifyPasswordOrDummy } from '../auth/password.js';
+import { verifyPasswordOrDummy } from '../auth/index.js';
+import { PlatformAuthRepository } from './platform-auth.repository.js';
 
 const sessionDurationMs = 8 * 60 * 60 * 1000;
 
-// A SaaS platform operator. Platform sessions are separate from hospital staff
-// sessions: one never works on the other's routes.
+// A SaaS platform operator (super admin). Platform sessions are separate from
+// hospital staff sessions: one never works on the other's routes.
 export interface PlatformContext {
   readonly userId: string;
   readonly email: string;
@@ -15,16 +16,16 @@ export interface PlatformContext {
 }
 
 export class PlatformAuthService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly auth = new PlatformAuthRepository(),
+  ) {}
 
   public async login(input: {
     email: string;
     password: string;
   }): Promise<{ token: string; expiresAt: Date }> {
-    const user = await this.database.user.findUnique({
-      where: { email: input.email.trim().toLowerCase() },
-      include: { platformAdmin: true },
-    });
+    const user = await this.auth.findUserWithAdmin(this.database, input.email.trim().toLowerCase());
     // Same response for unknown email, wrong password, or a non-operator.
     const passwordOk = await verifyPasswordOrDummy(input.password, user?.passwordHash);
     if (!user || !passwordOk || !user.platformAdmin || user.status !== 'ACTIVE') {
@@ -32,17 +33,16 @@ export class PlatformAuthService {
     }
     const token = createOpaqueToken();
     const expiresAt = new Date(Date.now() + sessionDurationMs);
-    await this.database.platformSession.create({
-      data: { userId: user.id, tokenHash: hashOpaqueToken(token), expiresAt },
+    await this.auth.createSession(this.database, {
+      userId: user.id,
+      tokenHash: hashOpaqueToken(token),
+      expiresAt,
     });
     return { token, expiresAt };
   }
 
   public async authenticate(token: string): Promise<PlatformContext> {
-    const session = await this.database.platformSession.findUnique({
-      where: { tokenHash: hashOpaqueToken(token) },
-      include: { admin: { include: { user: true } } },
-    });
+    const session = await this.auth.findSessionByTokenHash(this.database, hashOpaqueToken(token));
     if (
       !session ||
       session.revokedAt ||
@@ -60,9 +60,6 @@ export class PlatformAuthService {
   }
 
   public async logout(context: PlatformContext): Promise<void> {
-    await this.database.platformSession.updateMany({
-      where: { id: context.sessionId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    await this.auth.revokeSession(this.database, context.sessionId);
   }
 }

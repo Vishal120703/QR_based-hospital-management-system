@@ -1,5 +1,8 @@
-import { type Prisma, type PrismaClient } from '@prisma/client';
 import { NotFoundError } from '../../common/errors/app-error.js';
+import { type Db } from '../../database/client.js';
+import { StaffRepository } from './staff.repository.js';
+
+const repository = new StaffRepository();
 
 export interface EligibleStaff {
   readonly membershipId: string;
@@ -15,21 +18,15 @@ export interface EligibleStaff {
 //   4. currently ON_DUTY
 // Scheduled shifts do not affect eligibility in V1.
 export async function findEligibleStaff(
-  client: PrismaClient | Prisma.TransactionClient,
+  client: Db,
   hospitalId: string,
   query: { bedId: string; departmentId: string },
 ): Promise<EligibleStaff[]> {
-  const bed = await client.bed.findUnique({
-    where: { hospitalId_id: { hospitalId, id: query.bedId } },
-    select: { wardId: true, ward: { select: { floorId: true } } },
-  });
+  const bed = await repository.findBedPlace(client, hospitalId, query.bedId);
   if (!bed) {
     throw new NotFoundError('The referenced bed was not found.');
   }
-  const department = await client.department.findUnique({
-    where: { hospitalId_id: { hospitalId, id: query.departmentId } },
-    select: { active: true },
-  });
+  const department = await repository.findDepartment(client, hospitalId, query.departmentId);
   if (!department) {
     throw new NotFoundError('The referenced department was not found.');
   }
@@ -37,25 +34,10 @@ export async function findEligibleStaff(
     return [];
   }
 
-  const members = await client.hospitalMembership.findMany({
-    where: {
-      hospitalId,
-      status: 'ACTIVE',
-      dutyStatus: 'ON_DUTY',
-      user: { status: 'ACTIVE' },
-      departments: { some: { departmentId: query.departmentId } },
-      locationScopes: {
-        some: {
-          OR: [
-            { scopeType: 'HOSPITAL' },
-            { scopeType: 'FLOOR', floorId: bed.ward.floorId },
-            { scopeType: 'WARD', wardId: bed.wardId },
-          ],
-        },
-      },
-    },
-    select: { id: true, dutyChangedAt: true, user: { select: { displayName: true } } },
-    orderBy: { user: { displayName: 'asc' } },
+  const members = await repository.findEligibleMembers(client, hospitalId, {
+    departmentId: query.departmentId,
+    wardId: bed.wardId,
+    floorId: bed.ward.floorId,
   });
   return members.map((member) => ({
     membershipId: member.id,

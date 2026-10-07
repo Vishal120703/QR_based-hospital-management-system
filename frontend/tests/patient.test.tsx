@@ -11,9 +11,9 @@ import {
   type PublicCategory,
   type PublicRequest,
 } from '../src/api';
-import { PatientPage } from '../src/pages/PatientPage';
-import { ScanPage } from '../src/pages/ScanPage';
-import { LoginPage } from '../src/pages/LoginPage';
+import { PatientPage } from '../src/features/patient/PatientPage';
+import { ScanPage } from '../src/features/patient/ScanPage';
+import { LoginPage } from '../src/features/auth/LoginPage';
 
 const location: GuestLocation = {
   hospitalName: 'Test Hospital',

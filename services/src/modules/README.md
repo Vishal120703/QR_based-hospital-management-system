@@ -1,27 +1,30 @@
-# Backend module boundaries
+# Backend modules
 
-CARE QR uses a modular monolith. A module is created only when its planned phase begins. Keep each module flat until its size requires more structure:
+CARE QR is one deployable backend with domain modules. The [architecture guide](../../../docs/architecture/README.md) explains the system and the [module catalog](../../../docs/architecture/modules.md) names each module's responsibility.
+
+Each module is flat and contains only files it needs:
 
 ```text
-<module>/
-├── <module>.service.ts   Use cases and persistence operations
-├── <module>.routes.ts    HTTP validation and routing
-└── <helper>.ts           Focused domain helpers, only when used
+modules/departments/
+├── index.ts                    Public interface for the container and other modules
+├── department.routes.ts        Paths and permission guards
+├── department.controller.ts    HTTP input/output and Zod parsing
+├── department.schemas.ts       Input schemas and inferred types
+├── department.service.ts       Business rules and transaction boundaries
+└── department.repository.ts    Prisma queries
 ```
 
-Planned domain modules are `auth`, `tenancy`, `users`, `roles`, `hospitals`, `locations`, `qr`, `bed-sessions`, `departments`, `staff`, `catalog`, `sla`, `routing`, `requests`, `assignments`, `notifications`, `feedback`, `audit`, and `analytics`.
+Larger modules have multiple entities (for example `staff.*` and `shift.*`) or small pure helpers. `reports` is read-only, while `audit` records changes in the caller's transaction. Do not create empty placeholder files or folders merely to match a template.
 
-`locations` owns the whole Building → Floor → Ward → Room → Bed hierarchy, including beds, because its invariants span levels (see [`docs/architecture/location-hierarchy.md`](../../docs/architecture/location-hierarchy.md)). `departments` owns departments. `staff` owns staff memberships after bootstrap (creation, status, duty), their departments, coverage, and shifts, and the eligibility rule `findEligibleStaff` (see [`docs/architecture/staff-and-departments.md`](../../docs/architecture/staff-and-departments.md)). `catalog` owns service categories and items, the patient catalog, and `snapshotService`; `sla` owns versioned SLA policies and escalation policies (see [`docs/architecture/service-catalog-and-sla.md`](../../docs/architecture/service-catalog-and-sla.md)). `qr` owns QR codes and their public resolution. `bed-sessions` owns BedSessions and the GuestSessions created from them (see [`docs/architecture/qr-and-sessions.md`](../../docs/architecture/qr-and-sessions.md)). `requests` owns ServiceRequest creation, state transitions, and RequestEvent history; it consumes the catalog snapshot and staff eligibility interfaces without writing their tables (see [`docs/architecture/request-state-machine.md`](../../docs/architecture/request-state-machine.md)). `audit` currently provides `recordStaffAudit`, which must run inside the transaction of the change it records.
+## Boundary rules
 
-Rules:
+- A route declares an HTTP method, URL, and permission guard; a controller parses transport input and calls a service.
+- Services own business decisions, tenant/scope checks, and transactions. Repositories own Prisma queries and accept the shared client or an existing transaction.
+- A module imports another module only through its `index.ts`. Repositories stay private: `index.ts` never exports one, so cross-module reads and writes use the owner module's exported service or helper.
+- Input rules shared by several modules (codes, names, emails, passwords, date ranges) come from `src/common/validation.ts`; validation errors are turned into plain messages by `src/common/validation-errors.ts`.
+- Hospital-owned records are selected with server-derived `hospitalId`; never accept it as authority from the browser.
+- Administrative routes mount under `/admin` after staff authentication. Guest routes mount under `/public` and apply guest authentication only where needed.
+- `src/container.ts` creates services/controllers and wires the route groups. `src/app.ts` owns shared HTTP middleware.
+- Service ESLint rules enforce import and repository boundaries; run lint, types, unit tests, integration tests with a disposable database, and build after changing a module.
 
-- Controllers call application use cases and never Prisma directly.
-- A module owns its persistence model and business invariants. Another module may read its tables (for validation or display) but writes only through the owner's exported functions, for example `occupyBed` in `locations`.
-- Cross-module use goes through the target module's exported application interface; functions that must join the caller's transaction accept a `Prisma.TransactionClient`.
-- Asynchronous side effects use typed events emitted only after the source transaction commits.
-- Shared code is technical or contract-level code, not displaced domain logic.
-- `hospitalId` is passed through trusted tenant context for every tenant-owned operation.
-- Administrative routers are mounted under `/admin`, which authenticates the staff session once. Routers declare paths relative to `/admin` and check permissions per route.
-- Patient routers are mounted under `/public`. Guest authentication is applied per route, never with `router.use`, so it cannot leak onto other routes.
-- Every handler validates its params, query, and body with strict Zod schemas. Commands (`POST`, `PATCH`, `DELETE`) never accept query parameters; this is also enforced globally.
-- A module may be extracted later, but no in-process module behaves like a network service in V1.
+See [how to add a feature](../../../docs/adding-a-feature.md) for a concrete checklist. Planned future concerns (automatic routing, notifications, feedback) do not get modules until implemented.

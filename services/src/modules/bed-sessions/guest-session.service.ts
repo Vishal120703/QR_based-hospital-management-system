@@ -1,8 +1,9 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
-import { hospitalAccessSelect, hospitalIsOpen } from '../hospitals/hospital-access.js';
-import { logoUrl } from '../hospitals/logo.js';
+import { hospitalIsOpen, logoUrl } from '../hospitals/index.js';
+import { BedSessionRepository } from './bed-session.repository.js';
+import { GuestSessionRepository } from './guest-session.repository.js';
 
 const activityWriteIntervalMs = 60_000;
 
@@ -26,10 +27,13 @@ export interface GuestLocation {
   readonly expiresAt: Date;
 }
 
+// Patient access by QR: issuing, checking, and ending guest sessions.
 export class GuestSessionService {
   public constructor(
     private readonly database: PrismaClient,
     private readonly ttlMinutes: number,
+    private readonly guests = new GuestSessionRepository(),
+    private readonly bedSessions = new BedSessionRepository(),
   ) {}
 
   // Returns null when the bed has no active BedSession.
@@ -38,33 +42,23 @@ export class GuestSessionService {
     hospitalId: string,
     bedId: string,
   ): Promise<{ token: string; context: GuestContext } | null> {
-    const bedSession = await transaction.bedSession.findFirst({
-      where: { hospitalId, bedId, status: 'ACTIVE' },
-    });
+    const bedSession = await this.bedSessions.findActiveForBed(transaction, hospitalId, bedId);
     if (!bedSession) {
       return null;
     }
     const token = createOpaqueToken();
-    const session = await transaction.guestSession.create({
-      data: {
-        hospitalId,
-        bedId,
-        bedSessionId: bedSession.id,
-        tokenHash: hashOpaqueToken(token),
-        expiresAt: new Date(Date.now() + this.ttlMinutes * 60_000),
-      },
+    const session = await this.guests.create(transaction, {
+      hospitalId,
+      bedId,
+      bedSessionId: bedSession.id,
+      tokenHash: hashOpaqueToken(token),
+      expiresAt: new Date(Date.now() + this.ttlMinutes * 60_000),
     });
     return { token, context: toContext(session) };
   }
 
   public async authenticate(token: string): Promise<GuestContext> {
-    const session = await this.database.guestSession.findUnique({
-      where: { tokenHash: hashOpaqueToken(token) },
-      include: {
-        bedSession: { select: { status: true } },
-        hospital: { select: hospitalAccessSelect },
-      },
-    });
+    const session = await this.guests.findByTokenHash(this.database, hashOpaqueToken(token));
     const now = new Date();
     // The BedSession check also covers a guest session created in the instant
     // before its BedSession closed.
@@ -78,30 +72,17 @@ export class GuestSessionService {
       throw new UnauthorizedError();
     }
     if (now.getTime() - session.lastActivityAt.getTime() > activityWriteIntervalMs) {
-      await this.database.guestSession.updateMany({
-        where: { id: session.id },
-        data: { lastActivityAt: now },
-      });
+      await this.guests.touch(this.database, session.id, now);
     }
     return toContext(session);
   }
 
   public async describe(guest: GuestContext): Promise<GuestLocation> {
-    const [hospital, bed] = await Promise.all([
-      this.database.hospital.findUniqueOrThrow({
-        where: { id: guest.hospitalId },
-        select: { name: true, logo: { select: { publicId: true } } },
-      }),
-      this.database.bed.findUniqueOrThrow({
-        where: { hospitalId_id: { hospitalId: guest.hospitalId, id: guest.bedId } },
-        select: {
-          code: true,
-          displayName: true,
-          room: { select: { name: true } },
-          ward: { select: { name: true, floor: { select: { name: true } } } },
-        },
-      }),
-    ]);
+    const [hospital, bed] = await this.guests.findPlace(
+      this.database,
+      guest.hospitalId,
+      guest.bedId,
+    );
     return {
       hospitalName: hospital.name,
       hospitalLogoUrl: logoUrl(hospital.logo?.publicId),
@@ -113,28 +94,20 @@ export class GuestSessionService {
     };
   }
 
-  public async revokeForBed(
+  public revokeForBed(
     transaction: Prisma.TransactionClient,
     hospitalId: string,
     bedId: string,
   ): Promise<number> {
-    const revoked = await transaction.guestSession.updateMany({
-      where: { hospitalId, bedId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    return revoked.count;
+    return this.guests.revokeForBed(transaction, hospitalId, bedId);
   }
 
-  public async revokeForBedSession(
+  public revokeForBedSession(
     transaction: Prisma.TransactionClient,
     hospitalId: string,
     bedSessionId: string,
   ): Promise<number> {
-    const revoked = await transaction.guestSession.updateMany({
-      where: { hospitalId, bedSessionId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    return revoked.count;
+    return this.guests.revokeForBedSession(transaction, hospitalId, bedSessionId);
   }
 }
 

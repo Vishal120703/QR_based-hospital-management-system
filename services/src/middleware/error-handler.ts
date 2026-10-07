@@ -1,5 +1,6 @@
 import { type ErrorRequestHandler } from 'express';
 import { AppError } from '../common/errors/app-error.js';
+import { describeValidationError } from '../common/validation-errors.js';
 import { z, ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
 
@@ -36,13 +37,11 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
     return;
   }
 
+  // Say which field is wrong and why, so the person can correct it.
   if (error instanceof ZodError) {
+    const { message, fields } = describeValidationError(error);
     response.status(400).json({
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid request input.',
-        requestId,
-      },
+      error: { code: 'VALIDATION_ERROR', message, fields, requestId },
     });
     return;
   }
@@ -56,7 +55,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
         code: 'CONFLICT',
         message:
           error.code === 'P2002'
-            ? 'A record with these values already exists.'
+            ? duplicateMessage(error.meta?.target)
             : 'The change conflicts with related records.',
         requestId,
       },
@@ -119,3 +118,22 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
     },
   });
 };
+
+// Names the value that is already taken, from the unique constraint's fields.
+function duplicateMessage(target: unknown): string {
+  const fields = Array.isArray(target)
+    ? target.filter((field): field is string => typeof field === 'string')
+    : typeof target === 'string'
+      ? [target]
+      : [];
+  if (fields.some((field) => field.includes('code'))) {
+    return 'This code is already in use here. Choose a different code.';
+  }
+  if (fields.some((field) => field.includes('email'))) {
+    return 'This email is already in use.';
+  }
+  if (fields.some((field) => field.includes('name'))) {
+    return 'This name is already in use. Choose a different name.';
+  }
+  return 'A record with these values already exists.';
+}

@@ -1,125 +1,27 @@
 import { Router } from 'express';
-import { z } from 'zod';
-import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { requirePermission } from '../../middleware/staff-auth.js';
-import type { RoleService } from './role.service.js';
+import { type RoleController } from './role.controller.js';
 
-const idSchema = z.object({ id: z.string().uuid() }).strict();
-const membershipIdSchema = z.object({ id: z.string().uuid() }).strict();
-const createRoleSchema = z
-  .object({
-    name: z.string().trim().min(2).max(100),
-    description: z.string().trim().max(500).nullable().optional(),
-    active: z.boolean().optional(),
-    scopeLevel: z.enum(['HOSPITAL', 'FLOOR', 'WARD', 'DEPARTMENT']).optional(),
-    permissionKeys: z.array(z.string().min(1)).max(100).optional(),
-  })
-  .strict();
-const updateRoleSchema = createRoleSchema
-  .partial()
-  .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required.' });
-// scopeId is the floor, ward, or department for roles at those levels.
-const assignRoleSchema = z
-  .object({ roleId: z.string().uuid(), scopeId: z.string().uuid().optional() })
-  .strict();
-const emptyBodySchema = z.object({}).strict();
-
-export function createRoleRouter(roles: RoleService): Router {
+// Mounted under /admin. Giving or taking away a role needs both staff and
+// role management.
+export function createRoleRoutes(controller: RoleController): Router {
   const router = Router();
+  const canRead = requirePermission('role.read');
+  const canManage = requirePermission('role.manage');
+  const canAssign = [requirePermission('staff.manage'), canManage];
 
-  router.get('/roles', requirePermission('role.read'), async (request, response) => {
-    const context = request.staff;
-    if (!context) throw new UnauthorizedError();
-    z.object({}).strict().parse(request.query);
-    response.status(200).json({ roles: await roles.list(context) });
-  });
+  router.get('/roles', canRead, controller.list);
+  router.get('/roles/:id', canRead, controller.get);
+  router.post('/roles', canManage, controller.create);
+  router.patch('/roles/:id', canManage, controller.update);
+  router.delete('/roles/:id', canManage, controller.remove);
 
-  router.get('/roles/:id', requirePermission('role.read'), async (request, response) => {
-    const context = request.staff;
-    if (!context) throw new UnauthorizedError();
-    const { id } = idSchema.parse(request.params);
-    z.object({}).strict().parse(request.query);
-    response.status(200).json({ role: await roles.get(context, id) });
-  });
-
-  router.post('/roles', requirePermission('role.manage'), async (request, response) => {
-    const context = request.staff;
-    if (!context) throw new UnauthorizedError();
-    const input = createRoleSchema.parse(request.body);
-    const requestId = String(response.getHeader('x-request-id'));
-    response.status(201).json({ role: await roles.create(context, input, requestId) });
-  });
-
-  router.patch('/roles/:id', requirePermission('role.manage'), async (request, response) => {
-    const context = request.staff;
-    if (!context) throw new UnauthorizedError();
-    const { id } = idSchema.parse(request.params);
-    const input = updateRoleSchema.parse(request.body);
-    const requestId = String(response.getHeader('x-request-id'));
-    response.status(200).json({ role: await roles.update(context, id, input, requestId) });
-  });
-
-  router.delete('/roles/:id', requirePermission('role.manage'), async (request, response) => {
-    const context = request.staff;
-    if (!context) throw new UnauthorizedError();
-    const { id } = idSchema.parse(request.params);
-    emptyBodySchema.parse(request.body ?? {});
-    await roles.delete(context, id, String(response.getHeader('x-request-id')));
-    response.status(204).send();
-  });
-
-  router.post(
-    '/memberships/:id/roles',
-    requirePermission('staff.manage'),
-    requirePermission('role.manage'),
-    async (request, response) => {
-      const context = request.staff;
-      if (!context) throw new UnauthorizedError();
-      const { id } = membershipIdSchema.parse(request.params);
-      const { roleId, scopeId } = assignRoleSchema.parse(request.body);
-      const assignment = await roles.assignToMembership(
-        context,
-        id,
-        roleId,
-        scopeId,
-        String(response.getHeader('x-request-id')),
-      );
-      response.status(201).json({ assignment });
-    },
-  );
-
-  // Removes a role everywhere, or (with /scopes/:scopeId) for one place only.
-  for (const path of [
-    '/memberships/:id/roles/:roleId',
+  router.post('/memberships/:id/roles', ...canAssign, controller.assign);
+  router.delete('/memberships/:id/roles/:roleId', ...canAssign, controller.unassign);
+  router.delete(
     '/memberships/:id/roles/:roleId/scopes/:scopeId',
-  ]) {
-    router.delete(
-      path,
-      requirePermission('staff.manage'),
-      requirePermission('role.manage'),
-      async (request, response) => {
-        const context = request.staff;
-        if (!context) throw new UnauthorizedError();
-        const { id, roleId, scopeId } = z
-          .object({
-            id: z.string().uuid(),
-            roleId: z.string().uuid(),
-            scopeId: z.string().uuid().optional(),
-          })
-          .strict()
-          .parse(request.params);
-        emptyBodySchema.parse(request.body ?? {});
-        await roles.unassignFromMembership(
-          context,
-          id,
-          roleId,
-          scopeId,
-          String(response.getHeader('x-request-id')),
-        );
-        response.status(204).send();
-      },
-    );
-  }
-
+    ...canAssign,
+    controller.unassign,
+  );
   return router;
 }

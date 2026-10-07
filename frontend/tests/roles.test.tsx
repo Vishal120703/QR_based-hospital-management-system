@@ -4,9 +4,9 @@ import { type ReactNode } from 'react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { staffApi, type Role, type StaffMember } from '../src/api';
-import { type AdminContext } from '../src/pages/AdminLayout';
-import { RolesPage } from '../src/pages/RolesPage';
-import { StaffDialog } from '../src/pages/StaffDialog';
+import { type AdminContext } from '../src/features/workspace/AdminLayout';
+import { RolesPage } from '../src/features/people/RolesPage';
+import { StaffDialog } from '../src/features/people/StaffDialog';
 
 const roles: Role[] = [
   {

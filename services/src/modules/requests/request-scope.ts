@@ -1,5 +1,5 @@
 import { type Prisma } from '@prisma/client';
-import { scopesFor, type StaffContext } from '../auth/auth.service.js';
+import { scopesFor, type StaffContext } from '../auth/index.js';
 
 // The requests one permission covers: the whole hospital ({}), the beds on the
 // caller's floors and wards, or the requests of their departments. null means

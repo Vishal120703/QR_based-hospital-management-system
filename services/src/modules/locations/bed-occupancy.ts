@@ -1,5 +1,8 @@
 import { type Prisma } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
+import { LocationRepository } from './location.repository.js';
+
+const repository = new LocationRepository();
 
 // OCCUPIED is set and cleared only here, by the bed-sessions module inside its
 // own transaction. The conditional update makes concurrent starts race-free:
@@ -9,16 +12,10 @@ export async function occupyBed(
   hospitalId: string,
   bedId: string,
 ): Promise<void> {
-  const updated = await transaction.bed.updateMany({
-    where: { hospitalId, id: bedId, active: true, status: 'AVAILABLE' },
-    data: { status: 'OCCUPIED' },
-  });
-  if (updated.count === 1) {
+  if ((await repository.occupyBed(transaction, hospitalId, bedId)) === 1) {
     return;
   }
-  const bed = await transaction.bed.findUnique({
-    where: { hospitalId_id: { hospitalId, id: bedId } },
-  });
+  const bed = await repository.findBed(transaction, hospitalId, bedId);
   if (!bed) {
     throw new NotFoundError('The referenced bed was not found.');
   }
@@ -34,8 +31,5 @@ export async function releaseBed(
   hospitalId: string,
   bedId: string,
 ): Promise<void> {
-  await transaction.bed.updateMany({
-    where: { hospitalId, id: bedId, status: 'OCCUPIED' },
-    data: { status: 'AVAILABLE' },
-  });
+  await repository.releaseBed(transaction, hospitalId, bedId);
 }

@@ -5,31 +5,21 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { canAccessLocation, revokeStaffSessions, type StaffContext } from '../auth/auth.service.js';
-import { hashPassword } from '../auth/password.js';
-import { lockedRoleKey } from '../roles/built-in-roles.js';
+import { type Db } from '../../database/client.js';
+import { recordStaffAudit } from '../audit/index.js';
+import {
+  canAccessLocation,
+  hashPassword,
+  revokeStaffSessions,
+  type StaffContext,
+} from '../auth/index.js';
+import { lockedRoleKey } from '../roles/index.js';
 import { findEligibleStaff } from './eligibility.js';
+import { StaffRepository, type StaffRow } from './staff.repository.js';
+import { type CoverageInput, type CreateStaffInput, type StaffFilter } from './staff.schemas.js';
 
-// A staff member is a HospitalMembership; the User is the global identity.
-const staffSelect = {
-  id: true,
-  status: true,
-  dutyStatus: true,
-  dutyChangedAt: true,
-  createdAt: true,
-  user: { select: { id: true, email: true, displayName: true, status: true } },
-  departments: { select: { departmentId: true }, orderBy: { createdAt: 'asc' } },
-  locationScopes: {
-    select: { id: true, scopeType: true, floorId: true, wardId: true },
-    orderBy: { createdAt: 'asc' },
-  },
-  userRoles: {
-    select: { roleId: true, scopes: { select: { scopeType: true, scopeId: true } } },
-  },
-} satisfies Prisma.HospitalMembershipSelect;
-
-type StaffRow = Prisma.HospitalMembershipGetPayload<{ select: typeof staffSelect }>;
+type Transaction = Prisma.TransactionClient;
+const repository = new StaffRepository();
 
 function toView(row: StaffRow) {
   return {
@@ -53,65 +43,42 @@ function toView(row: StaffRow) {
   };
 }
 
-export type CoverageInput =
-  | { readonly scopeType: 'HOSPITAL' }
-  | { readonly scopeType: 'FLOOR'; readonly floorId: string }
-  | { readonly scopeType: 'WARD'; readonly wardId: string };
-
-export interface StaffFilter {
-  readonly status?: MembershipStatus | undefined;
-  readonly dutyStatus?: DutyStatus | undefined;
-  readonly departmentId?: string | undefined;
-}
-
-// A staff manager may only change the status of someone whose permissions they
-// hold themselves, and a hospital must keep at least one active Hospital Manager.
-async function requireSafeStatusChange(
-  transaction: Prisma.TransactionClient,
-  context: StaffContext,
-  membershipId: string,
-  deactivating: boolean,
-): Promise<void> {
-  const hospitalId = context.tenant.hospitalId;
-  const roles = await transaction.userRole.findMany({
-    where: { hospitalId, membershipId, role: { active: true } },
-    select: {
-      role: { select: { systemKey: true, rolePermissions: { select: { permissionKey: true } } } },
-    },
-  });
-  const held = roles.flatMap(({ role }) => role.rolePermissions.map((item) => item.permissionKey));
-  if (held.some((key) => !context.hospitalPermissions.has(key))) throw new ForbiddenError();
-  if (!deactivating || !roles.some(({ role }) => role.systemKey === lockedRoleKey)) return;
-  const others = await transaction.userRole.count({
-    where: {
-      hospitalId,
-      role: { systemKey: lockedRoleKey },
-      membershipId: { not: membershipId },
-      membership: { status: 'ACTIVE' },
-    },
-  });
-  if (others === 0) {
-    throw new ConflictError('A hospital must keep at least one active Hospital Manager.');
+// Creates a person's account and their membership in a hospital, inside the
+// caller's transaction. Used by staff creation, hospital setup, and the super
+// admin. Fails if the email already has an account.
+export async function createStaffAccount(
+  transaction: Transaction,
+  input: {
+    readonly hospitalId: string;
+    readonly email: string;
+    readonly displayName: string;
+    readonly passwordHash: string;
+  },
+): Promise<{ userId: string; membershipId: string }> {
+  const email = input.email.trim().toLowerCase();
+  if (await repository.findUserByEmail(transaction, email)) {
+    throw new ConflictError('A user with this email already exists.');
   }
+  const user = await repository.createUser(transaction, {
+    email,
+    displayName: input.displayName.trim(),
+    passwordHash: input.passwordHash,
+  });
+  const membership = await repository.createMembership(transaction, {
+    hospitalId: input.hospitalId,
+    userId: user.id,
+  });
+  return { userId: user.id, membershipId: membership.id };
 }
 
 export class StaffService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly staff = repository,
+  ) {}
 
   public async list(context: StaffContext, filter: StaffFilter) {
-    const rows = await this.database.hospitalMembership.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.status !== undefined ? { status: filter.status } : {}),
-        ...(filter.dutyStatus !== undefined ? { dutyStatus: filter.dutyStatus } : {}),
-        ...(filter.departmentId !== undefined
-          ? { departments: { some: { departmentId: filter.departmentId } } }
-          : {}),
-      },
-      select: staffSelect,
-      orderBy: { user: { displayName: 'asc' } },
-    });
-    return rows.map(toView);
+    return (await this.staff.list(this.database, context.tenant.hospitalId, filter)).map(toView);
   }
 
   public async get(context: StaffContext, id: string) {
@@ -120,10 +87,7 @@ export class StaffService {
 
   public async eligible(context: StaffContext, query: { bedId: string; departmentId: string }) {
     const hospitalId = context.tenant.hospitalId;
-    const bed = await this.database.bed.findUnique({
-      where: { hospitalId_id: { hospitalId, id: query.bedId } },
-      select: { wardId: true, ward: { select: { floorId: true } } },
-    });
+    const bed = await this.staff.findBedPlace(this.database, hospitalId, query.bedId);
     if (
       !bed ||
       !canAccessLocation(context, 'staff.read', {
@@ -139,31 +103,27 @@ export class StaffService {
 
   // Creates a new person and their membership in this hospital. Linking an
   // existing user from another hospital needs a platform-level flow (deferred).
-  public async create(
-    context: StaffContext,
-    input: { email: string; displayName: string; password: string },
-    requestId: string,
-  ) {
+  public async create(context: StaffContext, input: CreateStaffInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
-    const email = input.email.trim().toLowerCase();
     const passwordHash = await hashPassword(input.password);
     return this.database.$transaction(async (transaction) => {
-      if (await transaction.user.findUnique({ where: { email } })) {
-        throw new ConflictError('A user with this email already exists.');
-      }
-      const user = await transaction.user.create({
-        data: { email, displayName: input.displayName, passwordHash },
-      });
-      const membership = await transaction.hospitalMembership.create({
-        data: { hospitalId, userId: user.id },
+      const created = await createStaffAccount(transaction, {
+        hospitalId,
+        email: input.email,
+        displayName: input.displayName,
+        passwordHash,
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'staff.create',
         targetType: 'HospitalMembership',
-        targetId: membership.id,
-        metadata: { userId: user.id, email, displayName: input.displayName },
+        targetId: created.membershipId,
+        metadata: {
+          userId: created.userId,
+          email: input.email.trim().toLowerCase(),
+          displayName: input.displayName,
+        },
       });
-      return toView(await this.requireMember(transaction, context, membership.id));
+      return toView(await this.requireMember(transaction, context, created.membershipId));
     });
   }
 
@@ -177,22 +137,19 @@ export class StaffService {
         const before = await this.requireMember(transaction, context, id);
         const deactivating = status !== 'ACTIVE';
         if (status !== before.status) {
-          await requireSafeStatusChange(
+          await this.requireSafeStatusChange(
             transaction,
             context,
             id,
             deactivating && before.status === 'ACTIVE',
           );
         }
-        await transaction.hospitalMembership.update({
-          where: { hospitalId_id: { hospitalId, id } },
-          data: {
-            status,
-            // Staff who are not active cannot be on duty or keep signed-in sessions.
-            ...(deactivating && before.dutyStatus === 'ON_DUTY'
-              ? { dutyStatus: 'OFF_DUTY', dutyChangedAt: new Date() }
-              : {}),
-          },
+        await this.staff.updateMembership(transaction, hospitalId, id, {
+          status,
+          // Staff who are not active cannot be on duty or keep signed-in sessions.
+          ...(deactivating && before.dutyStatus === 'ON_DUTY'
+            ? { dutyStatus: 'OFF_DUTY' as const, dutyChangedAt: new Date() }
+            : {}),
         });
         const revokedSessions = deactivating
           ? await revokeStaffSessions(transaction, hospitalId, id)
@@ -223,9 +180,9 @@ export class StaffService {
         ) {
           throw new ConflictError('Only active staff can go on duty.');
         }
-        await transaction.hospitalMembership.update({
-          where: { hospitalId_id: { hospitalId, id } },
-          data: { dutyStatus, dutyChangedAt: new Date() },
+        await this.staff.updateMembership(transaction, hospitalId, id, {
+          dutyStatus,
+          dutyChangedAt: new Date(),
         });
         await recordStaffAudit(transaction, context, requestId, {
           action: 'staff.duty',
@@ -243,9 +200,7 @@ export class StaffService {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
       await this.requireMember(transaction, context, id);
-      const department = await transaction.department.findUnique({
-        where: { hospitalId_id: { hospitalId, id: departmentId } },
-      });
+      const department = await this.staff.findDepartment(transaction, hospitalId, departmentId);
       if (!department) {
         throw new NotFoundError('The referenced department was not found.');
       }
@@ -253,9 +208,7 @@ export class StaffService {
         throw new ConflictError('The department is inactive.');
       }
       // A duplicate fails on the unique key and returns 409.
-      await transaction.staffDepartment.create({
-        data: { hospitalId, membershipId: id, departmentId },
-      });
+      await this.staff.addDepartment(transaction, hospitalId, id, departmentId);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'staff.department.add',
         targetType: 'HospitalMembership',
@@ -275,10 +228,7 @@ export class StaffService {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
       await this.requireMember(transaction, context, id);
-      const removed = await transaction.staffDepartment.deleteMany({
-        where: { hospitalId, membershipId: id, departmentId },
-      });
-      if (removed.count !== 1) {
+      if ((await this.staff.removeDepartment(transaction, hospitalId, id, departmentId)) !== 1) {
         throw new NotFoundError();
       }
       await recordStaffAudit(transaction, context, requestId, {
@@ -296,30 +246,24 @@ export class StaffService {
     return this.database.$transaction(async (transaction) => {
       await this.requireMember(transaction, context, id);
       if (input.scopeType === 'FLOOR') {
-        await requireActiveLocation(
-          transaction.floor.findUnique({
-            where: { hospitalId_id: { hospitalId, id: input.floorId } },
-          }),
+        requireActiveLocation(
+          await this.staff.findFloor(transaction, hospitalId, input.floorId),
           'floor',
         );
       }
       if (input.scopeType === 'WARD') {
-        await requireActiveLocation(
-          transaction.ward.findUnique({
-            where: { hospitalId_id: { hospitalId, id: input.wardId } },
-          }),
+        requireActiveLocation(
+          await this.staff.findWard(transaction, hospitalId, input.wardId),
           'ward',
         );
       }
       // Duplicates fail on the unique keys (or the HOSPITAL partial index): 409.
-      const scope = await transaction.staffLocationScope.create({
-        data: {
-          hospitalId,
-          membershipId: id,
-          scopeType: input.scopeType,
-          floorId: input.scopeType === 'FLOOR' ? input.floorId : null,
-          wardId: input.scopeType === 'WARD' ? input.wardId : null,
-        },
+      const scope = await this.staff.addCoverage(transaction, {
+        hospitalId,
+        membershipId: id,
+        scopeType: input.scopeType,
+        floorId: input.scopeType === 'FLOOR' ? input.floorId : null,
+        wardId: input.scopeType === 'WARD' ? input.wardId : null,
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'staff.coverage.add',
@@ -340,10 +284,7 @@ export class StaffService {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
       await this.requireMember(transaction, context, id);
-      const removed = await transaction.staffLocationScope.deleteMany({
-        where: { hospitalId, membershipId: id, id: coverageId },
-      });
-      if (removed.count !== 1) {
+      if ((await this.staff.removeCoverage(transaction, hospitalId, id, coverageId)) !== 1) {
         throw new NotFoundError();
       }
       await recordStaffAudit(transaction, context, requestId, {
@@ -356,15 +297,34 @@ export class StaffService {
     });
   }
 
-  private async requireMember(
-    client: PrismaClient | Prisma.TransactionClient,
+  // A staff manager may only change the status of someone whose permissions they
+  // hold themselves, and a hospital must keep at least one active Hospital Manager.
+  private async requireSafeStatusChange(
+    transaction: Transaction,
     context: StaffContext,
-    id: string,
-  ): Promise<StaffRow> {
-    const member = await client.hospitalMembership.findUnique({
-      where: { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } },
-      select: staffSelect,
-    });
+    membershipId: string,
+    deactivating: boolean,
+  ): Promise<void> {
+    const hospitalId = context.tenant.hospitalId;
+    const roles = await this.staff.findActiveRoles(transaction, hospitalId, membershipId);
+    const held = roles.flatMap(({ role }) =>
+      role.rolePermissions.map((item) => item.permissionKey),
+    );
+    if (held.some((key) => !context.hospitalPermissions.has(key))) throw new ForbiddenError();
+    if (!deactivating || !roles.some(({ role }) => role.systemKey === lockedRoleKey)) return;
+    const others = await this.staff.countOtherActiveHolders(
+      transaction,
+      hospitalId,
+      lockedRoleKey,
+      membershipId,
+    );
+    if (others === 0) {
+      throw new ConflictError('A hospital must keep at least one active Hospital Manager.');
+    }
+  }
+
+  private async requireMember(db: Db, context: StaffContext, id: string): Promise<StaffRow> {
+    const member = await this.staff.findMember(db, context.tenant.hospitalId, id);
     if (!member) {
       throw new NotFoundError();
     }
@@ -372,11 +332,7 @@ export class StaffService {
   }
 }
 
-async function requireActiveLocation(
-  lookup: Promise<{ active: boolean } | null>,
-  label: string,
-): Promise<void> {
-  const location = await lookup;
+function requireActiveLocation(location: { active: boolean } | null, label: string): void {
   if (!location) {
     throw new NotFoundError(`The referenced ${label} was not found.`);
   }

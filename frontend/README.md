@@ -5,29 +5,21 @@ One React web app (Vite, TypeScript, React Router) for staff administration and 
 ```text
 src/
 ├── main.tsx           Routes
-├── api.ts             Backend client, response types, and token storage
-├── components.tsx     Shared UI (forms, retry states, notices, native modal)
+├── api/               Backend client split by staff, patient, platform, and reports
+├── components/        Shared UI (forms, retry states, notices, native modal)
+├── lib/               Shared helpers: useLoad (screen data), field-rules (input limits), QR PDF, logos, request status
 ├── styles.css
-└── pages/
-    ├── QrEntryPage.tsx    /: patient-first camera scanner and QR-link entry
-    ├── LoginPage.tsx      Staff sign-in
-    ├── AdminLayout.tsx    Role-aware staff shell
-    ├── OverviewPage.tsx   Relevant counts, setup guidance, and next steps
-    ├── RequestsPage.tsx   Manager assignment and staff work
-    ├── LocationsPage.tsx  Building → Floor → Ward → Room → Bed setup
-    ├── BedsPage.tsx       Bed sessions and single/bulk QR issuance
-    ├── QrLabelsDialog.tsx One-time QR preview and printable PDF
-    ├── RolesPage.tsx      Built-in and custom scoped access
-    ├── DepartmentsPage.tsx
-    ├── StaffPage.tsx      Staff list, duty toggle, and adding staff
-    ├── StaffDialog.tsx    Status, departments, coverage, roles, and shifts of one person
-    ├── staff-directory.ts Data and labels shared by the staff screens
-    ├── ServicesPage.tsx   Service catalog and categories
-    ├── SlaPage.tsx        SLA policies (versioned) and escalation policies
-    ├── EligibilityPage.tsx  "Who can respond?" for a bed and department
-    ├── ScanPage.tsx       /q/<token>: exchanges a QR token for a guest session
-    ├── PatientPage.tsx    Language choice, service requests, status, and cancellation
-    └── platform/          Separate CARE QR platform administration
+└── features/
+    ├── patient/        Starting page, QR resolution, and request tracking
+    ├── auth/           Staff sign-in
+    ├── workspace/      Permission-aware shell and overview
+    ├── locations/      Hierarchy, beds, sessions, and QR labels
+    ├── people/         Staff, departments, roles, and eligibility
+    ├── services/       Catalog and SLA screens
+    ├── requests/       Manager/staff workflow and request history
+    ├── reports/        Reports and audit log
+    ├── hospital/       Hospital profile and logo
+    └── platform/       Separate CARE QR platform administration
 ```
 
 Run `npm run dev` with the backend running on port 3001; see the root [README](../README.md).
@@ -35,6 +27,8 @@ Run `npm run dev` with the backend running on port 3001; see the root [README](.
 The website opens on the patient QR entry screen. Staff use **Staff sign in**. The QR decoder loads only when requested and reads CARE QR links for this website; patients can scan live, take/choose a QR photo (decoded locally without upload), or paste a link. Printed QR links still open `/q/<token>` directly. Live camera permission requires HTTPS or localhost; a plain HTTP LAN address can use QR-photo capture, the phone's Camera app, or a pasted link.
 
 Staff tokens are kept in `localStorage` until their 8-hour session ends. Guest tokens are kept in `sessionStorage`, so a patient's access lasts only for the tab that scanned the code.
+
+Screens load their data with `useLoad` (`src/lib/use-load.ts`): it keeps data on screen while refreshing, ignores out-of-date answers, shows load errors on the screen with **Try again**, and signs out only when the session has expired. Form inputs take their limits from `src/lib/field-rules.ts`, which mirrors the server's validation, so mistakes are caught before anything is sent.
 
 Navigation and management controls reflect the signed-in staff member's permissions; backend authorization remains authoritative. If a browser blocks storage, credentials remain in memory only until refresh. Network failures offer retry, and the patient page rechecks guest-session revocation/expiry while open.
 

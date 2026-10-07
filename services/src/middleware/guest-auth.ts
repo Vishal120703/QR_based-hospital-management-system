@@ -1,10 +1,7 @@
 import { type Request, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { UnauthorizedError } from '../common/errors/app-error.js';
-import {
-  type GuestContext,
-  type GuestSessionService,
-} from '../modules/bed-sessions/guest-session.service.js';
+import { type GuestContext, type GuestSessionService } from '../modules/bed-sessions/index.js';
 
 const bearerSchema = z.string().regex(/^Bearer [A-Za-z0-9_-]{43}$/);
 

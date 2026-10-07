@@ -6,19 +6,20 @@ import {
   NotFoundError,
 } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
-import { hospitalAccessSelect, hospitalIsOpen } from '../hospitals/hospital-access.js';
-import { areaFilters } from '../locations/location.service.js';
+import { recordStaffAudit } from '../audit/index.js';
+import { type StaffContext } from '../auth/index.js';
+import { hospitalIsOpen } from '../hospitals/index.js';
+import { areaFilters } from '../locations/index.js';
 import {
   type GuestContext,
   type GuestLocation,
   type GuestSessionService,
-} from '../bed-sessions/guest-session.service.js';
+} from '../bed-sessions/index.js';
+import { QrRepository, type QrBatchScope } from './qr.repository.js';
 
 // One response for every failure, so a scan never reveals whether the token,
 // bed, session, or hospital exists.
-export class QrUnavailableError extends AppError {
+class QrUnavailableError extends AppError {
   public constructor() {
     super(404, 'QR_UNAVAILABLE', 'This QR code is not active. Please ask hospital staff for help.');
   }
@@ -32,12 +33,7 @@ export interface QrIssue {
 
 export type QrCodeView = Omit<BedQrCode, 'tokenHash'>;
 
-export const maxBatchLabels = 300;
-
-export type QrBatchScope =
-  | { readonly kind: 'HOSPITAL' }
-  | { readonly kind: 'BUILDING' | 'FLOOR' | 'WARD' | 'ROOM'; readonly id: string }
-  | { readonly kind: 'BEDS'; readonly bedIds: readonly string[] };
+const maxBatchLabels = 300;
 
 export interface QrBatchIssue extends QrIssue {
   readonly bedId: string;
@@ -52,23 +48,6 @@ export interface QrBatchResult {
   readonly replaced: number;
   readonly skippedActive: number;
   readonly skippedInactive: number;
-}
-
-function scopeWhere(scope: QrBatchScope): Prisma.BedWhereInput {
-  switch (scope.kind) {
-    case 'HOSPITAL':
-      return {};
-    case 'BUILDING':
-      return { ward: { floor: { buildingId: scope.id } } };
-    case 'FLOOR':
-      return { ward: { floorId: scope.id } };
-    case 'WARD':
-      return { wardId: scope.id };
-    case 'ROOM':
-      return { roomId: scope.id };
-    case 'BEDS':
-      return { id: { in: [...scope.bedIds] } };
-  }
 }
 
 interface LocatedBed {
@@ -103,21 +82,20 @@ function toView({ tokenHash, ...view }: BedQrCode): QrCodeView {
   return view;
 }
 
+// Issuing, replacing, and disabling bed QR codes, and exchanging a scanned
+// code for a patient guest session.
 export class QrCodeService {
   public constructor(
     private readonly database: PrismaClient,
     private readonly guestSessions: GuestSessionService,
     private readonly publicAppUrl: string,
+    private readonly qrCodes = new QrRepository(),
   ) {}
 
   public async list(context: StaffContext, filter: { bedId?: string | undefined }) {
-    const codes = await this.database.bedQrCode.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.bedId !== undefined ? { bedId: filter.bedId } : {}),
-        bed: { ward: areaFilters(context, 'bed.read').ward },
-      },
-      orderBy: { issuedAt: 'desc' },
+    const codes = await this.qrCodes.list(this.database, context.tenant.hospitalId, {
+      bedId: filter.bedId,
+      wardArea: areaFilters(context, 'bed.read').ward,
     });
     return codes.map(toView);
   }
@@ -127,18 +105,14 @@ export class QrCodeService {
     const token = createOpaqueToken();
     const tokenHash = hashOpaqueToken(token);
     return this.database.$transaction(async (transaction) => {
-      const bed = await transaction.bed.findUnique({
-        where: { hospitalId_id: { hospitalId, id: bedId } },
-      });
+      const bed = await this.qrCodes.findBed(transaction, hospitalId, bedId);
       if (!bed) {
         throw new NotFoundError('The referenced bed was not found.');
       }
       if (!bed.active) {
         throw new ConflictError('Activate the bed before issuing a QR code.');
       }
-      const existing = await transaction.bedQrCode.findUnique({
-        where: { hospitalId_bedId: { hospitalId, bedId } },
-      });
+      const existing = await this.qrCodes.findForBed(transaction, hospitalId, bedId);
       if (existing?.status === 'ACTIVE') {
         throw new ConflictError('This bed already has an active QR code. Rotate it instead.');
       }
@@ -146,23 +120,13 @@ export class QrCodeService {
       let qrCode: BedQrCode;
       if (existing) {
         // Re-issue after revocation; the version guard rejects a concurrent re-issue.
-        const reissued = await transaction.bedQrCode.updateMany({
-          where: { id: existing.id, status: 'REVOKED', version: existing.version },
-          data: {
-            tokenHash,
-            status: 'ACTIVE',
-            version: existing.version + 1,
-            issuedAt: new Date(),
-            revokedAt: null,
-          },
-        });
-        if (reissued.count !== 1) {
+        if ((await this.qrCodes.reissue(transaction, existing, tokenHash)) !== 1) {
           throw new ConflictError();
         }
-        qrCode = await transaction.bedQrCode.findUniqueOrThrow({ where: { id: existing.id } });
+        qrCode = await this.qrCodes.findById(transaction, existing.id);
       } else {
         // A concurrent first issue fails on the (hospitalId, bedId) unique key.
-        qrCode = await transaction.bedQrCode.create({ data: { hospitalId, bedId, tokenHash } });
+        qrCode = await this.qrCodes.create(transaction, { hospitalId, bedId, tokenHash });
       }
 
       await recordStaffAudit(transaction, context, requestId, {
@@ -187,28 +151,10 @@ export class QrCodeService {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(
       async (transaction) => {
-        await this.requireScope(transaction, hospitalId, scope);
-        const beds = await transaction.bed.findMany({
-          where: { hospitalId, ...scopeWhere(scope) },
-          include: {
-            qrCode: true,
-            room: { select: { code: true, name: true } },
-            ward: {
-              select: {
-                code: true,
-                name: true,
-                floor: {
-                  select: {
-                    code: true,
-                    name: true,
-                    level: true,
-                    building: { select: { code: true, name: true } },
-                  },
-                },
-              },
-            },
-          },
-        });
+        if (!(await this.qrCodes.scopeExists(transaction, hospitalId, scope))) {
+          throw new NotFoundError('That location was not found.');
+        }
+        const beds = await this.qrCodes.findBedsForLabels(transaction, hospitalId, scope);
         beds.sort(byLocation);
         const eligible = beds.filter(
           (bed) => bed.active && (replaceExisting || bed.qrCode?.status !== 'ACTIVE'),
@@ -229,23 +175,15 @@ export class QrCodeService {
           if (existing?.status === 'ACTIVE') {
             // Same rules as a single rotation: the old label stops working and
             // patients connected through it must scan the new one.
-            const rotated = await transaction.bedQrCode.updateMany({
-              where: { id: existing.id, status: 'ACTIVE', version: existing.version },
-              data: {
-                tokenHash,
-                version: existing.version + 1,
-                issuedAt: new Date(),
-                rotatedAt: new Date(),
-              },
-            });
-            if (rotated.count !== 1)
+            if ((await this.qrCodes.rotate(transaction, existing, tokenHash)) !== 1) {
               throw new ConflictError('A bed QR changed. Refresh and retry.');
+            }
             const revokedGuestSessions = await this.guestSessions.revokeForBed(
               transaction,
               hospitalId,
               bed.id,
             );
-            qrCode = await transaction.bedQrCode.findUniqueOrThrow({ where: { id: existing.id } });
+            qrCode = await this.qrCodes.findById(transaction, existing.id);
             replaced += 1;
             await recordStaffAudit(transaction, context, requestId, {
               action: 'qr.rotate',
@@ -261,25 +199,15 @@ export class QrCodeService {
             });
           } else {
             if (existing) {
-              const reissued = await transaction.bedQrCode.updateMany({
-                where: { id: existing.id, status: 'REVOKED', version: existing.version },
-                data: {
-                  tokenHash,
-                  status: 'ACTIVE',
-                  version: existing.version + 1,
-                  issuedAt: new Date(),
-                  revokedAt: null,
-                },
-              });
-              if (reissued.count !== 1) {
+              if ((await this.qrCodes.reissue(transaction, existing, tokenHash)) !== 1) {
                 throw new ConflictError('A bed QR changed. Refresh and retry.');
               }
-              qrCode = await transaction.bedQrCode.findUniqueOrThrow({
-                where: { id: existing.id },
-              });
+              qrCode = await this.qrCodes.findById(transaction, existing.id);
             } else {
-              qrCode = await transaction.bedQrCode.create({
-                data: { hospitalId, bedId: bed.id, tokenHash },
+              qrCode = await this.qrCodes.create(transaction, {
+                hospitalId,
+                bedId: bed.id,
+                tokenHash,
               });
             }
             await recordStaffAudit(transaction, context, requestId, {
@@ -319,16 +247,7 @@ export class QrCodeService {
     const token = createOpaqueToken();
     return this.database.$transaction(async (transaction) => {
       const existing = await this.requireActive(transaction, hospitalId, bedId);
-      const rotated = await transaction.bedQrCode.updateMany({
-        where: { id: existing.id, status: 'ACTIVE', version: existing.version },
-        data: {
-          tokenHash: hashOpaqueToken(token),
-          version: existing.version + 1,
-          issuedAt: new Date(),
-          rotatedAt: new Date(),
-        },
-      });
-      if (rotated.count !== 1) {
+      if ((await this.qrCodes.rotate(transaction, existing, hashOpaqueToken(token))) !== 1) {
         throw new ConflictError();
       }
       // A rotated code may have leaked, so sessions opened with it end too.
@@ -337,7 +256,7 @@ export class QrCodeService {
         hospitalId,
         bedId,
       );
-      const qrCode = await transaction.bedQrCode.findUniqueOrThrow({ where: { id: existing.id } });
+      const qrCode = await this.qrCodes.findById(transaction, existing.id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'qr.rotate',
         targetType: 'BedQrCode',
@@ -357,11 +276,7 @@ export class QrCodeService {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
       const existing = await this.requireActive(transaction, hospitalId, bedId);
-      const revoked = await transaction.bedQrCode.updateMany({
-        where: { id: existing.id, status: 'ACTIVE', version: existing.version },
-        data: { status: 'REVOKED', revokedAt: new Date() },
-      });
-      if (revoked.count !== 1) {
+      if ((await this.qrCodes.revoke(transaction, existing)) !== 1) {
         throw new ConflictError();
       }
       const revokedGuestSessions = await this.guestSessions.revokeForBed(
@@ -375,7 +290,7 @@ export class QrCodeService {
         targetId: existing.id,
         metadata: { bedId, version: existing.version, revokedGuestSessions },
       });
-      return toView(await transaction.bedQrCode.findUniqueOrThrow({ where: { id: existing.id } }));
+      return toView(await this.qrCodes.findById(transaction, existing.id));
     });
   }
 
@@ -384,26 +299,11 @@ export class QrCodeService {
     token: string,
   ): Promise<{ guestToken: string; guest: GuestContext; location: GuestLocation }> {
     const issued = await this.database.$transaction(async (transaction) => {
-      const tokenHash = hashOpaqueToken(token);
-      // Credential resolution is the pre-tenant lookup. Rotation and revocation
-      // update this same row, so they cannot miss a guest issued from an old QR
-      // between checking its token and committing the guest session.
-      const locked = await transaction.$queryRaw<Array<{ id: string; hospitalId: string }>>`
-        SELECT "id", "hospitalId" FROM "BedQrCode"
-        WHERE "tokenHash" = ${tokenHash} AND "status" = 'ACTIVE'
-        FOR UPDATE
-      `;
-      const key = locked[0];
+      const key = await this.qrCodes.lockActiveByTokenHash(transaction, hashOpaqueToken(token));
       if (!key) {
         throw new QrUnavailableError();
       }
-      const qrCode = await transaction.bedQrCode.findUnique({
-        where: { hospitalId_id: { hospitalId: key.hospitalId, id: key.id } },
-        include: {
-          hospital: { select: hospitalAccessSelect },
-          bed: { select: { active: true } },
-        },
-      });
+      const qrCode = await this.qrCodes.findForScan(transaction, key.hospitalId, key.id);
       if (!qrCode || !hospitalIsOpen(qrCode.hospital) || !qrCode.bed.active) {
         throw new QrUnavailableError();
       }
@@ -425,9 +325,7 @@ export class QrCodeService {
     hospitalId: string,
     bedId: string,
   ): Promise<BedQrCode> {
-    const existing = await transaction.bedQrCode.findUnique({
-      where: { hospitalId_bedId: { hospitalId, bedId } },
-    });
+    const existing = await this.qrCodes.findForBed(transaction, hospitalId, bedId);
     if (!existing) {
       throw new NotFoundError('This bed has no QR code.');
     }
@@ -435,39 +333,6 @@ export class QrCodeService {
       throw new ConflictError('This QR code is revoked. Generate a new one instead.');
     }
     return existing;
-  }
-
-  private async requireScope(
-    transaction: Prisma.TransactionClient,
-    hospitalId: string,
-    scope: QrBatchScope,
-  ): Promise<void> {
-    const key = (id: string) => ({ where: { hospitalId_id: { hospitalId, id } } });
-    let found: boolean;
-    switch (scope.kind) {
-      case 'HOSPITAL':
-        found = true;
-        break;
-      case 'BUILDING':
-        found = Boolean(await transaction.building.findUnique(key(scope.id)));
-        break;
-      case 'FLOOR':
-        found = Boolean(await transaction.floor.findUnique(key(scope.id)));
-        break;
-      case 'WARD':
-        found = Boolean(await transaction.ward.findUnique(key(scope.id)));
-        break;
-      case 'ROOM':
-        found = Boolean(await transaction.room.findUnique(key(scope.id)));
-        break;
-      case 'BEDS': {
-        const ids = [...new Set(scope.bedIds)];
-        found =
-          (await transaction.bed.count({ where: { hospitalId, id: { in: ids } } })) === ids.length;
-        break;
-      }
-    }
-    if (!found) throw new NotFoundError('That location was not found.');
   }
 
   private toIssue(qrCode: BedQrCode, token: string): QrIssue {

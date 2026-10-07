@@ -4,10 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { credentials, platformApi, type PlatformClient, type PlatformHospital } from '../src/api';
-import { PlatformClientPage } from '../src/pages/platform/PlatformClientPage';
-import { PlatformClientsPage } from '../src/pages/platform/PlatformClientsPage';
-import { PlatformHospitalsPage } from '../src/pages/platform/PlatformHospitalsPage';
-import { PlatformLayout, type PlatformContext } from '../src/pages/platform/PlatformLayout';
+import { PlatformClientPage } from '../src/features/platform/PlatformClientPage';
+import { PlatformClientsPage } from '../src/features/platform/PlatformClientsPage';
+import { PlatformHospitalsPage } from '../src/features/platform/PlatformHospitalsPage';
+import { PlatformLayout, type PlatformContext } from '../src/features/platform/PlatformLayout';
 
 const sunrise: PlatformHospital = {
   id: 'h1',

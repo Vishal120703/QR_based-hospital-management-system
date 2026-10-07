@@ -3,11 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, credentials, staffApi, type Me } from '../src/api';
-import { AdminIndex, AdminLayout, type AdminContext } from '../src/pages/AdminLayout';
-import { BedsPage } from '../src/pages/BedsPage';
-import * as qrPdf from '../src/qr-pdf';
-import { ServicesPage } from '../src/pages/ServicesPage';
-import { StaffPage } from '../src/pages/StaffPage';
+import { AdminIndex, AdminLayout, type AdminContext } from '../src/features/workspace/AdminLayout';
+import { BedsPage } from '../src/features/locations/BedsPage';
+import * as qrPdf from '../src/lib/qr-pdf';
+import { ServicesPage } from '../src/features/services/ServicesPage';
+import { StaffPage } from '../src/features/people/StaffPage';
 
 const me: Me = {
   user: { id: 'user', email: 'admin@example.test', displayName: 'Test Admin' },

@@ -1,15 +1,15 @@
 import { type PrismaClient, type ServiceCategory } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
+import { recordStaffAudit } from '../audit/index.js';
+import { type StaffContext } from '../auth/index.js';
+import {
+  type CategoryFilter,
+  type CreateCategoryInput,
+  type UpdateCategoryInput,
+} from './catalog.schemas.js';
+import { CategoryRepository } from './category.repository.js';
 
-export interface CategoryInput {
-  readonly name?: string | undefined;
-  readonly description?: string | null | undefined;
-  readonly sortOrder?: number | undefined;
-  readonly emergencyNotice?: boolean | undefined;
-  readonly active?: boolean | undefined;
-}
+type CategoryInput = UpdateCategoryInput;
 
 const snapshot = (row: ServiceCategory) => ({
   name: row.name,
@@ -30,32 +30,28 @@ function changes(input: CategoryInput) {
 }
 
 export class CategoryService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly categories = new CategoryRepository(),
+  ) {}
 
-  public list(context: StaffContext, filter: { active?: boolean | undefined }) {
-    return this.database.serviceCategory.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.active !== undefined ? { active: filter.active } : {}),
-      },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-    });
+  public list(context: StaffContext, filter: CategoryFilter) {
+    return this.categories.list(this.database, context.tenant.hospitalId, filter);
   }
 
   public async get(context: StaffContext, id: string) {
-    const category = await this.database.serviceCategory.findUnique({
-      where: { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } },
-    });
+    const category = await this.categories.findById(this.database, context.tenant.hospitalId, id);
     if (!category) {
       throw new NotFoundError();
     }
     return category;
   }
 
-  public create(context: StaffContext, input: CategoryInput & { name: string }, requestId: string) {
+  public create(context: StaffContext, input: CreateCategoryInput, requestId: string) {
     return this.database.$transaction(async (transaction) => {
-      const category = await transaction.serviceCategory.create({
-        data: { hospitalId: context.tenant.hospitalId, ...changes(input), name: input.name },
+      const category = await this.categories.create(transaction, context.tenant.hospitalId, {
+        ...changes(input),
+        name: input.name,
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'serviceCategory.create',
@@ -68,14 +64,14 @@ export class CategoryService {
   }
 
   public update(context: StaffContext, id: string, input: CategoryInput, requestId: string) {
-    const where = { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } };
+    const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(
       async (transaction) => {
-        const before = await transaction.serviceCategory.findUnique({ where });
+        const before = await this.categories.findById(transaction, hospitalId, id);
         if (!before) {
           throw new NotFoundError();
         }
-        const after = await transaction.serviceCategory.update({ where, data: changes(input) });
+        const after = await this.categories.update(transaction, hospitalId, id, changes(input));
         await recordStaffAudit(transaction, context, requestId, {
           action: 'serviceCategory.update',
           targetType: 'ServiceCategory',
@@ -88,19 +84,17 @@ export class CategoryService {
     );
   }
 
-  public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {
+  public async remove(context: StaffContext, id: string, requestId: string): Promise<void> {
     const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(async (transaction) => {
-      const before = await transaction.serviceCategory.findUnique({
-        where: { hospitalId_id: { hospitalId, id } },
-      });
+      const before = await this.categories.findById(transaction, hospitalId, id);
       if (!before) {
         throw new NotFoundError();
       }
-      if ((await transaction.serviceItem.count({ where: { hospitalId, categoryId: id } })) > 0) {
+      if ((await this.categories.countServices(transaction, hospitalId, id)) > 0) {
         throw new ConflictError('This category has services. Move or delete them first.');
       }
-      await transaction.serviceCategory.delete({ where: { hospitalId_id: { hospitalId, id } } });
+      await this.categories.delete(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'serviceCategory.delete',
         targetType: 'ServiceCategory',

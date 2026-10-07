@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { staffApi, type Bed, type Building, type Floor, type Ward } from '../src/api';
-import { planBulkBeds } from '../src/location-types';
-import { type AdminContext } from '../src/pages/AdminLayout';
-import { LocationsPage } from '../src/pages/LocationsPage';
+import { planBulkBeds } from '../src/features/locations/location-types';
+import { type AdminContext } from '../src/features/workspace/AdminLayout';
+import { LocationsPage } from '../src/features/locations/LocationsPage';
 
 const building: Building = { id: 'b1', code: 'MB', name: 'Main Block', active: true };
 const floors: Floor[] = [
@@ -76,13 +76,13 @@ describe('Bulk bed numbering', () => {
   it('numbers beds with zero padding and rooms with a floor prefix', () => {
     const beds = planBulkBeds({
       mode: 'BEDS',
-      codePrefix: 'icu-',
+      codePrefix: 'gw-',
       namePrefix: 'Bed',
       start: 9,
       count: 3,
-      bedType: 'ICU',
+      bedType: 'STANDARD',
     });
-    expect(beds.beds.map((bed) => bed.code)).toEqual(['ICU-09', 'ICU-10', 'ICU-11']);
+    expect(beds.beds.map((bed) => bed.code)).toEqual(['GW-09', 'GW-10', 'GW-11']);
     expect(beds.beds[0]?.displayName).toBe('Bed 09');
 
     const rooms = planBulkBeds({
@@ -143,19 +143,30 @@ describe('Hospital layout screen', () => {
     });
   });
 
-  it('fills a new unit from its type, so an NICU gets a sensible name and code', async () => {
+  it('fills a new unit from its type, so a maternity ward gets a sensible name and code', async () => {
     const user = userEvent.setup();
     const create = vi.spyOn(staffApi, 'create').mockResolvedValue({ ward: { id: 'w2' } });
     show('/?at=floor:f1', manager);
-    await user.selectOptions(await screen.findByRole('combobox', { name: /Type of unit/ }), 'NICU');
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'Neonatal ICU');
+    const unitType = await screen.findByRole('combobox', { name: /Type of unit/ });
+    await user.selectOptions(unitType, 'MATERNITY');
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'Maternity Ward');
     await user.click(screen.getByRole('button', { name: 'Add unit' }));
     expect(create).toHaveBeenCalledWith('token', 'wards', {
       floorId: 'f1',
-      unitType: 'NICU',
-      code: 'NICU',
-      name: 'Neonatal ICU',
+      unitType: 'MATERNITY',
+      code: 'MAT',
+      name: 'Maternity Ward',
     });
+  });
+
+  it('does not offer intensive care units', async () => {
+    show('/?at=floor:f1', manager);
+    const unitType = await screen.findByRole('combobox', { name: /Type of unit/ });
+    const options = Array.from(unitType.querySelectorAll('option'), (option) => option.value);
+    expect(options).toContain('GENERAL');
+    for (const intensive of ['ICU', 'HDU', 'CCU', 'NICU', 'PICU']) {
+      expect(options).not.toContain(intensive);
+    }
   });
 
   it('is read-only without manage permissions', async () => {

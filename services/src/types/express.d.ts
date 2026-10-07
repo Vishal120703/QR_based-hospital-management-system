@@ -1,6 +1,6 @@
-import { type StaffContext } from '../modules/auth/auth.service.js';
-import { type GuestContext } from '../modules/bed-sessions/guest-session.service.js';
-import { type PlatformContext } from '../modules/platform/platform-auth.service.js';
+import { type StaffContext } from '../modules/auth/index.js';
+import { type GuestContext } from '../modules/bed-sessions/index.js';
+import { type PlatformContext } from '../modules/platform/index.js';
 
 declare global {
   namespace Express {

@@ -1,7 +1,8 @@
 import { type Prisma, type PrismaClient, type RequestStatus } from '@prisma/client';
 import { NotFoundError } from '../../common/errors/app-error.js';
-import { type StaffContext } from '../auth/auth.service.js';
-import { requestAreaWhere } from '../requests/request-scope.js';
+import { type StaffContext } from '../auth/index.js';
+import { requestAreaWhere } from '../requests/index.js';
+import { ReportRepository } from './report.repository.js';
 
 // Reports are rebuilt from each request's append-only event history, so they
 // show who actually assigned, accepted, and completed work, even after a
@@ -95,7 +96,10 @@ function metadataId(metadata: Prisma.JsonValue, key: string): string | null {
 }
 
 export class ReportService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly reports = new ReportRepository(),
+  ) {}
 
   // Requests submitted in the range, in the caller's report area, with their
   // full history and the names of everyone involved.
@@ -111,27 +115,7 @@ export class ReportService {
       submittedAt: { gte: range.from, lt: range.to },
       ...(Object.keys(area).length > 0 ? { AND: [area] } : {}),
     };
-    const rows = await this.database.serviceRequest.findMany({
-      where,
-      orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
-      take: maxRequests + 1,
-      include: {
-        department: { select: { name: true } },
-        bed: {
-          select: {
-            displayName: true,
-            room: { select: { name: true } },
-            ward: {
-              select: {
-                name: true,
-                floor: { select: { name: true, building: { select: { name: true } } } },
-              },
-            },
-          },
-        },
-        events: { orderBy: { requestVersion: 'asc' } },
-      },
-    });
+    const rows = await this.reports.findRequestsWithHistory(this.database, where, maxRequests + 1);
     const truncated = rows.length > maxRequests;
     const requests = rows.slice(0, maxRequests);
 
@@ -147,10 +131,9 @@ export class ReportService {
         }
       }
     }
-    const people = await this.database.hospitalMembership.findMany({
-      where: { hospitalId: context.tenant.hospitalId, id: { in: [...membershipIds] } },
-      select: { id: true, user: { select: { displayName: true } } },
-    });
+    const people = await this.reports.findMemberNames(this.database, context.tenant.hospitalId, [
+      ...membershipIds,
+    ]);
     const nameOf = (id: string | null | undefined) =>
       id ? (people.find((person) => person.id === id)?.user.displayName ?? 'Former staff') : null;
 
@@ -381,13 +364,10 @@ export class ReportService {
   public async requestTimeline(context: StaffContext, id: string, now = new Date()) {
     const area = requestAreaWhere(context, 'analytics.read');
     const request = area
-      ? await this.database.serviceRequest.findFirst({
-          where: {
-            hospitalId: context.tenant.hospitalId,
-            id,
-            ...(Object.keys(area).length > 0 ? { AND: [area] } : {}),
-          },
-          select: { submittedAt: true },
+      ? await this.reports.findSubmittedAt(this.database, {
+          hospitalId: context.tenant.hospitalId,
+          id,
+          ...(Object.keys(area).length > 0 ? { AND: [area] } : {}),
         })
       : null;
     if (!request) throw new NotFoundError();

@@ -1,35 +1,26 @@
-import { type BedSessionStatus, type Prisma, type PrismaClient } from '@prisma/client';
+import { type Prisma, type PrismaClient } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
-import { occupyBed, releaseBed } from '../locations/bed-occupancy.js';
-import { areaFilters } from '../locations/location.service.js';
+import { recordStaffAudit } from '../audit/index.js';
+import { type StaffContext } from '../auth/index.js';
+import { areaFilters, occupyBed, releaseBed } from '../locations/index.js';
+import { BedSessionRepository } from './bed-session.repository.js';
+import { type BedSessionFilter } from './bed-session.schemas.js';
 import { type GuestSessionService } from './guest-session.service.js';
 
-const listLimit = 100;
-
-export interface BedSessionFilter {
-  readonly bedId?: string | undefined;
-  readonly status?: BedSessionStatus | undefined;
-}
-
+// Admitting (start) and discharging (close) patients. A bed session has no
+// patient identity; closing it also ends the patient's QR access.
 export class BedSessionService {
   public constructor(
     private readonly database: PrismaClient,
     private readonly guestSessions: GuestSessionService,
+    private readonly bedSessions = new BedSessionRepository(),
   ) {}
 
   // Newest first, at most 100; filter by bed or status for more specific views.
   public list(context: StaffContext, filter: BedSessionFilter) {
-    return this.database.bedSession.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.bedId !== undefined ? { bedId: filter.bedId } : {}),
-        ...(filter.status !== undefined ? { status: filter.status } : {}),
-        bed: { ward: areaFilters(context, 'bed.read').ward },
-      },
-      orderBy: { startedAt: 'desc' },
-      take: listLimit,
+    return this.bedSessions.list(this.database, context.tenant.hospitalId, {
+      ...filter,
+      wardArea: areaFilters(context, 'bed.read').ward,
     });
   }
 
@@ -40,8 +31,10 @@ export class BedSessionService {
       // Moves the bed AVAILABLE -> OCCUPIED atomically; the partial unique
       // index on BedSession is the database-level backstop.
       await occupyBed(transaction, hospitalId, bedId);
-      const session = await transaction.bedSession.create({
-        data: { hospitalId, bedId, startedByMembershipId: context.membershipId },
+      const session = await this.bedSessions.create(transaction, {
+        hospitalId,
+        bedId,
+        startedByMembershipId: context.membershipId,
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'bedSession.start',
@@ -56,18 +49,12 @@ export class BedSessionService {
   public close(context: StaffContext, id: string, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
-      const session = await transaction.bedSession.findUnique({
-        where: { hospitalId_id: { hospitalId, id } },
-      });
+      const session = await this.bedSessions.findById(transaction, hospitalId, id);
       if (!session) {
         throw new NotFoundError();
       }
       await this.requireBedInArea(transaction, context, session.bedId);
-      const closed = await transaction.bedSession.updateMany({
-        where: { hospitalId, id, status: 'ACTIVE' },
-        data: { status: 'CLOSED', endedAt: new Date(), closedByMembershipId: context.membershipId },
-      });
-      if (closed.count !== 1) {
+      if ((await this.bedSessions.close(transaction, hospitalId, id, context.membershipId)) !== 1) {
         throw new ConflictError('This bed session is already closed.');
       }
       await releaseBed(transaction, hospitalId, session.bedId);
@@ -82,9 +69,7 @@ export class BedSessionService {
         targetId: id,
         metadata: { bedId: session.bedId, revokedGuestSessions },
       });
-      return transaction.bedSession.findUniqueOrThrow({
-        where: { hospitalId_id: { hospitalId, id } },
-      });
+      return (await this.bedSessions.findById(transaction, hospitalId, id))!;
     });
   }
 
@@ -94,14 +79,12 @@ export class BedSessionService {
     context: StaffContext,
     bedId: string,
   ): Promise<void> {
-    const bed = await transaction.bed.findFirst({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        id: bedId,
-        ward: areaFilters(context, 'bedSession.manage').ward,
-      },
-      select: { id: true },
-    });
+    const bed = await this.bedSessions.findBedInArea(
+      transaction,
+      context.tenant.hospitalId,
+      bedId,
+      areaFilters(context, 'bedSession.manage').ward,
+    );
     if (!bed) throw new NotFoundError('The referenced bed was not found.');
   }
 }

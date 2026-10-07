@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { staffApi, type Me, type StaffRequest } from '../src/api';
-import { type AdminContext } from '../src/pages/AdminLayout';
-import { RequestsPage } from '../src/pages/RequestsPage';
+import { type AdminContext } from '../src/features/workspace/AdminLayout';
+import { RequestsPage } from '../src/features/requests/RequestsPage';
 
 const request: StaffRequest = {
   id: 'request-1',

@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { createApp } from '../../src/app.js';
 import { createLogger } from '../../src/config/logger.js';
 import { createPrismaClient } from '../../src/database/prisma.js';
-import { cityCare, greenValley } from '../../src/modules/hospitals/test-seed-data.js';
-import { seedTestHospitals } from '../../src/modules/hospitals/test-seed.js';
+import { cityCare, greenValley } from '../../src/seeds/test-seed-data.js';
+import { seedTestHospitals } from '../../src/seeds/test-seed.js';
 import { fixturePassword, requireTestDatabaseUrl } from '../support/fixtures.js';
 
 // The manual-testing hospitals must load, sign everyone in with the right
@@ -176,7 +176,7 @@ describe('Manual-testing hospitals', () => {
         hospital: { code: cityCare.code },
         serviceName: 'Drinking Water',
         status: 'ASSIGNED',
-        bed: { code: 'ICU-03' },
+        bed: { code: 'S-03' },
       },
     });
     const accepted = await as('neha').post(`/admin/requests/${water.id}/accept`, {

@@ -1,4 +1,7 @@
 import { type Prisma, type RequestPriority } from '@prisma/client';
+import { createSlaPolicy } from '../sla/index.js';
+import { CategoryRepository } from './category.repository.js';
+import { ServiceItemRepository } from './service-item.repository.js';
 
 // Editable examples for a new hospital, matching the services in the V1 plan.
 // They are data: no code depends on these names or timings.
@@ -58,29 +61,19 @@ export async function seedExampleCatalog(
 ): Promise<void> {
   const slaIdByName = new Map<string, string>();
   for (const example of slaExamples) {
-    const policy = await transaction.slaPolicy.create({
-      data: {
-        hospitalId,
-        name: example.name,
-        versions: {
-          create: {
-            version: 1,
-            acceptMinutes: example.acceptMinutes,
-            completeMinutes: example.completeMinutes,
-          },
-        },
-      },
-    });
-    slaIdByName.set(example.name, policy.id);
+    slaIdByName.set(example.name, await createSlaPolicy(transaction, hospitalId, example));
   }
 
-  const categories = await transaction.serviceCategory.createManyAndReturn({
-    data: categoryExamples.map((example) => ({ hospitalId, ...example })),
-  });
+  const categories = await new CategoryRepository().createMany(
+    transaction,
+    hospitalId,
+    categoryExamples,
+  );
   const categoryIdByName = new Map(categories.map((category) => [category.name, category.id]));
 
-  await transaction.serviceItem.createMany({
-    data: serviceExamples.map((example, index) => ({
+  await new ServiceItemRepository().createMany(
+    transaction,
+    serviceExamples.map((example, index) => ({
       hospitalId,
       name: example.name,
       priority: example.priority,
@@ -89,7 +82,7 @@ export async function seedExampleCatalog(
       departmentId: required(departmentIdByCode, example.department),
       slaPolicyId: required(slaIdByName, example.sla),
     })),
-  });
+  );
 }
 
 function required(map: ReadonlyMap<string, string>, key: string): string {

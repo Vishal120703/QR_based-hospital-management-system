@@ -13,13 +13,14 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { canAccessLocation, type StaffContext } from '../auth/auth.service.js';
-import { type GuestContext } from '../bed-sessions/guest-session.service.js';
-import { snapshotService } from '../catalog/service-snapshot.js';
-import { hospitalAccessSelect, hospitalIsOpen } from '../hospitals/hospital-access.js';
-import { findEligibleStaff } from '../staff/eligibility.js';
+import { recordStaffAudit } from '../audit/index.js';
+import { canAccessLocation, type StaffContext } from '../auth/index.js';
+import { type GuestContext } from '../bed-sessions/index.js';
+import { snapshotService } from '../catalog/index.js';
+import { hospitalIsOpen } from '../hospitals/index.js';
+import { findEligibleStaff } from '../staff/index.js';
 import { visibleRequestsWhere } from './request-scope.js';
+import { RequestRepository } from './request.repository.js';
 
 type Command =
   'assign' | 'accept' | 'start' | 'complete' | 'close' | 'cancel' | 'reject' | 'transfer';
@@ -81,8 +82,14 @@ function toPublicRequest(request: ServiceRequest) {
   };
 }
 
+// The patient request lifecycle: patients submit and cancel; staff assign,
+// accept, start, complete, close, cancel, turn down, and hand over. Every
+// change is version-checked and adds one append-only event.
 export class RequestService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly requests = new RequestRepository(),
+  ) {}
 
   // Every open request in the caller's area, plus the 100 most recent finished
   // ones, so a long history never hides work that still needs attention.
@@ -90,24 +97,9 @@ export class RequestService {
     if (!context.permissions.has('request.read')) throw new ForbiddenError();
     const where = visibleRequestsWhere(context);
     if (!where) return [];
-    const query = {
-      include: {
-        bed: { select: { code: true, displayName: true } },
-        assignee: { select: { user: { select: { displayName: true } } } },
-      },
-      orderBy: [{ submittedAt: 'desc' as const }, { id: 'desc' as const }],
-    };
     const [open, finished] = await Promise.all([
-      this.database.serviceRequest.findMany({
-        ...query,
-        where: { ...where, status: { in: [...activeRequestStatuses, 'COMPLETED'] } },
-        take: 500,
-      }),
-      this.database.serviceRequest.findMany({
-        ...query,
-        where: { ...where, status: { in: ['CLOSED', 'CANCELLED', 'REJECTED'] } },
-        take: 100,
-      }),
+      this.requests.listWithBed(this.database, where, [...activeRequestStatuses, 'COMPLETED'], 500),
+      this.requests.listWithBed(this.database, where, ['CLOSED', 'CANCELLED', 'REJECTED'], 100),
     ]);
     return [...open, ...finished].map(({ bed, assignee, ...request }) => ({
       ...request,
@@ -125,40 +117,36 @@ export class RequestService {
         await this.assertActiveGuest(transaction, guest, now);
         const snapshot = await snapshotService(transaction, guest.hospitalId, serviceId, now);
         if (!snapshot) throw new NotFoundError('The requested service is unavailable.');
-        const created = await transaction.serviceRequest.create({
-          data: {
-            publicId: `CR-${randomBytes(8).toString('hex').toUpperCase()}`,
-            hospitalId: guest.hospitalId,
-            bedId: guest.bedId,
-            bedSessionId: guest.bedSessionId,
-            serviceId,
-            serviceName: snapshot.serviceName,
-            categoryName: snapshot.categoryName,
-            departmentId: snapshot.departmentId,
-            priority: snapshot.priority,
-            slaPolicyId: snapshot.slaPolicyId,
-            slaPolicyVersionId: snapshot.slaPolicyVersionId,
-            slaPolicyVersion: snapshot.slaPolicyVersion,
-            acceptMinutes: snapshot.acceptMinutes,
-            completeMinutes: snapshot.completeMinutes,
-            escalationPolicyId: snapshot.escalationPolicyId,
-            acceptDueAt: snapshot.acceptDueAt,
-            completeDueAt: snapshot.completeDueAt,
-            submittedAt: now,
-          },
+        const created = await this.requests.create(transaction, {
+          publicId: `CR-${randomBytes(8).toString('hex').toUpperCase()}`,
+          hospitalId: guest.hospitalId,
+          bedId: guest.bedId,
+          bedSessionId: guest.bedSessionId,
+          serviceId,
+          serviceName: snapshot.serviceName,
+          categoryName: snapshot.categoryName,
+          departmentId: snapshot.departmentId,
+          priority: snapshot.priority,
+          slaPolicyId: snapshot.slaPolicyId,
+          slaPolicyVersionId: snapshot.slaPolicyVersionId,
+          slaPolicyVersion: snapshot.slaPolicyVersion,
+          acceptMinutes: snapshot.acceptMinutes,
+          completeMinutes: snapshot.completeMinutes,
+          escalationPolicyId: snapshot.escalationPolicyId,
+          acceptDueAt: snapshot.acceptDueAt,
+          completeDueAt: snapshot.completeDueAt,
+          submittedAt: now,
         });
-        await transaction.requestEvent.create({
-          data: {
-            hospitalId: guest.hospitalId,
-            requestId: created.id,
-            type: 'SUBMITTED',
-            resultingStatus: 'SUBMITTED',
-            actorType: 'GUEST',
-            actorId: guest.guestSessionId,
-            occurredAt: now,
-            requestVersion: created.version,
-            correlationId: correlationId ?? null,
-          },
+        await this.requests.addEvent(transaction, {
+          hospitalId: guest.hospitalId,
+          requestId: created.id,
+          type: 'SUBMITTED',
+          resultingStatus: 'SUBMITTED',
+          actorType: 'GUEST',
+          actorId: guest.guestSessionId,
+          occurredAt: now,
+          requestVersion: created.version,
+          correlationId: correlationId ?? null,
         });
         return created;
       });
@@ -192,15 +180,12 @@ export class RequestService {
   public async listForGuest(guest: GuestContext) {
     return this.database.$transaction(async (transaction) => {
       await this.assertActiveGuest(transaction, guest, new Date());
-      const requests = await transaction.serviceRequest.findMany({
-        where: {
-          hospitalId: guest.hospitalId,
-          bedId: guest.bedId,
-          bedSessionId: guest.bedSessionId,
-        },
-        orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
-        take: 100,
-      });
+      const requests = await this.requests.listForBedSession(
+        transaction,
+        guest.hospitalId,
+        guest.bedId,
+        guest.bedSessionId,
+      );
       return requests.map(toPublicRequest);
     });
   }
@@ -214,7 +199,7 @@ export class RequestService {
     if (!reason.trim()) throw new InvalidInputError('A reason is required.');
     return this.database.$transaction(async (transaction) => {
       await this.assertActiveGuest(transaction, guest, new Date());
-      const current = await transaction.serviceRequest.findUnique({ where: { publicId } });
+      const current = await this.requests.findByPublicId(transaction, publicId);
       if (
         !current ||
         current.hospitalId !== guest.hospitalId ||
@@ -227,34 +212,28 @@ export class RequestService {
         throw new ConflictError('This request can no longer be cancelled.');
       }
       const now = new Date();
-      const updated = await transaction.serviceRequest.updateMany({
-        where: {
-          hospitalId: guest.hospitalId,
-          id: current.id,
-          version: current.version,
-          status: current.status,
-        },
-        data: { status: 'CANCELLED', cancelledAt: now, version: { increment: 1 } },
+      const updated = await this.requests.updateIfUnchanged(
+        transaction,
+        guest.hospitalId,
+        current.id,
+        current,
+        { status: 'CANCELLED', cancelledAt: now, version: { increment: 1 } },
+      );
+      if (updated !== 1) throw new ConflictError('The request changed during cancellation.');
+      await this.requests.addEvent(transaction, {
+        hospitalId: guest.hospitalId,
+        requestId: current.id,
+        type: 'CANCELLED',
+        previousStatus: current.status,
+        resultingStatus: 'CANCELLED',
+        actorType: 'GUEST',
+        actorId: guest.guestSessionId,
+        occurredAt: now,
+        reason: reason.trim(),
+        requestVersion: current.version + 1,
+        correlationId,
       });
-      if (updated.count !== 1) throw new ConflictError('The request changed during cancellation.');
-      await transaction.requestEvent.create({
-        data: {
-          hospitalId: guest.hospitalId,
-          requestId: current.id,
-          type: 'CANCELLED',
-          previousStatus: current.status,
-          resultingStatus: 'CANCELLED',
-          actorType: 'GUEST',
-          actorId: guest.guestSessionId,
-          occurredAt: now,
-          reason: reason.trim(),
-          requestVersion: current.version + 1,
-          correlationId,
-        },
-      });
-      const cancelled = await transaction.serviceRequest.findUniqueOrThrow({
-        where: { hospitalId_id: { hospitalId: guest.hospitalId, id: current.id } },
-      });
+      const cancelled = await this.requests.findById(transaction, guest.hospitalId, current.id);
       return toPublicRequest(cancelled);
     });
   }
@@ -262,14 +241,12 @@ export class RequestService {
   private async findActiveForGuest(guest: GuestContext, serviceId: string) {
     return this.database.$transaction(async (transaction) => {
       await this.assertActiveGuest(transaction, guest, new Date());
-      return transaction.serviceRequest.findFirst({
-        where: {
-          hospitalId: guest.hospitalId,
-          bedId: guest.bedId,
-          bedSessionId: guest.bedSessionId,
-          serviceId,
-          status: { in: activeRequestStatuses },
-        },
+      return this.requests.findFirst(transaction, {
+        hospitalId: guest.hospitalId,
+        bedId: guest.bedId,
+        bedSessionId: guest.bedSessionId,
+        serviceId,
+        status: { in: activeRequestStatuses },
       });
     });
   }
@@ -280,34 +257,15 @@ export class RequestService {
     now: Date,
   ): Promise<void> {
     // A shared lock serializes request operations with BedSession.close.
-    const activeSession = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`
-      SELECT "id" FROM "BedSession"
-      WHERE "hospitalId" = ${guest.hospitalId}::uuid
-        AND "bedId" = ${guest.bedId}::uuid
-        AND "id" = ${guest.bedSessionId}::uuid
-        AND "status" = 'ACTIVE'
-      FOR SHARE
-    `);
-    if (activeSession.length !== 1) throw new UnauthorizedError();
+    if (!(await this.requests.lockActiveBedSession(transaction, guest))) {
+      throw new UnauthorizedError();
+    }
     // QR rotation/revocation updates GuestSession rows. Lock this credential
     // too, so neither operation can revoke it between our check and commit.
-    const activeGuest = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`
-      SELECT "id" FROM "GuestSession"
-      WHERE "id" = ${guest.guestSessionId}::uuid
-        AND "hospitalId" = ${guest.hospitalId}::uuid
-        AND "bedId" = ${guest.bedId}::uuid
-        AND "bedSessionId" = ${guest.bedSessionId}::uuid
-        AND "revokedAt" IS NULL
-      FOR SHARE
-    `);
-    if (activeGuest.length !== 1) throw new UnauthorizedError();
-    const session = await transaction.guestSession.findUnique({
-      where: { id: guest.guestSessionId },
-      include: {
-        hospital: { select: hospitalAccessSelect },
-        bedSession: { include: { bed: { select: { active: true, status: true } } } },
-      },
-    });
+    if (!(await this.requests.lockActiveGuestSession(transaction, guest))) {
+      throw new UnauthorizedError();
+    }
+    const session = await this.requests.findGuestSession(transaction, guest.guestSessionId);
     if (
       !session ||
       session.hospitalId !== guest.hospitalId ||
@@ -328,7 +286,7 @@ export class RequestService {
     if (!context.permissions.has('request.read')) throw new ForbiddenError();
     const where = visibleRequestsWhere(context);
     const request = where
-      ? await this.database.serviceRequest.findFirst({ where: { AND: [where, { id }] } })
+      ? await this.requests.findFirst(this.database, { AND: [where, { id }] })
       : null;
     if (!request) {
       throw new NotFoundError();
@@ -338,10 +296,7 @@ export class RequestService {
 
   public async events(context: StaffContext, id: string) {
     await this.get(context, id);
-    return this.database.requestEvent.findMany({
-      where: { hospitalId: context.tenant.hospitalId, requestId: id },
-      orderBy: { requestVersion: 'asc' },
-    });
+    return this.requests.listEvents(this.database, context.tenant.hospitalId, id);
   }
 
   public assign(context: StaffContext, id: string, input: CommandInput, correlationId: string) {
@@ -379,10 +334,7 @@ export class RequestService {
     if (!context.permissions.has(commandPermissions[action])) throw new ForbiddenError();
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
-      const current = await transaction.serviceRequest.findUnique({
-        where: { hospitalId_id: { hospitalId, id } },
-        include: { bed: { select: { wardId: true, ward: { select: { floorId: true } } } } },
-      });
+      const current = await this.requests.findWithPlace(transaction, hospitalId, id);
       if (
         !current ||
         !canAccessLocation(context, commandPermissions[action], {
@@ -454,11 +406,14 @@ export class RequestService {
       if (action === 'cancel') data.cancelledAt = now;
       if (action === 'reject') data.rejectedAt = now;
 
-      const updated = await transaction.serviceRequest.updateMany({
-        where: { hospitalId, id, version: current.version, status: current.status },
+      const updated = await this.requests.updateIfUnchanged(
+        transaction,
+        hospitalId,
+        id,
+        current,
         data,
-      });
-      if (updated.count !== 1) throw new ConflictError('The request changed during this command.');
+      );
+      if (updated !== 1) throw new ConflictError('The request changed during this command.');
 
       const metadata: Prisma.InputJsonObject = {
         ...(action === 'assign' || action === 'transfer'
@@ -466,21 +421,19 @@ export class RequestService {
           : {}),
         ...(action === 'transfer' ? { previousAssigneeId: current.assigneeId } : {}),
       };
-      await transaction.requestEvent.create({
-        data: {
-          hospitalId,
-          requestId: id,
-          type: transitions[action].event,
-          previousStatus: current.status,
-          resultingStatus: transitions[action].to,
-          actorType: 'STAFF',
-          actorId: context.membershipId,
-          occurredAt: now,
-          reason: input.reason?.trim() || null,
-          metadata,
-          requestVersion: current.version + 1,
-          correlationId,
-        },
+      await this.requests.addEvent(transaction, {
+        hospitalId,
+        requestId: id,
+        type: transitions[action].event,
+        previousStatus: current.status,
+        resultingStatus: transitions[action].to,
+        actorType: 'STAFF',
+        actorId: context.membershipId,
+        occurredAt: now,
+        reason: input.reason?.trim() || null,
+        metadata,
+        requestVersion: current.version + 1,
+        correlationId,
       });
       if (['assign', 'transfer', 'cancel', 'reject'].includes(action)) {
         await recordStaffAudit(transaction, context, correlationId, {
@@ -495,9 +448,7 @@ export class RequestService {
           },
         });
       }
-      return transaction.serviceRequest.findUniqueOrThrow({
-        where: { hospitalId_id: { hospitalId, id } },
-      });
+      return this.requests.findById(transaction, hospitalId, id);
     });
   }
 }

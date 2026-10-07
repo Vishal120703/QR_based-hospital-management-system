@@ -58,17 +58,13 @@ enum BedStatus {
   MAINTENANCE
 }
 
-// Clinical unit types, so one model fits general wards, critical care,
-// emergency, day care, maternity, and specialty units.
+// Clinical unit types, so one model fits general wards, emergency, day care,
+// maternity, and specialty units. Intensive care (ICU, HDU, CCU, NICU, PICU)
+// is deliberately not supported: those patients are not served by bedside QR.
 enum WardType {
   GENERAL
   PRIVATE
   SEMI_PRIVATE
-  ICU
-  HDU
-  CCU
-  NICU
-  PICU
   EMERGENCY
   DAY_CARE
   MATERNITY
@@ -96,11 +92,8 @@ enum RoomType {
 // and treatment chairs.
 enum BedType {
   STANDARD
-  ICU
-  VENTILATOR
   ISOLATION
   PEDIATRIC_COT
-  NEONATAL
   DAY_CARE_CHAIR
   DIALYSIS_CHAIR
   EMERGENCY_TROLLEY

@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { staffApi, type StaffRequest } from '../src/api';
-import { type AdminContext } from '../src/pages/AdminLayout';
-import { OverviewPage } from '../src/pages/OverviewPage';
+import { type AdminContext } from '../src/features/workspace/AdminLayout';
+import { OverviewPage } from '../src/features/workspace/OverviewPage';
 
 const submitted: StaffRequest = {
   id: 'request-1',

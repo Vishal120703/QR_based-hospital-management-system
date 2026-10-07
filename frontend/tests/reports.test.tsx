@@ -4,10 +4,10 @@ import { type ReactNode } from 'react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { reportApi, type RequestLogRow, type RequestReport } from '../src/api';
-import { type AdminContext } from '../src/pages/AdminLayout';
-import { AuditLogPage } from '../src/pages/AuditLogPage';
-import { ReportsPage } from '../src/pages/ReportsPage';
-import { requestLogCsv, toCsv } from '../src/report-format';
+import { type AdminContext } from '../src/features/workspace/AdminLayout';
+import { AuditLogPage } from '../src/features/reports/AuditLogPage';
+import { ReportsPage } from '../src/features/reports/ReportsPage';
+import { requestLogCsv, toCsv } from '../src/features/reports/report-format';
 
 function show(page: ReactNode) {
   const context: AdminContext = {

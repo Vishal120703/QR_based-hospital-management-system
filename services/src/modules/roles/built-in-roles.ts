@@ -1,4 +1,4 @@
-import { type Prisma, type RoleScopeLevel } from '@prisma/client';
+import { type RoleScopeLevel } from '@prisma/client';
 import { permissionCatalog, type PermissionKey } from './permissions.js';
 
 export type BuiltInRoleKey =
@@ -85,31 +85,3 @@ export const builtInRoles: readonly BuiltInRole[] = [
 ];
 
 export const lockedRoleKey: BuiltInRoleKey = 'HOSPITAL_MANAGER';
-
-// Creates the built-in roles for a new hospital, inside its bootstrap transaction.
-export async function createBuiltInRoles(
-  transaction: Prisma.TransactionClient,
-  hospitalId: string,
-): Promise<Map<BuiltInRoleKey, string>> {
-  const ids = new Map<BuiltInRoleKey, string>();
-  for (const definition of builtInRoles) {
-    const role = await transaction.role.create({
-      data: {
-        hospitalId,
-        name: definition.name,
-        description: definition.description,
-        scopeLevel: definition.scopeLevel,
-        systemKey: definition.key,
-      },
-    });
-    await transaction.rolePermission.createMany({
-      data: definition.permissions.map((permissionKey) => ({
-        hospitalId,
-        roleId: role.id,
-        permissionKey,
-      })),
-    });
-    ids.set(definition.key, role.id);
-  }
-  return ids;
-}

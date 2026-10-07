@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { staffApi, type Hospital } from '../src/api';
-import * as logoImage from '../src/logo-image';
-import { type AdminContext } from '../src/pages/AdminLayout';
-import { HospitalProfilePage } from '../src/pages/HospitalProfilePage';
+import * as logoImage from '../src/lib/logo-image';
+import { type AdminContext } from '../src/features/workspace/AdminLayout';
+import { HospitalProfilePage } from '../src/features/hospital/HospitalProfilePage';
 
 const hospital: Hospital = {
   id: 'hospital',

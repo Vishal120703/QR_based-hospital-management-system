@@ -1,29 +1,24 @@
-import { type Prisma, type PrismaClient, type RoleScopeLevel } from '@prisma/client';
+import {
+  type Prisma,
+  type PrismaClient,
+  type RoleScopeLevel,
+  type ScopeType,
+} from '@prisma/client';
 import {
   ConflictError,
   ForbiddenError,
   InvalidInputError,
   NotFoundError,
 } from '../../common/errors/app-error.js';
-import { type StaffContext } from '../auth/auth.service.js';
-import { builtInRoles, lockedRoleKey } from './built-in-roles.js';
-
-export interface RoleInput {
-  readonly name?: string | undefined;
-  readonly description?: string | null | undefined;
-  readonly active?: boolean | undefined;
-  readonly scopeLevel?: RoleScopeLevel | undefined;
-  readonly permissionKeys?: readonly string[] | undefined;
-}
+import { recordStaffAudit } from '../audit/index.js';
+import { type StaffContext } from '../auth/index.js';
+import { builtInRoles, lockedRoleKey, type BuiltInRoleKey } from './built-in-roles.js';
+import { permissionCatalog } from './permissions.js';
+import { RoleRepository, type RoleRow } from './role.repository.js';
+import { type CreateRoleInput, type UpdateRoleInput } from './role.schemas.js';
 
 type Transaction = Prisma.TransactionClient;
-
-const roleInclude = {
-  rolePermissions: { select: { permissionKey: true } },
-  _count: { select: { userRoles: true } },
-} satisfies Prisma.RoleInclude;
-
-type RoleRow = Prisma.RoleGetPayload<{ include: typeof roleInclude }>;
+const repository = new RoleRepository();
 
 function toView({ rolePermissions, _count, ...role }: RoleRow) {
   return {
@@ -37,22 +32,84 @@ function toView({ rolePermissions, _count, ...role }: RoleRow) {
   };
 }
 
-const scopeTypeFor: Record<RoleScopeLevel, 'HOSPITAL' | 'FLOOR' | 'WARD' | 'DEPARTMENT'> = {
+const scopeTypeFor: Record<RoleScopeLevel, ScopeType> = {
   HOSPITAL: 'HOSPITAL',
   FLOOR: 'FLOOR',
   WARD: 'WARD',
   DEPARTMENT: 'DEPARTMENT',
 };
 
+// Nobody may hand out, change, or take away more power than they hold
+// hospital-wide.
+const exceedsCaller = (
+  context: StaffContext,
+  permissions: readonly { readonly permissionKey: string }[],
+) => permissions.some((item) => !context.hospitalPermissions.has(item.permissionKey));
+
+// Makes sure every permission in the catalog exists. Runs when a hospital is
+// created, inside its transaction.
+export function ensurePermissionCatalog(transaction: Transaction): Promise<void> {
+  return repository.upsertPermissions(transaction, permissionCatalog);
+}
+
+// Creates the built-in roles for a new hospital, inside its bootstrap transaction.
+export async function createBuiltInRoles(
+  transaction: Transaction,
+  hospitalId: string,
+): Promise<Map<BuiltInRoleKey, string>> {
+  const ids = new Map<BuiltInRoleKey, string>();
+  for (const definition of builtInRoles) {
+    const role = await repository.create(transaction, {
+      hospitalId,
+      name: definition.name,
+      description: definition.description,
+      scopeLevel: definition.scopeLevel,
+      systemKey: definition.key,
+    });
+    await repository.addPermissions(transaction, hospitalId, role.id, definition.permissions);
+    ids.set(definition.key, role.id);
+  }
+  return ids;
+}
+
+// Gives a role to a person for one place, without the checks a staff member
+// is held to: for hospital setup, seeding, and super admin actions.
+export async function grantRole(
+  transaction: Transaction,
+  grant: {
+    readonly hospitalId: string;
+    readonly membershipId: string;
+    readonly roleId: string;
+    readonly scopeType: ScopeType;
+    readonly scopeId: string;
+  },
+): Promise<void> {
+  const userRole =
+    (await repository.findUserRole(
+      transaction,
+      grant.hospitalId,
+      grant.membershipId,
+      grant.roleId,
+    )) ??
+    (await repository.createUserRole(transaction, {
+      hospitalId: grant.hospitalId,
+      membershipId: grant.membershipId,
+      roleId: grant.roleId,
+    }));
+  await repository.createScope(transaction, grant.hospitalId, userRole.id, {
+    scopeType: grant.scopeType,
+    scopeId: grant.scopeId,
+  });
+}
+
 export class RoleService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly roles = repository,
+  ) {}
 
   public async list(context: StaffContext) {
-    const roles = await this.database.role.findMany({
-      where: { hospitalId: context.tenant.hospitalId },
-      include: roleInclude,
-      orderBy: { name: 'asc' },
-    });
+    const roles = await this.roles.list(this.database, context.tenant.hospitalId);
     // Built-in roles in hierarchy order, then the hospital's own roles by name.
     const rank = (role: RoleRow) => {
       const index = builtInRoles.findIndex((item) => item.key === role.systemKey);
@@ -62,59 +119,43 @@ export class RoleService {
   }
 
   public async get(context: StaffContext, id: string) {
-    const role = await this.database.role.findFirst({
-      where: { hospitalId: context.tenant.hospitalId, id },
-      include: roleInclude,
-    });
+    const role = await this.roles.findById(this.database, context.tenant.hospitalId, id);
     if (!role) {
       throw new NotFoundError();
     }
     return toView(role);
   }
 
-  public async create(
-    context: StaffContext,
-    input: RoleInput & { name: string },
-    requestId: string,
-  ) {
+  public async create(context: StaffContext, input: CreateRoleInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     const permissionKeys = [...new Set(input.permissionKeys ?? [])];
     await this.validatePermissionGrant(context, permissionKeys);
 
     return this.database.$transaction(async (transaction) => {
-      const role = await transaction.role.create({
-        data: {
-          hospitalId,
-          name: input.name,
-          ...(input.description !== undefined ? { description: input.description } : {}),
-          active: input.active ?? true,
-          scopeLevel: input.scopeLevel ?? 'HOSPITAL',
-        },
+      const role = await this.roles.create(transaction, {
+        hospitalId,
+        name: input.name,
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        active: input.active ?? true,
+        scopeLevel: input.scopeLevel ?? 'HOSPITAL',
       });
-      if (permissionKeys.length > 0) {
-        await transaction.rolePermission.createMany({
-          data: permissionKeys.map((permissionKey) => ({
-            hospitalId,
-            roleId: role.id,
-            permissionKey,
-          })),
-        });
-      }
-      await this.audit(transaction, context, requestId, 'role.create', 'Role', role.id, {
-        name: role.name,
-        scopeLevel: role.scopeLevel,
-        permissionKeys,
+      await this.roles.addPermissions(transaction, hospitalId, role.id, permissionKeys);
+      await recordStaffAudit(transaction, context, requestId, {
+        action: 'role.create',
+        targetType: 'Role',
+        targetId: role.id,
+        metadata: { name: role.name, scopeLevel: role.scopeLevel, permissionKeys },
       });
-      return toView(
-        await transaction.role.findFirstOrThrow({
-          where: { hospitalId, id: role.id },
-          include: roleInclude,
-        }),
-      );
+      return toView((await this.roles.findById(transaction, hospitalId, role.id))!);
     });
   }
 
-  public async update(context: StaffContext, id: string, input: RoleInput, requestId: string) {
+  public async update(
+    context: StaffContext,
+    id: string,
+    input: UpdateRoleInput,
+    requestId: string,
+  ) {
     const hospitalId = context.tenant.hospitalId;
     const permissionKeys = input.permissionKeys && [...new Set(input.permissionKeys)];
     if (permissionKeys) {
@@ -123,10 +164,7 @@ export class RoleService {
 
     return this.database.$transaction(
       async (transaction) => {
-        const existing = await transaction.role.findFirst({
-          where: { hospitalId, id },
-          include: roleInclude,
-        });
+        const existing = await this.roles.findById(transaction, hospitalId, id);
         if (!existing) {
           throw new NotFoundError();
         }
@@ -136,11 +174,7 @@ export class RoleService {
           );
         }
         // Nobody may weaken or reshape a role more powerful than their own.
-        if (
-          existing.rolePermissions.some(
-            (item) => !context.hospitalPermissions.has(item.permissionKey),
-          )
-        ) {
+        if (exceedsCaller(context, existing.rolePermissions)) {
           throw new ForbiddenError();
         }
         if (existing.systemKey && (input.name !== undefined || input.scopeLevel !== undefined)) {
@@ -164,31 +198,17 @@ export class RoleService {
             throw new ForbiddenError();
           }
         }
-        await transaction.role.update({
-          where: { hospitalId_id: { hospitalId, id } },
-          data: {
-            ...(input.name !== undefined ? { name: input.name } : {}),
-            ...(input.description !== undefined ? { description: input.description } : {}),
-            ...(input.active !== undefined ? { active: input.active } : {}),
-            ...(input.scopeLevel !== undefined ? { scopeLevel: input.scopeLevel } : {}),
-          },
+        await this.roles.update(transaction, hospitalId, id, {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.active !== undefined ? { active: input.active } : {}),
+          ...(input.scopeLevel !== undefined ? { scopeLevel: input.scopeLevel } : {}),
         });
         if (permissionKeys) {
-          await transaction.rolePermission.deleteMany({ where: { hospitalId, roleId: id } });
-          if (permissionKeys.length > 0) {
-            await transaction.rolePermission.createMany({
-              data: permissionKeys.map((permissionKey) => ({
-                hospitalId,
-                roleId: id,
-                permissionKey,
-              })),
-            });
-          }
+          await this.roles.removePermissions(transaction, hospitalId, id);
+          await this.roles.addPermissions(transaction, hospitalId, id, permissionKeys);
         }
-        const updated = await transaction.role.findFirstOrThrow({
-          where: { hospitalId, id },
-          include: roleInclude,
-        });
+        const updated = (await this.roles.findById(transaction, hospitalId, id))!;
         const snapshot = (row: RoleRow) => ({
           name: row.name,
           description: row.description,
@@ -196,9 +216,11 @@ export class RoleService {
           scopeLevel: row.scopeLevel,
           permissionKeys: row.rolePermissions.map((item) => item.permissionKey),
         });
-        await this.audit(transaction, context, requestId, 'role.update', 'Role', id, {
-          before: snapshot(existing),
-          after: snapshot(updated),
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'role.update',
+          targetType: 'Role',
+          targetId: id,
+          metadata: { before: snapshot(existing), after: snapshot(updated) },
         });
         return toView(updated);
       },
@@ -206,40 +228,32 @@ export class RoleService {
     );
   }
 
-  public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {
+  public async remove(context: StaffContext, id: string, requestId: string): Promise<void> {
     const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(
       async (transaction) => {
-        const existing = await transaction.role.findFirst({
-          where: { hospitalId, id },
-          include: { rolePermissions: { select: { permissionKey: true } } },
-        });
+        const existing = await this.roles.findWithPermissions(transaction, hospitalId, id);
         if (!existing) {
           throw new NotFoundError();
         }
         if (existing.systemKey) {
           throw new ConflictError('Built-in roles cannot be deleted.');
         }
-        if (
-          existing.rolePermissions.some(
-            (item) => !context.hospitalPermissions.has(item.permissionKey),
-          )
-        ) {
+        if (exceedsCaller(context, existing.rolePermissions)) {
           throw new ForbiddenError();
         }
-        const assignmentCount = await transaction.userRole.count({
-          where: { hospitalId, roleId: id },
-        });
-        if (assignmentCount > 0) {
+        if ((await this.roles.countAssignments(transaction, hospitalId, id)) > 0) {
           throw new ConflictError('This role is assigned to staff and cannot be deleted.');
         }
-        await transaction.rolePermission.deleteMany({ where: { hospitalId, roleId: id } });
-        const deleted = await transaction.role.deleteMany({ where: { hospitalId, id } });
-        if (deleted.count !== 1) {
+        await this.roles.removePermissions(transaction, hospitalId, id);
+        if ((await this.roles.delete(transaction, hospitalId, id)) !== 1) {
           throw new NotFoundError();
         }
-        await this.audit(transaction, context, requestId, 'role.delete', 'Role', id, {
-          name: existing.name,
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'role.delete',
+          targetType: 'Role',
+          targetId: id,
+          metadata: { name: existing.name },
         });
       },
       { isolationLevel: 'Serializable' },
@@ -260,11 +274,8 @@ export class RoleService {
     return this.database.$transaction(
       async (transaction) => {
         const [membership, role] = await Promise.all([
-          transaction.hospitalMembership.findFirst({ where: { hospitalId, id: membershipId } }),
-          transaction.role.findFirst({
-            where: { hospitalId, id: roleId, active: true },
-            include: { rolePermissions: { select: { permissionKey: true } } },
-          }),
+          this.roles.findMembership(transaction, hospitalId, membershipId),
+          this.roles.findActiveWithPermissions(transaction, hospitalId, roleId),
         ]);
         if (!membership || !role) {
           throw new NotFoundError();
@@ -272,36 +283,24 @@ export class RoleService {
         if (membership.status !== 'ACTIVE') {
           throw new ConflictError('The staff membership is not active.');
         }
-        if (
-          role.rolePermissions.some((item) => !context.hospitalPermissions.has(item.permissionKey))
-        ) {
+        if (exceedsCaller(context, role.rolePermissions)) {
           throw new ForbiddenError();
         }
         const scope = await this.resolveScope(transaction, hospitalId, role.scopeLevel, scopeId);
 
         const userRole =
-          (await transaction.userRole.findUnique({
-            where: { hospitalId_membershipId_roleId: { hospitalId, membershipId, roleId } },
-          })) ??
-          (await transaction.userRole.create({ data: { hospitalId, membershipId, roleId } }));
-        const duplicate = await transaction.scopeAssignment.findFirst({
-          where: { hospitalId, userRoleId: userRole.id, ...scope },
-        });
-        if (duplicate) {
+          (await this.roles.findUserRole(transaction, hospitalId, membershipId, roleId)) ??
+          (await this.roles.createUserRole(transaction, { hospitalId, membershipId, roleId }));
+        if (await this.roles.findScope(transaction, hospitalId, userRole.id, scope)) {
           throw new ConflictError('This person already has this role there.');
         }
-        await transaction.scopeAssignment.create({
-          data: { hospitalId, userRoleId: userRole.id, ...scope },
+        await this.roles.createScope(transaction, hospitalId, userRole.id, scope);
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'role.assign',
+          targetType: 'HospitalMembership',
+          targetId: membershipId,
+          metadata: { roleId, ...scope },
         });
-        await this.audit(
-          transaction,
-          context,
-          requestId,
-          'role.assign',
-          'HospitalMembership',
-          membershipId,
-          { roleId, ...scope },
-        );
         return { userRoleId: userRole.id, roleId, ...scope };
       },
       { isolationLevel: 'Serializable' },
@@ -322,22 +321,17 @@ export class RoleService {
     const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(
       async (transaction) => {
-        const userRole = await transaction.userRole.findUnique({
-          where: { hospitalId_membershipId_roleId: { hospitalId, membershipId, roleId } },
-          include: {
-            role: { include: { rolePermissions: { select: { permissionKey: true } } } },
-            scopes: true,
-          },
-        });
+        const userRole = await this.roles.findUserRoleWithScopes(
+          transaction,
+          hospitalId,
+          membershipId,
+          roleId,
+        );
         if (!userRole) {
           throw new NotFoundError();
         }
         // Symmetric with assignment: nobody can remove a role more privileged than their own.
-        if (
-          userRole.role.rolePermissions.some(
-            (item) => !context.hospitalPermissions.has(item.permissionKey),
-          )
-        ) {
+        if (exceedsCaller(context, userRole.role.rolePermissions)) {
           throw new ForbiddenError();
         }
         const removing = scopeId
@@ -350,23 +344,20 @@ export class RoleService {
         if (removesRole && userRole.role.systemKey === lockedRoleKey) {
           await this.requireAnotherManager(transaction, hospitalId, membershipId);
         }
-        await transaction.scopeAssignment.deleteMany({
-          where: { hospitalId, id: { in: removing.map((scope) => scope.id) } },
-        });
-        if (removesRole) {
-          await transaction.userRole.delete({
-            where: { hospitalId_id: { hospitalId, id: userRole.id } },
-          });
-        }
-        await this.audit(
+        await this.roles.deleteScopes(
           transaction,
-          context,
-          requestId,
-          'role.unassign',
-          'HospitalMembership',
-          membershipId,
-          { roleId, scopeIds: removing.map((scope) => scope.scopeId) },
+          hospitalId,
+          removing.map((scope) => scope.id),
         );
+        if (removesRole) {
+          await this.roles.deleteUserRole(transaction, hospitalId, userRole.id);
+        }
+        await recordStaffAudit(transaction, context, requestId, {
+          action: 'role.unassign',
+          targetType: 'HospitalMembership',
+          targetId: membershipId,
+          metadata: { roleId, scopeIds: removing.map((scope) => scope.scopeId) },
+        });
       },
       { isolationLevel: 'Serializable' },
     );
@@ -378,14 +369,12 @@ export class RoleService {
     hospitalId: string,
     leavingMembershipId: string,
   ): Promise<void> {
-    const others = await transaction.userRole.count({
-      where: {
-        hospitalId,
-        role: { systemKey: lockedRoleKey },
-        membershipId: { not: leavingMembershipId },
-        membership: { status: 'ACTIVE' },
-      },
-    });
+    const others = await this.roles.countOtherActiveManagers(
+      transaction,
+      hospitalId,
+      lockedRoleKey,
+      leavingMembershipId,
+    );
     if (others === 0) {
       throw new ConflictError('A hospital must keep at least one active Hospital Manager.');
     }
@@ -396,7 +385,7 @@ export class RoleService {
     hospitalId: string,
     level: RoleScopeLevel,
     scopeId: string | undefined,
-  ): Promise<{ scopeType: 'HOSPITAL' | 'FLOOR' | 'WARD' | 'DEPARTMENT'; scopeId: string }> {
+  ): Promise<{ scopeType: ScopeType; scopeId: string }> {
     if (level === 'HOSPITAL') {
       if (scopeId && scopeId !== hospitalId) {
         throw new InvalidInputError(
@@ -408,13 +397,7 @@ export class RoleService {
     if (!scopeId) {
       throw new InvalidInputError(`Choose the ${level.toLowerCase()} this role applies to.`);
     }
-    const key = { where: { hospitalId_id: { hospitalId, id: scopeId } } };
-    const place =
-      level === 'FLOOR'
-        ? await transaction.floor.findUnique(key)
-        : level === 'WARD'
-          ? await transaction.ward.findUnique(key)
-          : await transaction.department.findUnique(key);
+    const place = await this.roles.findPlace(transaction, hospitalId, level, scopeId);
     if (!place) {
       throw new NotFoundError(`That ${level.toLowerCase()} was not found.`);
     }
@@ -422,29 +405,6 @@ export class RoleService {
       throw new ConflictError(`That ${level.toLowerCase()} is inactive.`);
     }
     return { scopeType: scopeTypeFor[level], scopeId };
-  }
-
-  private async audit(
-    transaction: Transaction,
-    context: StaffContext,
-    requestId: string,
-    action: string,
-    targetType: string,
-    targetId: string,
-    metadata: Prisma.InputJsonObject,
-  ) {
-    await transaction.auditLog.create({
-      data: {
-        hospitalId: context.tenant.hospitalId,
-        actorType: 'STAFF',
-        actorMembershipId: context.membershipId,
-        action,
-        targetType,
-        targetId,
-        metadata,
-        requestId,
-      },
-    });
   }
 
   private async validatePermissionGrant(
@@ -455,9 +415,7 @@ export class RoleService {
     if (permissionKeys.some((key) => !context.hospitalPermissions.has(key))) {
       throw new ForbiddenError();
     }
-    const count = await this.database.permission.count({
-      where: { key: { in: [...permissionKeys] } },
-    });
+    const count = await this.roles.countKnownPermissions(this.database, permissionKeys);
     if (count !== permissionKeys.length) {
       throw new NotFoundError();
     }

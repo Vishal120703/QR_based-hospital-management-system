@@ -1,7 +1,15 @@
-import { type Department, type PrismaClient } from '@prisma/client';
+import { type Department, type Prisma, type PrismaClient } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { type StaffContext } from '../auth/auth.service.js';
+import { recordStaffAudit } from '../audit/index.js';
+import { type StaffContext } from '../auth/index.js';
+import { DepartmentRepository } from './department.repository.js';
+import {
+  type CreateDepartmentInput,
+  type DepartmentFilter,
+  type UpdateDepartmentInput,
+} from './department.schemas.js';
+
+const repository = new DepartmentRepository();
 
 // Editable examples given to every new hospital. Departments are data, not
 // logic: no code path depends on these codes.
@@ -15,42 +23,51 @@ export const exampleDepartments = [
   ['TRANSPORT', 'Transport'],
 ] as const;
 
-export interface DepartmentInput {
-  readonly code?: string | undefined;
-  readonly name?: string | undefined;
-  readonly active?: boolean | undefined;
+// Creates the example departments for a new hospital, inside its bootstrap
+// transaction, and returns their IDs by code.
+export async function createExampleDepartments(
+  transaction: Prisma.TransactionClient,
+  hospitalId: string,
+): Promise<Map<string, string>> {
+  const created = await repository.createMany(
+    transaction,
+    hospitalId,
+    exampleDepartments.map(([code, name]) => ({ code, name })),
+  );
+  return new Map(created.map((department) => [department.code, department.id]));
 }
 
 const snapshot = (row: Department) => ({ code: row.code, name: row.name, active: row.active });
 
 export class DepartmentService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly departments = repository,
+  ) {}
 
-  public list(context: StaffContext, filter: { active?: boolean | undefined }) {
-    return this.database.department.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.active !== undefined ? { active: filter.active } : {}),
-      },
-      orderBy: { name: 'asc' },
-    });
+  public list(context: StaffContext, filter: DepartmentFilter) {
+    return this.departments.list(this.database, context.tenant.hospitalId, filter);
   }
 
   public async get(context: StaffContext, id: string) {
-    const department = await this.database.department.findUnique({
-      where: { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } },
-    });
+    const department = await this.departments.findById(
+      this.database,
+      context.tenant.hospitalId,
+      id,
+    );
     if (!department) {
       throw new NotFoundError();
     }
     return department;
   }
 
-  public create(context: StaffContext, input: { code: string; name: string }, requestId: string) {
+  public create(context: StaffContext, input: CreateDepartmentInput, requestId: string) {
     return this.database.$transaction(async (transaction) => {
-      const department = await transaction.department.create({
-        data: { hospitalId: context.tenant.hospitalId, code: input.code, name: input.name },
-      });
+      const department = await this.departments.create(
+        transaction,
+        context.tenant.hospitalId,
+        input,
+      );
       await recordStaffAudit(transaction, context, requestId, {
         action: 'department.create',
         targetType: 'Department',
@@ -61,21 +78,23 @@ export class DepartmentService {
     });
   }
 
-  public update(context: StaffContext, id: string, input: DepartmentInput, requestId: string) {
-    const where = { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } };
+  public update(
+    context: StaffContext,
+    id: string,
+    input: UpdateDepartmentInput,
+    requestId: string,
+  ) {
+    const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(
       async (transaction) => {
-        const before = await transaction.department.findUnique({ where });
+        const before = await this.departments.findById(transaction, hospitalId, id);
         if (!before) {
           throw new NotFoundError();
         }
-        const after = await transaction.department.update({
-          where,
-          data: {
-            ...(input.code !== undefined ? { code: input.code } : {}),
-            ...(input.name !== undefined ? { name: input.name } : {}),
-            ...(input.active !== undefined ? { active: input.active } : {}),
-          },
+        const after = await this.departments.update(transaction, hospitalId, id, {
+          ...(input.code !== undefined ? { code: input.code } : {}),
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.active !== undefined ? { active: input.active } : {}),
         });
         await recordStaffAudit(transaction, context, requestId, {
           action: 'department.update',
@@ -89,28 +108,19 @@ export class DepartmentService {
     );
   }
 
-  public async delete(context: StaffContext, id: string, requestId: string): Promise<void> {
+  public async remove(context: StaffContext, id: string, requestId: string): Promise<void> {
     const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(async (transaction) => {
-      const before = await transaction.department.findUnique({
-        where: { hospitalId_id: { hospitalId, id } },
-      });
+      const before = await this.departments.findById(transaction, hospitalId, id);
       if (!before) {
         throw new NotFoundError();
       }
-      const staff = await transaction.staffDepartment.count({
-        where: { hospitalId, departmentId: id },
-      });
-      const shifts = await transaction.shift.count({ where: { hospitalId, departmentId: id } });
-      const services = await transaction.serviceItem.count({
-        where: { hospitalId, departmentId: id },
-      });
-      if (staff + shifts + services > 0) {
+      if ((await this.departments.countUses(transaction, hospitalId, id)) > 0) {
         throw new ConflictError(
           'This department has staff, shifts, or services. Deactivate it instead.',
         );
       }
-      await transaction.department.delete({ where: { hospitalId_id: { hospitalId, id } } });
+      await this.departments.delete(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'department.delete',
         targetType: 'Department',

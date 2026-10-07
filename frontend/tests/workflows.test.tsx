@@ -12,10 +12,10 @@ import {
   type SlaPolicy,
   type StaffMember,
 } from '../src/api';
-import { AdminLayout } from '../src/pages/AdminLayout';
-import { EligibilityPage } from '../src/pages/EligibilityPage';
-import { SlaPage } from '../src/pages/SlaPage';
-import { StaffPage } from '../src/pages/StaffPage';
+import { AdminLayout } from '../src/features/workspace/AdminLayout';
+import { EligibilityPage } from '../src/features/people/EligibilityPage';
+import { SlaPage } from '../src/features/services/SlaPage';
+import { StaffPage } from '../src/features/people/StaffPage';
 
 const me: Me = {
   user: { id: 'admin-user', email: 'admin@example.test', displayName: 'Test Admin' },

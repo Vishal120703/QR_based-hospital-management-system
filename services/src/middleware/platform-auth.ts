@@ -1,10 +1,7 @@
 import { type Request, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { UnauthorizedError } from '../common/errors/app-error.js';
-import {
-  type PlatformAuthService,
-  type PlatformContext,
-} from '../modules/platform/platform-auth.service.js';
+import { type PlatformAuthService, type PlatformContext } from '../modules/platform/index.js';
 
 const bearerSchema = z.string().regex(/^Bearer [A-Za-z0-9_-]{43}$/);
 

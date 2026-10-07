@@ -6,7 +6,7 @@ import { createApp } from '../../src/app.js';
 import { createLogger } from '../../src/config/logger.js';
 import { createPrismaClient } from '../../src/database/prisma.js';
 import { hashPassword } from '../../src/modules/auth/password.js';
-import { bootstrapHospital } from '../../src/modules/hospitals/bootstrap.js';
+import { bootstrapHospital } from '../../src/modules/hospitals/index.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 if (!databaseUrl) {

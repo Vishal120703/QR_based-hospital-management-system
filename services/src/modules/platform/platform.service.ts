@@ -1,69 +1,20 @@
-import {
-  type ClientStatus,
-  type HospitalStatus,
-  type Prisma,
-  type PrismaClient,
-} from '@prisma/client';
+import { type Prisma, type PrismaClient } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
-import { hashPassword } from '../auth/password.js';
-import { bootstrapHospital, type NewClientInput } from '../hospitals/bootstrap.js';
-import { logoUrl, storeLogo } from '../hospitals/logo.js';
-import { lockedRoleKey } from '../roles/built-in-roles.js';
+import { recordPlatformAudit } from '../audit/index.js';
+import { hashPassword, revokeHospitalSessions } from '../auth/index.js';
+import { bootstrapHospital, logoUrl, removeLogo, storeLogo } from '../hospitals/index.js';
+import { grantRole, lockedRoleKey } from '../roles/index.js';
+import { createStaffAccount } from '../staff/index.js';
 import { type PlatformContext } from './platform-auth.service.js';
+import { PlatformRepository } from './platform.repository.js';
+import {
+  type AddManagerInput,
+  type CreateHospitalInput,
+  type UpdateClientInput,
+  type UpdateHospitalInput,
+} from './platform.schemas.js';
 
 type Transaction = Prisma.TransactionClient;
-
-export interface NewHospitalInput {
-  readonly name: string;
-  readonly code: string;
-  readonly timezone: string;
-  readonly managerName: string;
-  readonly managerEmail: string;
-  readonly managerPassword: string;
-  // Either an existing client, or a new client to create with the hospital.
-  // Without both, the hospital becomes its own new client.
-  readonly clientId?: string | undefined;
-  readonly client?: NewClientInput | undefined;
-}
-
-export interface ClientUpdate {
-  readonly name?: string | undefined;
-  readonly contactName?: string | null | undefined;
-  readonly contactEmail?: string | null | undefined;
-  readonly contactPhone?: string | null | undefined;
-  readonly status?: ClientStatus | undefined;
-}
-
-export interface HospitalUpdate {
-  readonly name?: string | undefined;
-  readonly timezone?: string | undefined;
-  readonly status?: Extract<HospitalStatus, 'ACTIVE' | 'SUSPENDED'> | undefined;
-  // Moves the hospital to another client (for example after an acquisition).
-  readonly clientId?: string | undefined;
-}
-
-// Platform actions are audited in the hospital they change.
-async function recordPlatformAudit(
-  transaction: Transaction,
-  context: PlatformContext,
-  requestId: string,
-  hospitalId: string,
-  action: string,
-  metadata: Prisma.InputJsonObject,
-): Promise<void> {
-  await transaction.auditLog.create({
-    data: {
-      hospitalId,
-      actorType: 'PLATFORM',
-      actorPlatformUserId: context.userId,
-      action,
-      targetType: 'Hospital',
-      targetId: hospitalId,
-      metadata,
-      requestId,
-    },
-  });
-}
 
 function withTotals<T extends object>(
   client: T,
@@ -83,45 +34,36 @@ function withTotals<T extends object>(
 // The super admin's work: clients (customers) and their hospitals. It never
 // reads patients, requests, or other clinical data beyond simple counts.
 export class PlatformService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly platform = new PlatformRepository(),
+  ) {}
+
+  // Platform actions are audited in the hospital they change.
+  private audit(
+    transaction: Transaction,
+    context: PlatformContext,
+    requestId: string,
+    hospitalId: string,
+    action: string,
+    metadata: Prisma.InputJsonObject,
+  ): Promise<void> {
+    return recordPlatformAudit(transaction, {
+      platformUserId: context.userId,
+      hospitalId,
+      requestId,
+      action,
+      metadata,
+    });
+  }
 
   // Hospitals with their client and simple size counts, never clinical data.
   private async hospitalSummaries(where: Prisma.HospitalWhereInput = {}) {
-    const hospitals = await this.database.hospital.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        timezone: true,
-        status: true,
-        createdAt: true,
-        logo: { select: { publicId: true } },
-        client: { select: { id: true, name: true, code: true, status: true } },
-      },
-    });
-    const ids = hospitals.map((hospital) => hospital.id);
-    const [beds, staff, openRequests] = await Promise.all([
-      this.database.bed.groupBy({
-        by: ['hospitalId'],
-        where: { hospitalId: { in: ids }, active: true },
-        _count: true,
-      }),
-      this.database.hospitalMembership.groupBy({
-        by: ['hospitalId'],
-        where: { hospitalId: { in: ids }, status: 'ACTIVE' },
-        _count: true,
-      }),
-      this.database.serviceRequest.groupBy({
-        by: ['hospitalId'],
-        where: {
-          hospitalId: { in: ids },
-          status: { in: ['SUBMITTED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] },
-        },
-        _count: true,
-      }),
-    ]);
+    const hospitals = await this.platform.listHospitals(this.database, where);
+    const [beds, staff, openRequests] = await this.platform.countByHospital(
+      this.database,
+      hospitals.map((hospital) => hospital.id),
+    );
     const countOf = (rows: { hospitalId: string; _count: number }[], id: string) =>
       rows.find((row) => row.hospitalId === id)?._count ?? 0;
     return hospitals.map(({ logo, ...hospital }) => ({
@@ -140,7 +82,7 @@ export class PlatformService {
   // Clients with how many hospitals, beds, staff, and open requests they have.
   public async listClients() {
     const [clients, hospitals] = await Promise.all([
-      this.database.client.findMany({ orderBy: { createdAt: 'desc' } }),
+      this.platform.listClients(this.database),
       this.hospitalSummaries(),
     ]);
     return clients.map((client) =>
@@ -152,7 +94,7 @@ export class PlatformService {
   }
 
   public async getClient(id: string) {
-    const client = await this.database.client.findUnique({ where: { id } });
+    const client = await this.platform.findClient(this.database, id);
     if (!client) throw new NotFoundError();
     const hospitals = await this.hospitalSummaries({ clientId: id });
     return { ...withTotals(client, hospitals), hospitals };
@@ -164,37 +106,26 @@ export class PlatformService {
   public async updateClient(
     context: PlatformContext,
     id: string,
-    input: ClientUpdate,
+    input: UpdateClientInput,
     requestId: string,
   ) {
     await this.database.$transaction(
       async (transaction) => {
-        const before = await transaction.client.findUnique({
-          where: { id },
-          include: { hospitals: { select: { id: true } } },
-        });
+        const before = await this.platform.findClientWithHospitals(transaction, id);
         if (!before) throw new NotFoundError();
-        const after = await transaction.client.update({
-          where: { id },
-          data: {
-            ...(input.name !== undefined ? { name: input.name } : {}),
-            ...(input.contactName !== undefined ? { contactName: input.contactName } : {}),
-            ...(input.contactEmail !== undefined
-              ? { contactEmail: input.contactEmail?.toLowerCase() ?? null }
-              : {}),
-            ...(input.contactPhone !== undefined ? { contactPhone: input.contactPhone } : {}),
-            ...(input.status !== undefined ? { status: input.status } : {}),
-          },
+        const after = await this.platform.updateClient(transaction, id, {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.contactName !== undefined ? { contactName: input.contactName } : {}),
+          ...(input.contactEmail !== undefined
+            ? { contactEmail: input.contactEmail?.toLowerCase() ?? null }
+            : {}),
+          ...(input.contactPhone !== undefined ? { contactPhone: input.contactPhone } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
         });
         const hospitalIds = before.hospitals.map((hospital) => hospital.id);
         const revokedStaffSessions =
           input.status === 'SUSPENDED' && before.status !== 'SUSPENDED'
-            ? (
-                await transaction.staffSession.updateMany({
-                  where: { hospitalId: { in: hospitalIds }, revokedAt: null },
-                  data: { revokedAt: new Date() },
-                })
-              ).count
+            ? await revokeHospitalSessions(transaction, hospitalIds)
             : 0;
         const view = (client: typeof after) => ({
           name: client.name,
@@ -205,14 +136,12 @@ export class PlatformService {
         });
         // Recorded in each hospital's audit log, where its managers can see it.
         for (const hospitalId of hospitalIds) {
-          await recordPlatformAudit(
-            transaction,
-            context,
-            requestId,
-            hospitalId,
-            'platform.client.update',
-            { clientId: id, before: view(before), after: view(after), revokedStaffSessions },
-          );
+          await this.audit(transaction, context, requestId, hospitalId, 'platform.client.update', {
+            clientId: id,
+            before: view(before),
+            after: view(after),
+            revokedStaffSessions,
+          });
         }
       },
       { isolationLevel: 'Serializable' },
@@ -221,32 +150,9 @@ export class PlatformService {
   }
 
   public async getHospital(id: string) {
-    const hospital = await this.database.hospital.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        timezone: true,
-        status: true,
-        createdAt: true,
-        logo: { select: { publicId: true } },
-        client: { select: { id: true, name: true, code: true, status: true } },
-      },
-    });
+    const hospital = await this.platform.findHospitalDetail(this.database, id);
     if (!hospital) throw new NotFoundError();
-    const managers = await this.database.userRole.findMany({
-      where: { hospitalId: id, role: { systemKey: lockedRoleKey } },
-      select: {
-        membership: {
-          select: {
-            id: true,
-            status: true,
-            user: { select: { email: true, displayName: true } },
-          },
-        },
-      },
-    });
+    const managers = await this.platform.findRoleHolders(this.database, id, lockedRoleKey);
     const { logo, ...rest } = hospital;
     return {
       ...rest,
@@ -260,11 +166,11 @@ export class PlatformService {
     };
   }
 
-  // Creates a client hospital with its built-in roles, starter departments and
-  // services, and its first Hospital Manager.
+  // Creates a hospital with its built-in roles, starter departments and
+  // services, and its first Hospital Manager, for a new or existing client.
   public async createHospital(
     context: PlatformContext,
-    input: NewHospitalInput,
+    input: CreateHospitalInput,
     requestId: string,
   ) {
     const { hospitalId } = await bootstrapHospital(
@@ -284,7 +190,7 @@ export class PlatformService {
       },
       async (transaction, created) => {
         if (created.newClient) {
-          await recordPlatformAudit(
+          await this.audit(
             transaction,
             context,
             requestId,
@@ -293,7 +199,7 @@ export class PlatformService {
             { clientId: created.clientId, name: input.client?.name ?? input.name },
           );
         }
-        await recordPlatformAudit(
+        await this.audit(
           transaction,
           context,
           requestId,
@@ -313,41 +219,33 @@ export class PlatformService {
   public async updateHospital(
     context: PlatformContext,
     id: string,
-    input: HospitalUpdate,
+    input: UpdateHospitalInput,
     requestId: string,
   ) {
     await this.database.$transaction(
       async (transaction) => {
-        const before = await transaction.hospital.findUnique({ where: { id } });
+        const before = await this.platform.findHospital(transaction, id);
         if (!before) throw new NotFoundError();
         if (input.clientId !== undefined && input.clientId !== before.clientId) {
-          const target = await transaction.client.findUnique({ where: { id: input.clientId } });
+          const target = await this.platform.findClient(transaction, input.clientId);
           if (!target) throw new NotFoundError('The client was not found.');
           if (target.status !== 'ACTIVE') {
             throw new ConflictError('Reactivate that client before moving a hospital to it.');
           }
         }
-        const after = await transaction.hospital.update({
-          where: { id },
-          data: {
-            ...(input.name !== undefined ? { name: input.name } : {}),
-            ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
-            ...(input.status !== undefined ? { status: input.status } : {}),
-            ...(input.clientId !== undefined ? { clientId: input.clientId } : {}),
-          },
+        const after = await this.platform.updateHospital(transaction, id, {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(input.clientId !== undefined ? { clientId: input.clientId } : {}),
         });
         // Suspending signs everyone out straight away; patients' QR access
         // stops too, because every guest request checks the hospital status.
         const revokedStaffSessions =
           input.status === 'SUSPENDED' && before.status !== 'SUSPENDED'
-            ? (
-                await transaction.staffSession.updateMany({
-                  where: { hospitalId: id, revokedAt: null },
-                  data: { revokedAt: new Date() },
-                })
-              ).count
+            ? await revokeHospitalSessions(transaction, [id])
             : 0;
-        await recordPlatformAudit(transaction, context, requestId, id, 'platform.hospital.update', {
+        await this.audit(transaction, context, requestId, id, 'platform.hospital.update', {
           before: {
             name: before.name,
             timezone: before.timezone,
@@ -370,9 +268,9 @@ export class PlatformService {
 
   public async setLogo(context: PlatformContext, id: string, bytes: Uint8Array, requestId: string) {
     return this.database.$transaction(async (transaction) => {
-      if (!(await transaction.hospital.findUnique({ where: { id } }))) throw new NotFoundError();
+      if (!(await this.platform.findHospital(transaction, id))) throw new NotFoundError();
       const stored = await storeLogo(transaction, id, bytes);
-      await recordPlatformAudit(transaction, context, requestId, id, 'platform.hospital.logo', {
+      await this.audit(transaction, context, requestId, id, 'platform.hospital.logo', {
         contentType: stored.contentType,
         byteSize: stored.byteSize,
       });
@@ -382,16 +280,10 @@ export class PlatformService {
 
   public async removeLogo(context: PlatformContext, id: string, requestId: string) {
     await this.database.$transaction(async (transaction) => {
-      const removed = await transaction.hospitalLogo.deleteMany({ where: { hospitalId: id } });
-      if (removed.count === 0) throw new NotFoundError('This hospital has no logo.');
-      await recordPlatformAudit(
-        transaction,
-        context,
-        requestId,
-        id,
-        'platform.hospital.logo.remove',
-        {},
-      );
+      if (!(await removeLogo(transaction, id))) {
+        throw new NotFoundError('This hospital has no logo.');
+      }
+      await this.audit(transaction, context, requestId, id, 'platform.hospital.logo.remove', {});
     });
   }
 
@@ -399,43 +291,35 @@ export class PlatformService {
   public async addManager(
     context: PlatformContext,
     hospitalId: string,
-    input: { displayName: string; email: string; password: string },
+    input: AddManagerInput,
     requestId: string,
   ) {
-    const email = input.email.trim().toLowerCase();
     const passwordHash = await hashPassword(input.password);
     await this.database.$transaction(
       async (transaction) => {
-        const role = await transaction.role.findUnique({
-          where: { hospitalId_systemKey: { hospitalId, systemKey: lockedRoleKey } },
-        });
-        if (!role) throw new NotFoundError();
-        if (await transaction.user.findUnique({ where: { email } })) {
-          throw new ConflictError('This email already has a CARE QR account.');
-        }
-        const user = await transaction.user.create({
-          data: { email, displayName: input.displayName.trim(), passwordHash },
-        });
-        const membership = await transaction.hospitalMembership.create({
-          data: { hospitalId, userId: user.id },
-        });
-        const userRole = await transaction.userRole.create({
-          data: { hospitalId, membershipId: membership.id, roleId: role.id },
-        });
-        await transaction.scopeAssignment.create({
-          data: { hospitalId, userRoleId: userRole.id, scopeType: 'HOSPITAL', scopeId: hospitalId },
-        });
-        await recordPlatformAudit(
+        const role = await this.platform.findRoleBySystemKey(
           transaction,
-          context,
-          requestId,
           hospitalId,
-          'platform.manager.add',
-          {
-            email,
-            membershipId: membership.id,
-          },
+          lockedRoleKey,
         );
+        if (!role) throw new NotFoundError();
+        const account = await createStaffAccount(transaction, {
+          hospitalId,
+          email: input.email,
+          displayName: input.displayName,
+          passwordHash,
+        });
+        await grantRole(transaction, {
+          hospitalId,
+          membershipId: account.membershipId,
+          roleId: role.id,
+          scopeType: 'HOSPITAL',
+          scopeId: hospitalId,
+        });
+        await this.audit(transaction, context, requestId, hospitalId, 'platform.manager.add', {
+          email: input.email.trim().toLowerCase(),
+          membershipId: account.membershipId,
+        });
       },
       { isolationLevel: 'Serializable' },
     );

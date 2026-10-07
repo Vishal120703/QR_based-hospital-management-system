@@ -1,151 +1,36 @@
 import {
   type Bed,
-  type BedStatus,
-  type BedType,
   type Building,
   type Floor,
   type Prisma,
   type PrismaClient,
   type Room,
-  type RoomType,
   type Ward,
-  type WardType,
 } from '@prisma/client';
 import { ConflictError, InvalidInputError, NotFoundError } from '../../common/errors/app-error.js';
-import { recordStaffAudit } from '../audit/audit-log.js';
-import { bedScopeWhere, type StaffContext } from '../auth/auth.service.js';
+import { recordStaffAudit } from '../audit/index.js';
+import { bedScopeWhere, type StaffContext } from '../auth/index.js';
+import { maxBulkBeds, planBulkBeds, type BulkBedsInput } from './bulk-beds.js';
+import { LocationRepository } from './location.repository.js';
+import {
+  type BedFilter,
+  type BuildingFilter,
+  type CreateBedInput,
+  type CreateBuildingInput,
+  type CreateFloorInput,
+  type CreateRoomInput,
+  type CreateWardInput,
+  type FloorFilter,
+  type RoomFilter,
+  type UpdateBedInput,
+  type UpdateBuildingInput,
+  type UpdateFloorInput,
+  type UpdateRoomInput,
+  type UpdateWardInput,
+  type WardFilter,
+} from './location.schemas.js';
 
 type Transaction = Prisma.TransactionClient;
-
-export interface ActiveFilter {
-  readonly active?: boolean | undefined;
-}
-export interface FloorFilter extends ActiveFilter {
-  readonly buildingId?: string | undefined;
-}
-export interface WardFilter extends ActiveFilter {
-  readonly floorId?: string | undefined;
-}
-export interface RoomFilter extends ActiveFilter {
-  readonly wardId?: string | undefined;
-}
-export interface BedFilter extends RoomFilter {
-  readonly roomId?: string | undefined;
-  readonly status?: BedStatus | undefined;
-}
-
-export interface LocationCreate {
-  readonly code: string;
-  readonly name: string;
-}
-export interface FloorCreate extends LocationCreate {
-  readonly buildingId?: string | undefined;
-  readonly level?: number | undefined;
-}
-export interface WardCreate extends LocationCreate {
-  readonly floorId: string;
-  readonly unitType?: WardType | undefined;
-}
-export interface RoomCreate extends LocationCreate {
-  readonly wardId: string;
-  readonly roomType?: RoomType | undefined;
-}
-export interface LocationUpdate {
-  readonly code?: string | undefined;
-  readonly name?: string | undefined;
-  readonly active?: boolean | undefined;
-}
-export interface FloorUpdate extends LocationUpdate {
-  readonly level?: number | null | undefined;
-}
-export interface WardUpdate extends LocationUpdate {
-  readonly unitType?: WardType | undefined;
-}
-export interface RoomUpdate extends LocationUpdate {
-  readonly roomType?: RoomType | undefined;
-}
-
-// Creates many beds in one ward at once, either as numbered beds or as
-// numbered rooms that each hold the same number of beds.
-export type BulkBedsInput =
-  | {
-      readonly mode: 'BEDS';
-      readonly roomId?: string | undefined;
-      readonly codePrefix: string;
-      readonly namePrefix: string;
-      readonly start: number;
-      readonly count: number;
-      readonly bedType: BedType;
-    }
-  | {
-      readonly mode: 'ROOMS';
-      readonly roomPrefix: string;
-      readonly start: number;
-      readonly count: number;
-      readonly roomType: RoomType;
-      readonly bedsPerRoom: number;
-      readonly bedType: BedType;
-    };
-
-export const maxBulkBeds = 300;
-
-// The rooms and beds a bulk request would create. Kept pure so the numbering
-// rule is easy to test and identical to the preview shown in the browser.
-export function planBulkBeds(input: BulkBedsInput): {
-  rooms: { code: string; name: string }[];
-  beds: { roomCode: string | null; code: string; displayName: string }[];
-} {
-  const last = input.start + input.count - 1;
-  const width = Math.max(2, String(last).length);
-  const numbers = Array.from({ length: input.count }, (_, index) => input.start + index);
-  if (input.mode === 'BEDS') {
-    return {
-      rooms: [],
-      beds: numbers.map((number) => {
-        const label = String(number).padStart(width, '0');
-        return {
-          roomCode: null,
-          code: `${input.codePrefix}${label}`.toUpperCase(),
-          displayName: `${input.namePrefix} ${label}`.trim(),
-        };
-      }),
-    };
-  }
-  // Floor prefix "2" with rooms 1–3 gives 201, 202, 203.
-  const rooms = numbers.map((number) => {
-    const code = `${input.roomPrefix}${String(number).padStart(width, '0')}`.toUpperCase();
-    return { code, name: `Room ${code}` };
-  });
-  return {
-    rooms,
-    beds: rooms.flatMap((room) =>
-      input.bedsPerRoom === 1
-        ? [{ roomCode: room.code, code: room.code, displayName: `Room ${room.code}` }]
-        : Array.from({ length: input.bedsPerRoom }, (_, index) => {
-            const code = `${room.code}-${String.fromCharCode(65 + index)}`;
-            return { roomCode: room.code, code, displayName: `Bed ${code}` };
-          }),
-    ),
-  };
-}
-
-// OCCUPIED is reserved for the BedSession lifecycle and is never set manually.
-export type ManualBedStatus = Exclude<BedStatus, 'OCCUPIED'>;
-
-export interface BedCreate {
-  readonly wardId: string;
-  readonly roomId?: string | undefined;
-  readonly code: string;
-  readonly displayName: string;
-  readonly bedType?: BedType | undefined;
-}
-export interface BedUpdate {
-  readonly code?: string | undefined;
-  readonly displayName?: string | undefined;
-  readonly bedType?: BedType | undefined;
-  readonly status?: ManualBedStatus | undefined;
-  readonly active?: boolean | undefined;
-}
 
 const snapshot = {
   building: (row: Building) => ({ code: row.code, name: row.name, active: row.active }),
@@ -180,10 +65,6 @@ const snapshot = {
     active: row.active,
   }),
 };
-
-function tenantKey(context: StaffContext, id: string) {
-  return { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } };
-}
 
 function found<T>(row: T | null): T {
   if (!row) {
@@ -234,11 +115,11 @@ export function areaFilters(context: StaffContext, permission: string) {
   return { building, floor, ward };
 }
 
-function activeWhere(filter: ActiveFilter) {
-  return filter.active === undefined ? {} : { active: filter.active };
-}
-
-function locationChanges(input: LocationUpdate) {
+function locationChanges(input: {
+  code?: string | undefined;
+  name?: string | undefined;
+  active?: boolean | undefined;
+}) {
   return {
     ...(input.code !== undefined ? { code: input.code } : {}),
     ...(input.name !== undefined ? { name: input.name } : {}),
@@ -246,38 +127,39 @@ function locationChanges(input: LocationUpdate) {
   };
 }
 
+// Buildings, floors, wards (units), rooms, and beds. Reads respect the
+// caller's floor or ward; every change is audited in the same transaction.
 export class LocationService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly locations = new LocationRepository(),
+  ) {}
 
   // Buildings
 
-  public listBuildings(context: StaffContext, filter: ActiveFilter) {
-    return this.database.building.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...activeWhere(filter),
-        AND: [areaFilters(context, 'location.read').building],
-      },
-      orderBy: { code: 'asc' },
+  public listBuildings(context: StaffContext, filter: BuildingFilter) {
+    return this.locations.listBuildings(this.database, context.tenant.hospitalId, {
+      active: filter.active,
+      area: areaFilters(context, 'location.read').building,
     });
   }
 
   public async getBuilding(context: StaffContext, id: string) {
     return found(
-      await this.database.building.findFirst({
-        where: {
-          hospitalId: context.tenant.hospitalId,
-          id,
-          AND: [areaFilters(context, 'location.read').building],
-        },
-      }),
+      await this.locations.findBuildingInArea(
+        this.database,
+        context.tenant.hospitalId,
+        id,
+        areaFilters(context, 'location.read').building,
+      ),
     );
   }
 
-  public createBuilding(context: StaffContext, input: LocationCreate, requestId: string) {
+  public createBuilding(context: StaffContext, input: CreateBuildingInput, requestId: string) {
     return this.write(async (transaction) => {
-      const building = await transaction.building.create({
-        data: { hospitalId: context.tenant.hospitalId, code: input.code, name: input.name },
+      const building = await this.locations.createBuilding(transaction, context.tenant.hospitalId, {
+        code: input.code,
+        name: input.name,
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'building.create',
@@ -292,24 +174,24 @@ export class LocationService {
   public updateBuilding(
     context: StaffContext,
     id: string,
-    input: LocationUpdate,
+    input: UpdateBuildingInput,
     requestId: string,
   ) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
-      const before = found(
-        await transaction.building.findUnique({ where: tenantKey(context, id) }),
-      );
+      const before = found(await this.locations.findBuilding(transaction, hospitalId, id));
       if (input.active === false && before.active) {
         requireNoActiveChildren(
-          await transaction.floor.count({ where: { hospitalId, buildingId: id, active: true } }),
+          await this.locations.countFloorsInBuilding(transaction, hospitalId, id, true),
           'building',
         );
       }
-      const after = await transaction.building.update({
-        where: tenantKey(context, id),
-        data: locationChanges(input),
-      });
+      const after = await this.locations.updateBuilding(
+        transaction,
+        hospitalId,
+        id,
+        locationChanges(input),
+      );
       await recordStaffAudit(transaction, context, requestId, {
         action: 'building.update',
         targetType: 'Building',
@@ -323,14 +205,12 @@ export class LocationService {
   public async deleteBuilding(context: StaffContext, id: string, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     await this.write(async (transaction) => {
-      const before = found(
-        await transaction.building.findUnique({ where: tenantKey(context, id) }),
-      );
+      const before = found(await this.locations.findBuilding(transaction, hospitalId, id));
       requireNoChildren(
-        await transaction.floor.count({ where: { hospitalId, buildingId: id } }),
+        await this.locations.countFloorsInBuilding(transaction, hospitalId, id, false),
         'building',
       );
-      await transaction.building.delete({ where: tenantKey(context, id) });
+      await this.locations.deleteBuilding(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'building.delete',
         targetType: 'Building',
@@ -343,45 +223,38 @@ export class LocationService {
   // Floors
 
   public listFloors(context: StaffContext, filter: FloorFilter) {
-    return this.database.floor.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.buildingId !== undefined ? { buildingId: filter.buildingId } : {}),
-        ...activeWhere(filter),
-        AND: [areaFilters(context, 'location.read').floor],
-      },
-      orderBy: [{ level: { sort: 'asc', nulls: 'last' } }, { code: 'asc' }],
+    return this.locations.listFloors(this.database, context.tenant.hospitalId, {
+      buildingId: filter.buildingId,
+      active: filter.active,
+      area: areaFilters(context, 'location.read').floor,
     });
   }
 
   public async getFloor(context: StaffContext, id: string) {
     return found(
-      await this.database.floor.findFirst({
-        where: {
-          hospitalId: context.tenant.hospitalId,
-          id,
-          AND: [areaFilters(context, 'location.read').floor],
-        },
-      }),
+      await this.locations.findFloorInArea(
+        this.database,
+        context.tenant.hospitalId,
+        id,
+        areaFilters(context, 'location.read').floor,
+      ),
     );
   }
 
-  public createFloor(context: StaffContext, input: FloorCreate, requestId: string) {
+  public createFloor(context: StaffContext, input: CreateFloorInput, requestId: string) {
+    const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
       if (input.buildingId !== undefined) {
         requireActiveParent(
-          await transaction.building.findUnique({ where: tenantKey(context, input.buildingId) }),
+          await this.locations.findBuilding(transaction, hospitalId, input.buildingId),
           'building',
         );
       }
-      const floor = await transaction.floor.create({
-        data: {
-          hospitalId: context.tenant.hospitalId,
-          buildingId: input.buildingId ?? null,
-          code: input.code,
-          name: input.name,
-          level: input.level ?? null,
-        },
+      const floor = await this.locations.createFloor(transaction, hospitalId, {
+        buildingId: input.buildingId ?? null,
+        code: input.code,
+        name: input.name,
+        level: input.level ?? null,
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'floor.create',
@@ -393,28 +266,30 @@ export class LocationService {
     });
   }
 
-  public updateFloor(context: StaffContext, id: string, input: FloorUpdate, requestId: string) {
+  public updateFloor(
+    context: StaffContext,
+    id: string,
+    input: UpdateFloorInput,
+    requestId: string,
+  ) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
-      const before = found(await transaction.floor.findUnique({ where: tenantKey(context, id) }));
+      const before = found(await this.locations.findFloor(transaction, hospitalId, id));
       if (input.active === true && !before.active && before.buildingId) {
         requireActiveParent(
-          await transaction.building.findUnique({ where: tenantKey(context, before.buildingId) }),
+          await this.locations.findBuilding(transaction, hospitalId, before.buildingId),
           'building',
         );
       }
       if (input.active === false && before.active) {
         requireNoActiveChildren(
-          await transaction.ward.count({ where: { hospitalId, floorId: id, active: true } }),
+          await this.locations.countWardsOnFloor(transaction, hospitalId, id, true),
           'floor',
         );
       }
-      const after = await transaction.floor.update({
-        where: tenantKey(context, id),
-        data: {
-          ...locationChanges(input),
-          ...(input.level !== undefined ? { level: input.level } : {}),
-        },
+      const after = await this.locations.updateFloor(transaction, hospitalId, id, {
+        ...locationChanges(input),
+        ...(input.level !== undefined ? { level: input.level } : {}),
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'floor.update',
@@ -429,12 +304,12 @@ export class LocationService {
   public async deleteFloor(context: StaffContext, id: string, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     await this.write(async (transaction) => {
-      const before = found(await transaction.floor.findUnique({ where: tenantKey(context, id) }));
+      const before = found(await this.locations.findFloor(transaction, hospitalId, id));
       requireNoChildren(
-        await transaction.ward.count({ where: { hospitalId, floorId: id } }),
+        await this.locations.countWardsOnFloor(transaction, hospitalId, id, false),
         'floor',
       );
-      await transaction.floor.delete({ where: tenantKey(context, id) });
+      await this.locations.deleteFloor(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'floor.delete',
         targetType: 'Floor',
@@ -447,43 +322,36 @@ export class LocationService {
   // Wards
 
   public listWards(context: StaffContext, filter: WardFilter) {
-    return this.database.ward.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.floorId !== undefined ? { floorId: filter.floorId } : {}),
-        ...activeWhere(filter),
-        AND: [areaFilters(context, 'location.read').ward],
-      },
-      orderBy: { code: 'asc' },
+    return this.locations.listWards(this.database, context.tenant.hospitalId, {
+      floorId: filter.floorId,
+      active: filter.active,
+      area: areaFilters(context, 'location.read').ward,
     });
   }
 
   public async getWard(context: StaffContext, id: string) {
     return found(
-      await this.database.ward.findFirst({
-        where: {
-          hospitalId: context.tenant.hospitalId,
-          id,
-          AND: [areaFilters(context, 'location.read').ward],
-        },
-      }),
+      await this.locations.findWardInArea(
+        this.database,
+        context.tenant.hospitalId,
+        id,
+        areaFilters(context, 'location.read').ward,
+      ),
     );
   }
 
-  public createWard(context: StaffContext, input: WardCreate, requestId: string) {
+  public createWard(context: StaffContext, input: CreateWardInput, requestId: string) {
+    const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
       requireActiveParent(
-        await transaction.floor.findUnique({ where: tenantKey(context, input.floorId) }),
+        await this.locations.findFloor(transaction, hospitalId, input.floorId),
         'floor',
       );
-      const ward = await transaction.ward.create({
-        data: {
-          hospitalId: context.tenant.hospitalId,
-          floorId: input.floorId,
-          code: input.code,
-          name: input.name,
-          ...(input.unitType ? { unitType: input.unitType } : {}),
-        },
+      const ward = await this.locations.createWard(transaction, hospitalId, {
+        floorId: input.floorId,
+        code: input.code,
+        name: input.name,
+        ...(input.unitType ? { unitType: input.unitType } : {}),
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'ward.create',
@@ -495,31 +363,29 @@ export class LocationService {
     });
   }
 
-  public updateWard(context: StaffContext, id: string, input: WardUpdate, requestId: string) {
+  public updateWard(context: StaffContext, id: string, input: UpdateWardInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
-      const before = found(await transaction.ward.findUnique({ where: tenantKey(context, id) }));
+      const before = found(await this.locations.findWard(transaction, hospitalId, id));
       if (input.active === true && !before.active) {
         requireActiveParent(
-          await transaction.floor.findUnique({ where: tenantKey(context, before.floorId) }),
+          await this.locations.findFloor(transaction, hospitalId, before.floorId),
           'floor',
         );
       }
       if (input.active === false && before.active) {
-        const activeRooms = await transaction.room.count({
-          where: { hospitalId, wardId: id, active: true },
-        });
-        const activeBeds = await transaction.bed.count({
-          where: { hospitalId, wardId: id, active: true },
-        });
+        const activeRooms = await this.locations.countRoomsInWard(
+          transaction,
+          hospitalId,
+          id,
+          true,
+        );
+        const activeBeds = await this.locations.countBedsInWard(transaction, hospitalId, id, true);
         requireNoActiveChildren(activeRooms + activeBeds, 'ward');
       }
-      const after = await transaction.ward.update({
-        where: tenantKey(context, id),
-        data: {
-          ...locationChanges(input),
-          ...(input.unitType !== undefined ? { unitType: input.unitType } : {}),
-        },
+      const after = await this.locations.updateWard(transaction, hospitalId, id, {
+        ...locationChanges(input),
+        ...(input.unitType !== undefined ? { unitType: input.unitType } : {}),
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'ward.update',
@@ -534,11 +400,11 @@ export class LocationService {
   public async deleteWard(context: StaffContext, id: string, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     await this.write(async (transaction) => {
-      const before = found(await transaction.ward.findUnique({ where: tenantKey(context, id) }));
-      const rooms = await transaction.room.count({ where: { hospitalId, wardId: id } });
-      const beds = await transaction.bed.count({ where: { hospitalId, wardId: id } });
+      const before = found(await this.locations.findWard(transaction, hospitalId, id));
+      const rooms = await this.locations.countRoomsInWard(transaction, hospitalId, id, false);
+      const beds = await this.locations.countBedsInWard(transaction, hospitalId, id, false);
       requireNoChildren(rooms + beds, 'ward');
-      await transaction.ward.delete({ where: tenantKey(context, id) });
+      await this.locations.deleteWard(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'ward.delete',
         targetType: 'Ward',
@@ -551,43 +417,36 @@ export class LocationService {
   // Rooms
 
   public listRooms(context: StaffContext, filter: RoomFilter) {
-    return this.database.room.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.wardId !== undefined ? { wardId: filter.wardId } : {}),
-        ...activeWhere(filter),
-        ward: areaFilters(context, 'location.read').ward,
-      },
-      orderBy: { code: 'asc' },
+    return this.locations.listRooms(this.database, context.tenant.hospitalId, {
+      wardId: filter.wardId,
+      active: filter.active,
+      wardArea: areaFilters(context, 'location.read').ward,
     });
   }
 
   public async getRoom(context: StaffContext, id: string) {
     return found(
-      await this.database.room.findFirst({
-        where: {
-          hospitalId: context.tenant.hospitalId,
-          id,
-          ward: areaFilters(context, 'location.read').ward,
-        },
-      }),
+      await this.locations.findRoomInArea(
+        this.database,
+        context.tenant.hospitalId,
+        id,
+        areaFilters(context, 'location.read').ward,
+      ),
     );
   }
 
-  public createRoom(context: StaffContext, input: RoomCreate, requestId: string) {
+  public createRoom(context: StaffContext, input: CreateRoomInput, requestId: string) {
+    const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
       requireActiveParent(
-        await transaction.ward.findUnique({ where: tenantKey(context, input.wardId) }),
+        await this.locations.findWard(transaction, hospitalId, input.wardId),
         'ward',
       );
-      const room = await transaction.room.create({
-        data: {
-          hospitalId: context.tenant.hospitalId,
-          wardId: input.wardId,
-          code: input.code,
-          name: input.name,
-          ...(input.roomType ? { roomType: input.roomType } : {}),
-        },
+      const room = await this.locations.createRoom(transaction, hospitalId, {
+        wardId: input.wardId,
+        code: input.code,
+        name: input.name,
+        ...(input.roomType ? { roomType: input.roomType } : {}),
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'room.create',
@@ -599,28 +458,25 @@ export class LocationService {
     });
   }
 
-  public updateRoom(context: StaffContext, id: string, input: RoomUpdate, requestId: string) {
+  public updateRoom(context: StaffContext, id: string, input: UpdateRoomInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
-      const before = found(await transaction.room.findUnique({ where: tenantKey(context, id) }));
+      const before = found(await this.locations.findRoom(transaction, hospitalId, id));
       if (input.active === true && !before.active) {
         requireActiveParent(
-          await transaction.ward.findUnique({ where: tenantKey(context, before.wardId) }),
+          await this.locations.findWard(transaction, hospitalId, before.wardId),
           'ward',
         );
       }
       if (input.active === false && before.active) {
         requireNoActiveChildren(
-          await transaction.bed.count({ where: { hospitalId, roomId: id, active: true } }),
+          await this.locations.countBedsInRoom(transaction, hospitalId, id, true),
           'room',
         );
       }
-      const after = await transaction.room.update({
-        where: tenantKey(context, id),
-        data: {
-          ...locationChanges(input),
-          ...(input.roomType !== undefined ? { roomType: input.roomType } : {}),
-        },
+      const after = await this.locations.updateRoom(transaction, hospitalId, id, {
+        ...locationChanges(input),
+        ...(input.roomType !== undefined ? { roomType: input.roomType } : {}),
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'room.update',
@@ -635,9 +491,12 @@ export class LocationService {
   public async deleteRoom(context: StaffContext, id: string, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     await this.write(async (transaction) => {
-      const before = found(await transaction.room.findUnique({ where: tenantKey(context, id) }));
-      requireNoChildren(await transaction.bed.count({ where: { hospitalId, roomId: id } }), 'room');
-      await transaction.room.delete({ where: tenantKey(context, id) });
+      const before = found(await this.locations.findRoom(transaction, hospitalId, id));
+      requireNoChildren(
+        await this.locations.countBedsInRoom(transaction, hospitalId, id, false),
+        'room',
+      );
+      await this.locations.deleteRoom(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'room.delete',
         targetType: 'Room',
@@ -650,58 +509,46 @@ export class LocationService {
   // Beds
 
   public listBeds(context: StaffContext, filter: BedFilter) {
-    return this.database.bed.findMany({
-      where: {
-        hospitalId: context.tenant.hospitalId,
-        ...(filter.wardId !== undefined ? { wardId: filter.wardId } : {}),
-        ...(filter.roomId !== undefined ? { roomId: filter.roomId } : {}),
-        ...(filter.status !== undefined ? { status: filter.status } : {}),
-        ...activeWhere(filter),
-        ward: areaFilters(context, 'bed.read').ward,
-      },
-      orderBy: [{ wardId: 'asc' }, { code: 'asc' }],
+    return this.locations.listBeds(this.database, context.tenant.hospitalId, {
+      wardId: filter.wardId,
+      roomId: filter.roomId,
+      status: filter.status,
+      active: filter.active,
+      wardArea: areaFilters(context, 'bed.read').ward,
     });
   }
 
   public async getBed(context: StaffContext, id: string) {
     return found(
-      await this.database.bed.findFirst({
-        where: {
-          hospitalId: context.tenant.hospitalId,
-          id,
-          ward: areaFilters(context, 'bed.read').ward,
-        },
-      }),
+      await this.locations.findBedInArea(
+        this.database,
+        context.tenant.hospitalId,
+        id,
+        areaFilters(context, 'bed.read').ward,
+      ),
     );
   }
 
-  public createBed(context: StaffContext, input: BedCreate, requestId: string) {
+  public createBed(context: StaffContext, input: CreateBedInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
       requireActiveParent(
-        await transaction.ward.findUnique({ where: tenantKey(context, input.wardId) }),
+        await this.locations.findWard(transaction, hospitalId, input.wardId),
         'ward',
       );
       if (input.roomId !== undefined) {
         // The room must belong to the bed's own ward, not merely the same hospital.
         requireActiveParent(
-          await transaction.room.findUnique({
-            where: {
-              hospitalId_wardId_id: { hospitalId, wardId: input.wardId, id: input.roomId },
-            },
-          }),
+          await this.locations.findRoomInWard(transaction, hospitalId, input.wardId, input.roomId),
           'room',
         );
       }
-      const bed = await transaction.bed.create({
-        data: {
-          hospitalId,
-          wardId: input.wardId,
-          roomId: input.roomId ?? null,
-          code: input.code,
-          displayName: input.displayName,
-          ...(input.bedType ? { bedType: input.bedType } : {}),
-        },
+      const bed = await this.locations.createBed(transaction, hospitalId, {
+        wardId: input.wardId,
+        roomId: input.roomId ?? null,
+        code: input.code,
+        displayName: input.displayName,
+        ...(input.bedType ? { bedType: input.bedType } : {}),
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'bed.create',
@@ -713,33 +560,31 @@ export class LocationService {
     });
   }
 
-  public updateBed(context: StaffContext, id: string, input: BedUpdate, requestId: string) {
+  public updateBed(context: StaffContext, id: string, input: UpdateBedInput, requestId: string) {
+    const hospitalId = context.tenant.hospitalId;
     return this.write(async (transaction) => {
-      const before = found(await transaction.bed.findUnique({ where: tenantKey(context, id) }));
+      const before = found(await this.locations.findBed(transaction, hospitalId, id));
       if (before.status === 'OCCUPIED' && (input.status !== undefined || input.active === false)) {
         throw new ConflictError('An occupied bed is managed through its bed session.');
       }
       if (input.active === true && !before.active) {
         requireActiveParent(
-          await transaction.ward.findUnique({ where: tenantKey(context, before.wardId) }),
+          await this.locations.findWard(transaction, hospitalId, before.wardId),
           'ward',
         );
         if (before.roomId) {
           requireActiveParent(
-            await transaction.room.findUnique({ where: tenantKey(context, before.roomId) }),
+            await this.locations.findRoom(transaction, hospitalId, before.roomId),
             'room',
           );
         }
       }
-      const after = await transaction.bed.update({
-        where: tenantKey(context, id),
-        data: {
-          ...(input.code !== undefined ? { code: input.code } : {}),
-          ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
-          ...(input.bedType !== undefined ? { bedType: input.bedType } : {}),
-          ...(input.status !== undefined ? { status: input.status } : {}),
-          ...(input.active !== undefined ? { active: input.active } : {}),
-        },
+      const after = await this.locations.updateBed(transaction, hospitalId, id, {
+        ...(input.code !== undefined ? { code: input.code } : {}),
+        ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+        ...(input.bedType !== undefined ? { bedType: input.bedType } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.active !== undefined ? { active: input.active } : {}),
       });
       await recordStaffAudit(transaction, context, requestId, {
         action: 'bed.update',
@@ -752,17 +597,15 @@ export class LocationService {
   }
 
   public async deleteBed(context: StaffContext, id: string, requestId: string) {
+    const hospitalId = context.tenant.hospitalId;
     await this.write(async (transaction) => {
-      const before = found(await transaction.bed.findUnique({ where: tenantKey(context, id) }));
-      const hospitalId = context.tenant.hospitalId;
-      const qrCodes = await transaction.bedQrCode.count({ where: { hospitalId, bedId: id } });
-      const sessions = await transaction.bedSession.count({ where: { hospitalId, bedId: id } });
-      if (qrCodes + sessions > 0) {
+      const before = found(await this.locations.findBed(transaction, hospitalId, id));
+      if ((await this.locations.countBedHistory(transaction, hospitalId, id)) > 0) {
         throw new ConflictError(
           'This bed has a QR code or session history. Deactivate it instead.',
         );
       }
-      await transaction.bed.delete({ where: tenantKey(context, id) });
+      await this.locations.deleteBed(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'bed.delete',
         targetType: 'Bed',
@@ -786,27 +629,26 @@ export class LocationService {
       throw new InvalidInputError(`Create at most ${maxBulkBeds} beds at a time.`);
     }
     return this.write(async (transaction) => {
-      requireActiveParent(
-        await transaction.ward.findUnique({ where: tenantKey(context, wardId) }),
-        'ward',
-      );
+      requireActiveParent(await this.locations.findWard(transaction, hospitalId, wardId), 'ward');
       if (input.mode === 'BEDS' && input.roomId !== undefined) {
         requireActiveParent(
-          await transaction.room.findUnique({
-            where: { hospitalId_wardId_id: { hospitalId, wardId, id: input.roomId } },
-          }),
+          await this.locations.findRoomInWard(transaction, hospitalId, wardId, input.roomId),
           'room',
         );
       }
       const [takenBeds, takenRooms] = await Promise.all([
-        transaction.bed.findMany({
-          where: { hospitalId, wardId, code: { in: plan.beds.map((bed) => bed.code) } },
-          select: { code: true },
-        }),
-        transaction.room.findMany({
-          where: { hospitalId, wardId, code: { in: plan.rooms.map((room) => room.code) } },
-          select: { code: true },
-        }),
+        this.locations.findBedCodes(
+          transaction,
+          hospitalId,
+          wardId,
+          plan.beds.map((bed) => bed.code),
+        ),
+        this.locations.findRoomCodes(
+          transaction,
+          hospitalId,
+          wardId,
+          plan.rooms.map((room) => room.code),
+        ),
       ]);
       const taken = [...takenRooms, ...takenBeds].map((row) => row.code);
       if (taken.length > 0) {
@@ -818,21 +660,23 @@ export class LocationService {
 
       const rooms =
         input.mode === 'ROOMS'
-          ? await transaction.room.createManyAndReturn({
-              data: plan.rooms.map((room) => ({
-                hospitalId,
-                wardId,
+          ? await this.locations.createRooms(
+              transaction,
+              hospitalId,
+              wardId,
+              plan.rooms.map((room) => ({
                 code: room.code,
                 name: room.name,
                 roomType: input.roomType,
               })),
-            })
+            )
           : [];
       const roomIdByCode = new Map(rooms.map((room) => [room.code, room.id]));
-      const beds = await transaction.bed.createManyAndReturn({
-        data: plan.beds.map((bed) => ({
-          hospitalId,
-          wardId,
+      const beds = await this.locations.createBeds(
+        transaction,
+        hospitalId,
+        wardId,
+        plan.beds.map((bed) => ({
           roomId:
             input.mode === 'ROOMS'
               ? (roomIdByCode.get(bed.roomCode ?? '') ?? null)
@@ -841,7 +685,7 @@ export class LocationService {
           displayName: bed.displayName,
           bedType: input.bedType,
         })),
-      });
+      );
       await recordStaffAudit(transaction, context, requestId, {
         action: 'bed.bulk_create',
         targetType: 'Ward',

@@ -1,4 +1,8 @@
-import { type Prisma, type PrismaClient, type RequestPriority } from '@prisma/client';
+import { type RequestPriority } from '@prisma/client';
+import { type Db } from '../../database/client.js';
+import { ServiceItemRepository } from './service-item.repository.js';
+
+const repository = new ServiceItemRepository();
 
 // Everything a request copies from the catalog when it is submitted. Requests
 // store these values, so later catalog or SLA edits never change them.
@@ -33,31 +37,21 @@ export function dueDates(
 // or the service, its category, or its department is inactive. Call it inside
 // the transaction that creates the request.
 export async function snapshotService(
-  client: PrismaClient | Prisma.TransactionClient,
+  client: Db,
   hospitalId: string,
   serviceItemId: string,
   submittedAt: Date,
 ): Promise<ServiceSnapshot | null> {
-  const item = await client.serviceItem.findUnique({
-    where: { hospitalId_id: { hospitalId, id: serviceItemId } },
-    include: {
-      category: { select: { name: true, active: true } },
-      department: { select: { active: true } },
-      slaPolicy: { select: { currentVersion: true } },
-    },
-  });
+  const item = await repository.findForSnapshot(client, hospitalId, serviceItemId);
   if (!item || !item.active || !item.category.active || !item.department.active) {
     return null;
   }
-  const version = await client.slaPolicyVersion.findUniqueOrThrow({
-    where: {
-      hospitalId_slaPolicyId_version: {
-        hospitalId,
-        slaPolicyId: item.slaPolicyId,
-        version: item.slaPolicy.currentVersion,
-      },
-    },
-  });
+  const version = await repository.findSlaVersion(
+    client,
+    hospitalId,
+    item.slaPolicyId,
+    item.slaPolicy.currentVersion,
+  );
   return {
     serviceItemId: item.id,
     serviceName: item.name,

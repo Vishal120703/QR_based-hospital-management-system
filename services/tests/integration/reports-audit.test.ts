@@ -383,6 +383,34 @@ describe('Request reports and audit', () => {
     expect(
       (await admin().get('/admin/reports/requests?from=2024-01-01&to=2026-01-01')).status,
     ).toBe(400);
+    const reversed = await admin().get('/admin/audit-log?from=2026-12-01&to=2026-01-01');
+    expect(reversed.status).toBe(400);
+    expect(reversed.body).toMatchObject({
+      error: { code: 'VALIDATION_ERROR', message: 'The start must be before the end.' },
+    });
+  });
+
+  it('says which field is wrong when input is invalid', async () => {
+    const response = await admin().post('/admin/departments', { code: 'LAB 2', name: 'Lab' });
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Code has characters that are not allowed.',
+        fields: ['code'],
+      },
+    });
+    const control = await admin().post('/admin/departments', { code: 'LAB2', name: 'Lab\n2' });
+    expect(control.body).toMatchObject({ error: { fields: ['name'] } });
+
+    expect((await admin().post('/admin/departments', { code: 'DUP', name: 'Dup' })).status).toBe(
+      201,
+    );
+    const duplicate = await admin().post('/admin/departments', { code: 'dup', name: 'Dup 2' });
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body).toMatchObject({
+      error: { message: 'This code is already in use here. Choose a different code.' },
+    });
   });
 });
 

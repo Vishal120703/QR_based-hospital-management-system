@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { type Prisma } from '@prisma/client';
 import { InvalidInputError } from '../../common/errors/app-error.js';
+import { HospitalRepository } from './hospital.repository.js';
 
 export const maxLogoBytes = 1024 * 1024;
 
@@ -35,10 +36,15 @@ export async function storeLogo(
   }
   const data = Buffer.from(bytes);
   const values = { publicId: randomUUID(), contentType, data, byteSize: data.length };
-  await transaction.hospitalLogo.upsert({
-    where: { hospitalId },
-    create: { hospitalId, ...values },
-    update: values,
-  });
+  await new HospitalRepository().upsertLogo(transaction, hospitalId, values);
   return { publicId: values.publicId, contentType, byteSize: values.byteSize };
+}
+
+// Removes a hospital's logo inside the caller's transaction. Returns false
+// when the hospital had no logo.
+export async function removeLogo(
+  transaction: Prisma.TransactionClient,
+  hospitalId: string,
+): Promise<boolean> {
+  return (await new HospitalRepository().deleteLogo(transaction, hospitalId)) > 0;
 }

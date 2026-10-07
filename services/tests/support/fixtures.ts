@@ -4,7 +4,7 @@ import { type Express } from 'express';
 import request from 'supertest';
 import { z } from 'zod';
 import { hashPassword } from '../../src/modules/auth/password.js';
-import { bootstrapHospital } from '../../src/modules/hospitals/bootstrap.js';
+import { bootstrapHospital } from '../../src/modules/hospitals/index.js';
 
 const fixturePassword = 'FixturePassword123!';
 const loginSchema = z.object({ token: z.string().min(40) });

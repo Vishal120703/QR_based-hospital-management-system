@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { credentials, guestApi } from '../src/api';
-import { QrEntryPage, tokenFromQrLink } from '../src/pages/QrEntryPage';
+import { QrEntryPage, tokenFromQrLink } from '../src/features/patient/QrEntryPage';
 
 const token = 'A'.repeat(43);
 const camera = vi.hoisted(() => ({ decode: vi.fn(), image: vi.fn(), stop: vi.fn() }));
@@ -69,7 +69,7 @@ describe('Patient QR entry', () => {
     });
     renderEntry();
 
-    await user.type(screen.getByLabelText('Or paste the bedside QR link'), `/q/${token}`);
+    await user.type(screen.getByLabelText('Paste the bedside QR link'), `/q/${token}`);
     await user.click(screen.getByRole('button', { name: 'Open patient page' }));
 
     expect(await screen.findByText('Patient request page')).toBeTruthy();
@@ -83,7 +83,7 @@ describe('Patient QR entry', () => {
     renderEntry();
 
     await user.type(
-      screen.getByLabelText('Or paste the bedside QR link'),
+      screen.getByLabelText('Paste the bedside QR link'),
       `https://other.example/q/${token}`,
     );
     await user.click(screen.getByRole('button', { name: 'Open patient page' }));
@@ -119,7 +119,7 @@ describe('Patient QR entry', () => {
     try {
       renderEntry();
       await user.upload(
-        screen.getByLabelText(/Or take \/ choose a QR photo/),
+        screen.getByLabelText(/Upload a QR photo/),
         new File(['qr-image'], 'bedside.png', { type: 'image/png' }),
       );
       expect(await screen.findByText('Patient request page')).toBeTruthy();

@@ -6,20 +6,21 @@ CARE QR is a modular hospital service-request platform. V1 has one backend servi
 
 ```text
 frontend/   React web app: staff administration and the patient QR pages
-services/   Backend: Express API, domain modules, Prisma, tests, architecture docs
+services/   Backend: Express API, domain modules, Prisma, and tests
+docs/       Architecture, data flow, ER diagrams, guides, and test plans
 ```
 
-Architecture decisions are in [`services/docs/architecture`](./services/docs/architecture). Module boundaries are described in [`services/src/modules/README.md`](./services/src/modules/README.md).
+Start with the [documentation index](./docs/README.md). Architecture decisions and diagrams are in [docs/architecture](./docs/architecture/README.md); module boundaries are described in the [backend module guide](./services/src/modules/README.md).
 
 ## Current progress
 
-The patient QR flow and manual request workflow are implemented: managers assign requests and staff accept, start, and complete them. Automatic routing, alerts, and production hardening remain. See the [phase-by-phase status and audit results](./services/docs/project-status.md).
+The patient QR flow and manual request workflow are implemented: managers assign requests and staff accept, start, and complete them. Automatic routing, alerts, and production hardening remain. See the [phase-by-phase status and audit results](./docs/project-status.md).
 
-The [Phase 0–8 manual test plan](./services/docs/manual-test-plan-phases-0-8.md) is a historical baseline, not the full acceptance plan for the newer manager, staff, platform, and QR-label features.
+The [Phase 0–8 manual test plan](./docs/testing/manual-test-plan-phases-0-8.md) is a historical baseline, not the full acceptance plan for the newer manager, staff, platform, and QR-label features.
 
-For a plain-language walkthrough of the architecture, demo data, and local setup, read the [easy project guide](./services/docs/easy-guide.md).
+For a plain-language walkthrough of the architecture, demo data, and local setup, read the [easy project guide](./docs/guides/easy-guide.md).
 
-To test every role with ready-made dummy hospitals, run `npm run seed:test` in `services/` and follow the [full testing guide](./services/docs/full-testing-guide.md).
+To test every role with ready-made dummy hospitals, run `npm run seed:test` in `services/` and follow the [full testing guide](./docs/guides/full-testing-guide.md).
 
 Patients can submit, track, and cancel eligible service requests from an active QR session. A floor manager can manually assign requests; assigned staff can accept, start, and mark them complete. Automatic routing, alerts, and notifications are still later work. This is not ready for hospital production use.
 
@@ -46,7 +47,7 @@ If you change `services/.env` (especially `DATABASE_URL`), stop and restart the 
 
 2. Create the SaaS **platform admin** (the CARE QR team account that onboards hospitals), inside `services/`: set `PLATFORM_ADMIN_EMAIL`, `PLATFORM_ADMIN_NAME`, and a `PLATFORM_ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:platform-admin`. Sign in at `/platform/login` and use **Add hospital** to create each client hospital with its logo and first Hospital Manager. Alternatively, create a hospital and its first administrator from the command line, inside `services/`. Set `DATABASE_URL`, `HOSPITAL_NAME`, `HOSPITAL_CODE`, `HOSPITAL_TIMEZONE`, `ADMIN_EMAIL`, `ADMIN_NAME`, and an `ADMIN_PASSWORD` of at least 12 characters, then run `npm run bootstrap:hospital`. The password is hashed and never printed. To brand a new client hospital at the same time, also set `HOSPITAL_LOGO_PATH` to a PNG, JPEG, or WebP file of up to 1 MB; a bad file stops the command before anything is created. The logo can be added or changed later in **Hospital → Profile & logo**.
 
-   For a ready-made **dummy hospital instead of this step**, follow the [one-time demo seed instructions](./services/docs/easy-guide.md#load-dummy-data-once). It creates `CAREQR-DEMO` with beds, staff, catalog, and an active bed session in a local database; it refuses to overwrite an existing demo hospital.
+   For a ready-made **dummy hospital instead of this step**, follow the [one-time demo seed instructions](./docs/guides/easy-guide.md#load-dummy-data-once). It creates `CAREQR-DEMO` with beds, staff, catalog, and an active bed session in a local database; it refuses to overwrite an existing demo hospital.
 
 3. Frontend, inside `frontend/`:
 
@@ -60,7 +61,7 @@ If you change `services/.env` (especially `DATABASE_URL`), stop and restart the 
 ## Try it
 
 1. Open http://localhost:5173. Patients see **Scan QR** first and can use the live camera, take/choose a QR photo, or paste their bedside QR link without signing in. Staff choose **Staff sign in** and enter the hospital code, email, and password from step 2. Staff land on **Overview**, with role-relevant counts and a few next-step shortcuts; the navigation lists their other available sections.
-2. **Location setup:** add a floor (with its level), then a unit such as a General ward or ICU, then add its beds in one step with **Add beds**. Buildings and rooms are optional. Use **Beds & QR → Print QR labels** to choose a floor and optionally a unit or room, then download one A4 PDF with a separate QR for each active bed that needs one. Location screens also offer contextual QR-label actions.
+2. **Location setup:** add a floor (with its level), then a unit such as a General ward or Maternity ward (intensive care units are not supported), then add its beds in one step with **Add beds**. Buildings and rooms are optional. Use **Beds & QR → Print QR labels** to choose a floor and optionally a unit or room, then download one A4 PDF with a separate QR for each active bed that needs one. Location screens also offer contextual QR-label actions.
 3. **Beds & QR:** choose **Start session** for an available bed, then **Generate QR**. In the one-time QR dialog, choose **Open patient view** to test on this computer, or **Download PDF** and print it at actual size. If an active QR already exists but its link was lost, choose **Replace QR** to issue a new one; the old code stops working.
 4. On the patient page, choose a service and select **Request service**. The request appears under **Your requests**, where the patient can track or cancel it while eligible.
 5. **Close session**, **Replace QR**, or **Disable QR** ends existing patient access. The patient page rechecks access every 30 seconds and when the tab becomes visible.
@@ -83,6 +84,8 @@ npm run test:integration
 npm run build
 npm run prisma:validate
 npm run prisma:status
+npm run prisma:generate
+npm run docs:er:check
 ```
 
 Inside `frontend/`:

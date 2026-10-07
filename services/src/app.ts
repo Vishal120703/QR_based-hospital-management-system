@@ -1,58 +1,15 @@
-import express, { Router, type Express } from 'express';
+import express, { type Express } from 'express';
 import { pinoHttp } from 'pino-http';
 import { type Logger } from 'pino';
-import { NotFoundError } from './common/errors/app-error.js';
-import { errorHandler } from './middleware/error-handler.js';
-import { requestIdMiddleware } from './middleware/request-id.js';
-import { requireStaffAuth } from './middleware/staff-auth.js';
-import { createHealthRouter, type ReadinessProbe } from './routes/health.js';
 import { type PrismaClient } from '@prisma/client';
-import { StaffAuthService } from './modules/auth/auth.service.js';
-import { createAuthRouter, type LoginRateLimits } from './modules/auth/auth.routes.js';
-import { AuditLogService } from './modules/reports/audit-log.service.js';
-import { createReportRouter } from './modules/reports/report.routes.js';
-import { ReportService } from './modules/reports/report.service.js';
-import { PlatformAuthService } from './modules/platform/platform-auth.service.js';
-import { createPlatformRouter } from './modules/platform/platform.routes.js';
-import { PlatformService } from './modules/platform/platform.service.js';
-import { HospitalService } from './modules/hospitals/hospital.service.js';
-import {
-  createHospitalRouter,
-  createPublicLogoRouter,
-} from './modules/hospitals/hospital.routes.js';
-import { RoleService } from './modules/roles/role.service.js';
-import { createRoleRouter } from './modules/roles/role.routes.js';
-import { LocationService } from './modules/locations/location.service.js';
-import { createLocationRouter } from './modules/locations/location.routes.js';
-import { GuestSessionService } from './modules/bed-sessions/guest-session.service.js';
-import { BedSessionService } from './modules/bed-sessions/bed-session.service.js';
-import {
-  createBedSessionRouter,
-  createGuestSessionRouter,
-} from './modules/bed-sessions/bed-session.routes.js';
-import { QrCodeService } from './modules/qr/qr.service.js';
-import { createQrAdminRouter, createQrPublicRouter } from './modules/qr/qr.routes.js';
-import { DepartmentService } from './modules/departments/department.service.js';
-import { createDepartmentRouter } from './modules/departments/department.routes.js';
-import { StaffService } from './modules/staff/staff.service.js';
-import { ShiftService } from './modules/staff/shift.service.js';
-import { createStaffRouter } from './modules/staff/staff.routes.js';
-import { CategoryService } from './modules/catalog/category.service.js';
-import { ServiceItemService } from './modules/catalog/service-item.service.js';
-import {
-  createCatalogRouter,
-  createPublicCatalogRouter,
-} from './modules/catalog/catalog.routes.js';
-import { SlaPolicyService } from './modules/sla/sla-policy.service.js';
-import { EscalationPolicyService } from './modules/sla/escalation-policy.service.js';
-import { createSlaRouter } from './modules/sla/sla.routes.js';
-import { RequestService } from './modules/requests/request.service.js';
-import {
-  createPublicRequestRouter,
-  createRequestRouter,
-} from './modules/requests/request.routes.js';
-import { type RateLimitOptions } from './middleware/rate-limit.js';
 import { z } from 'zod';
+import { NotFoundError } from './common/errors/app-error.js';
+import { createContainer } from './container.js';
+import { createHealthRouter, type ReadinessProbe } from './http/health.routes.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { type RateLimitOptions } from './middleware/rate-limit.js';
+import { requestIdMiddleware } from './middleware/request-id.js';
+import { type LoginRateLimits } from './modules/auth/index.js';
 
 const noQuerySchema = z.object({}).strict();
 
@@ -68,6 +25,8 @@ export interface CreateAppOptions {
   readonly configureRoutes?: (application: Express) => void;
 }
 
+// The HTTP application: shared middleware, health checks, every module's
+// routes (from the container), then "not found" and error handling.
 export function createApp(options: CreateAppOptions): Express {
   const application = express();
   application.disable('x-powered-by');
@@ -90,54 +49,16 @@ export function createApp(options: CreateAppOptions): Express {
 
   application.use(createHealthRouter(options.readinessProbes ?? []));
   if (options.database) {
-    const database = options.database;
-    const auth = new StaffAuthService(database);
-    const guestSessions = new GuestSessionService(database, options.guestSessionTtlMinutes ?? 120);
-    const serviceItems = new ServiceItemService(database);
-    const requests = new RequestService(database);
-    const qrCodes = new QrCodeService(
-      database,
-      guestSessions,
-      options.publicAppUrl ?? 'http://localhost:5173',
-    );
-    application.use(createAuthRouter(auth, options.staffLoginRateLimits));
-    application.use(
-      createPlatformRouter(
-        new PlatformAuthService(database),
-        new PlatformService(database),
-        options.platformLoginRateLimit ?? { windowMs: 60_000, max: 10 },
-      ),
-    );
-
-    // Every administrative route is authenticated exactly once, here.
-    const admin = Router();
-    admin.use(requireStaffAuth(auth));
-    const hospitals = new HospitalService(database);
-    admin.use(createHospitalRouter(hospitals));
-    admin.use(createRoleRouter(new RoleService(database)));
-    admin.use(createLocationRouter(new LocationService(database)));
-    admin.use(createBedSessionRouter(new BedSessionService(database, guestSessions)));
-    admin.use(createQrAdminRouter(qrCodes));
-    admin.use(createDepartmentRouter(new DepartmentService(database)));
-    admin.use(createStaffRouter(new StaffService(database), new ShiftService(database)));
-    admin.use(createCatalogRouter(new CategoryService(database), serviceItems));
-    admin.use(
-      createSlaRouter(new SlaPolicyService(database), new EscalationPolicyService(database)),
-    );
-    admin.use(createRequestRouter(requests));
-    admin.use(createReportRouter(new ReportService(database), new AuditLogService(database)));
-    application.use('/admin', admin);
-
-    // Patient/attendant routes. Guest authentication is applied per route.
-    const publicRoutes = Router();
-    publicRoutes.use(createPublicLogoRouter(hospitals));
-    publicRoutes.use(
-      createQrPublicRouter(qrCodes, options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 }),
-    );
-    publicRoutes.use(createGuestSessionRouter(guestSessions));
-    publicRoutes.use(createPublicCatalogRouter(serviceItems, guestSessions));
-    publicRoutes.use(createPublicRequestRouter(requests, guestSessions));
-    application.use('/public', publicRoutes);
+    const routes = createContainer(options.database, {
+      publicAppUrl: options.publicAppUrl ?? 'http://localhost:5173',
+      guestSessionTtlMinutes: options.guestSessionTtlMinutes ?? 120,
+      qrResolveRateLimit: options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 },
+      platformLoginRateLimit: options.platformLoginRateLimit ?? { windowMs: 60_000, max: 10 },
+      staffLoginRateLimits: options.staffLoginRateLimits,
+    });
+    for (const router of routes.root) application.use(router);
+    application.use('/admin', routes.admin);
+    application.use('/public', routes.public);
   }
   options.configureRoutes?.(application);
 

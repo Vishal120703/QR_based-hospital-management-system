@@ -126,13 +126,13 @@ describe('Phase 3 location hierarchy', () => {
     expect(floor).toMatchObject({ code: 'FLAT-F1', buildingId: null });
     const ward = await create(hospitalA.adminToken, '/admin/wards', 'ward', {
       floorId: floor.id,
-      code: 'ICU',
-      name: 'Intensive Care',
+      code: 'MAT',
+      name: 'Maternity Ward',
     });
     const bed = await create(hospitalA.adminToken, '/admin/beds', 'bed', {
       wardId: ward.id,
-      code: 'ICU-1',
-      displayName: 'ICU Bed 1',
+      code: 'MAT-1',
+      displayName: 'Maternity Bed 1',
     });
     expect(bed).toMatchObject({ roomId: null, hospitalId: hospitalA.hospitalId });
 
@@ -576,30 +576,33 @@ describe('Phase 3 location hierarchy', () => {
   it('stores unit, room, and bed types', async () => {
     const owned = await createHierarchy(hospitalA, 'TYPE');
     const admin = as(hospitalA.adminToken);
-    const icu = await admin.post('/admin/wards', {
+    const dialysis = await admin.post('/admin/wards', {
       floorId: owned.floor.id,
-      code: 'ICU',
-      name: 'Medical ICU',
-      unitType: 'ICU',
+      code: 'DIA',
+      name: 'Dialysis Unit',
+      unitType: 'DIALYSIS',
     });
-    expect(icu.status).toBe(201);
-    expect(icu.body).toMatchObject({ ward: { unitType: 'ICU' } });
-    expect(
-      (
-        await admin.post('/admin/wards', {
-          floorId: owned.floor.id,
-          code: 'X',
-          name: 'X',
-          unitType: 'SPA',
-        })
-      ).status,
-    ).toBe(400);
+    expect(dialysis.status).toBe(201);
+    expect(dialysis.body).toMatchObject({ ward: { unitType: 'DIALYSIS' } });
+    // Unknown types and intensive care (not served by bedside QR) are refused.
+    for (const unitType of ['SPA', 'ICU', 'NICU']) {
+      const refused = await admin.post('/admin/wards', {
+        floorId: owned.floor.id,
+        code: 'X',
+        name: 'X',
+        unitType,
+      });
+      expect(refused.status).toBe(400);
+    }
     expect(owned.ward).toMatchObject({ unitType: 'GENERAL' });
 
     const room = await admin.patch(`/admin/rooms/${owned.room.id}`, { roomType: 'PRIVATE' });
     expect(room.body).toMatchObject({ room: { roomType: 'PRIVATE' } });
-    const bed = await admin.patch(`/admin/beds/${owned.bed.id}`, { bedType: 'VENTILATOR' });
-    expect(bed.body).toMatchObject({ bed: { bedType: 'VENTILATOR', status: 'AVAILABLE' } });
+    const bed = await admin.patch(`/admin/beds/${owned.bed.id}`, { bedType: 'ISOLATION' });
+    expect(bed.body).toMatchObject({ bed: { bedType: 'ISOLATION', status: 'AVAILABLE' } });
+    expect(
+      (await admin.patch(`/admin/beds/${owned.bed.id}`, { bedType: 'VENTILATOR' })).status,
+    ).toBe(400);
   });
 
   it('creates numbered beds or rooms in bulk, all or nothing', async () => {
