@@ -1,5 +1,6 @@
 import { type BedType, type RequestPriority, type RoomType, type WardType } from '@prisma/client';
 import { type PermissionKey } from '../roles/permissions.js';
+import { type NewClientInput } from './bootstrap.js';
 
 // Dummy client hospitals for a full manual test: every role, a realistic
 // layout, and two weeks of request history. No real patient data.
@@ -87,6 +88,8 @@ export interface HospitalSpec {
   readonly code: string;
   readonly name: string;
   readonly domain: string;
+  // The customer organisation that owns the hospital.
+  readonly client: NewClientInput;
   readonly createdAt: When;
   readonly logo: {
     readonly color: readonly [number, number, number];
@@ -160,6 +163,13 @@ export const cityCare: HospitalSpec = {
   code: 'CITYCARE',
   name: 'CityCare Multispeciality Hospital',
   domain: 'citycare.example',
+  client: {
+    name: 'CityCare Health Group',
+    code: 'CITYCARE-GROUP',
+    contactName: 'Dr. Meera Iyer',
+    contactEmail: 'accounts@citycare.example',
+    contactPhone: '+91 80 4000 1000',
+  },
   createdAt: [20, '10:00'],
   logo: { color: [13, 148, 136], shape: 'square' },
   people: [
@@ -899,6 +909,13 @@ export const greenValley: HospitalSpec = {
   code: 'GREENVALLEY',
   name: 'Green Valley Clinic',
   domain: 'greenvalley.example',
+  client: {
+    name: 'Green Valley Healthcare',
+    code: 'GREENVALLEY-HC',
+    contactName: 'Dr. Rohan Das',
+    contactEmail: 'office@greenvalley.example',
+    contactPhone: '+91 20 2600 2200',
+  },
   createdAt: [10, '11:00'],
   logo: { color: [22, 163, 74], shape: 'circle' },
   people: [

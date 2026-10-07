@@ -1,6 +1,7 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
+import { hospitalAccessSelect, hospitalIsOpen } from '../hospitals/hospital-access.js';
 import { logoUrl } from '../hospitals/logo.js';
 
 const activityWriteIntervalMs = 60_000;
@@ -61,7 +62,7 @@ export class GuestSessionService {
       where: { tokenHash: hashOpaqueToken(token) },
       include: {
         bedSession: { select: { status: true } },
-        hospital: { select: { status: true } },
+        hospital: { select: hospitalAccessSelect },
       },
     });
     const now = new Date();
@@ -72,7 +73,7 @@ export class GuestSessionService {
       session.revokedAt ||
       session.expiresAt <= now ||
       session.bedSession.status !== 'ACTIVE' ||
-      session.hospital.status !== 'ACTIVE'
+      !hospitalIsOpen(session.hospital)
     ) {
       throw new UnauthorizedError();
     }

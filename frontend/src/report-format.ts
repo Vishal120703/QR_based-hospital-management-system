@@ -53,6 +53,8 @@ const actionLabels: Record<string, string> = {
   'platform.hospital.logo': 'Platform changed the logo',
   'platform.hospital.logo.remove': 'Platform removed the logo',
   'platform.manager.add': 'Platform added a Hospital Manager',
+  'platform.client.create': 'Platform added this client',
+  'platform.client.update': 'Platform changed the client (group)',
   'staff.create': 'Added a staff member',
   'staff.status': 'Changed staff status',
   'staff.duty': 'Changed duty (on/off)',

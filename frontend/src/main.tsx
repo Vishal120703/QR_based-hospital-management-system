@@ -10,6 +10,8 @@ import { LocationsPage } from './pages/LocationsPage';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { PatientPage } from './pages/PatientPage';
+import { PlatformClientPage } from './pages/platform/PlatformClientPage';
+import { PlatformClientsPage } from './pages/platform/PlatformClientsPage';
 import { PlatformHospitalPage } from './pages/platform/PlatformHospitalPage';
 import { PlatformHospitalsPage } from './pages/platform/PlatformHospitalsPage';
 import { PlatformLayout } from './pages/platform/PlatformLayout';
@@ -36,10 +38,12 @@ createRoot(root).render(
       <Routes>
         <Route path="/" element={<QrEntryPage />} />
         <Route path="/login" element={<LoginPage />} />
-        {/* SaaS platform administration: onboard and manage client hospitals. */}
+        {/* Super admin: manage clients (customers) and their hospitals, nothing inside them. */}
         <Route path="/platform/login" element={<PlatformLoginPage />} />
         <Route path="/platform" element={<PlatformLayout />}>
-          <Route index element={<PlatformHospitalsPage />} />
+          <Route index element={<PlatformClientsPage />} />
+          <Route path="clients/:id" element={<PlatformClientPage />} />
+          <Route path="hospitals" element={<PlatformHospitalsPage />} />
           <Route path="hospitals/:id" element={<PlatformHospitalPage />} />
         </Route>
         <Route path="/admin" element={<AdminLayout />}>

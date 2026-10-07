@@ -28,7 +28,7 @@ CARE QR is a SaaS platform: one CARE QR team serves many client hospitals, and e
 
 | Person | What they do | Where they sign in |
 |---|---|---|
-| **Platform admin** (the CARE QR team) | Adds client hospitals with their logo and first Hospital Manager; suspends or reactivates a hospital. Never sees patients or requests. | `/platform/login` (email + password) |
+| **Super admin** (the CARE QR team) | Manages **clients** (the customers who buy CARE QR, such as a hospital group) and their **hospitals**: adds a client with its first hospital, adds more hospitals (branches) to a client, edits client contacts, moves a hospital to another client, and suspends or reactivates a whole client or one hospital. Never sees patients, requests, or staff records inside a hospital. | `/platform/login` (email + password) |
 | **Hospital Manager** | Runs one hospital: layout, beds, QR labels, staff, departments, services, **Roles & access**, **Reports**, and the **Audit log** | Staff sign-in (hospital code + email + password) |
 | **Floor Manager** / **Ward Manager** | Admit and discharge patients, assign requests, and see **Reports**, only for their own floor or ward | Staff sign-in |
 | **Department Supervisor** | Assigns and closes one department's requests (for example Pantry) across the hospital, and sees that department's **Reports** | Staff sign-in |
@@ -136,7 +136,7 @@ The app is a **modular monolith**: one backend process and one frontend, with se
 |---|---|
 | `/` | Patient-first QR scanner, with a separate staff sign-in link |
 | `/login` | Staff/admin sign-in |
-| `/platform/login`, `/platform` | CARE QR platform administration |
+| `/platform/login`, `/platform` | Super admin: clients and their hospitals |
 | `/admin/overview` | Role-relevant summary and next steps |
 | `/admin/requests` | Manager assignment and staff work |
 | `/admin/locations`, `/admin/beds` | Location setup, admissions, QR issuance |
@@ -258,7 +258,7 @@ PLATFORM_ADMIN_EMAIL=you@yourcompany.com PLATFORM_ADMIN_NAME="Your Name" PLATFOR
 
 A fresh demo seed can also create `platform.demo@careqr.example` if you set `DEMO_PLATFORM_PASSWORD` before `npm run seed:demo`.
 
-**Try the SaaS flow:** sign in at `http://localhost:5173/platform/login` → **Add hospital** (name, code, time zone, optional logo, first manager) → sign in as that manager at the staff sign-in page with the new hospital code → **Departments**: add a department → **Roles & access**: create a role → **Staff & coverage**: add a person and give them **Floor Manager** for one floor → sign in as them: they see only Overview, Requests, and Beds & QR for their floor. Back in the platform, **Suspend hospital** signs everyone in that hospital out and stops its QR codes; **Reactivate hospital** restores access. No data is deleted.
+**Try the SaaS flow:** sign in at `http://localhost:5173/platform/login` → **Clients** → **Add client** (the customer, then its first hospital: name, code, time zone, optional logo, first manager). A client's page has **Add hospital** for more branches → sign in as that manager at the staff sign-in page with the new hospital code → **Departments**: add a department → **Roles & access**: create a role → **Staff & coverage**: add a person and give them **Floor Manager** for one floor → sign in as them: they see only Overview, Requests, and Beds & QR for their floor. Back in the super admin, **Suspend hospital** signs everyone in that hospital out and stops its QR codes; **Suspend client** does the same for every hospital of that client at once. **Reactivate** restores access. No data is deleted.
 
 ---
 

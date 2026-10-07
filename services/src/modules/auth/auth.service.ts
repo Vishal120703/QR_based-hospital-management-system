@@ -1,5 +1,6 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
+import { hospitalIsOpen } from '../hospitals/hospital-access.js';
 import { logoUrl } from '../hospitals/logo.js';
 import { verifyPasswordOrDummy } from './password.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
@@ -84,6 +85,7 @@ export class StaffAuthService {
   }): Promise<{ token: string; expiresAt: Date }> {
     const hospital = await this.database.hospital.findUnique({
       where: { code: input.hospitalCode.toUpperCase() },
+      include: { client: { select: { status: true } } },
     });
     const user = await this.database.user.findUnique({
       where: { email: input.email.toLowerCase() },
@@ -98,11 +100,7 @@ export class StaffAuthService {
       where: { hospitalId_userId: { hospitalId: hospital.id, userId: user.id } },
     });
 
-    if (
-      hospital.status !== 'ACTIVE' ||
-      user.status !== 'ACTIVE' ||
-      membership?.status !== 'ACTIVE'
-    ) {
+    if (!hospitalIsOpen(hospital) || user.status !== 'ACTIVE' || membership?.status !== 'ACTIVE') {
       throw new UnauthorizedError();
     }
 
@@ -126,7 +124,12 @@ export class StaffAuthService {
     const session = await this.database.staffSession.findUnique({
       where: { tokenHash: hashOpaqueToken(token) },
       include: {
-        hospital: { include: { logo: { select: { publicId: true } } } },
+        hospital: {
+          include: {
+            logo: { select: { publicId: true } },
+            client: { select: { status: true } },
+          },
+        },
         membership: {
           include: {
             user: true,
@@ -145,7 +148,7 @@ export class StaffAuthService {
       !session ||
       session.revokedAt ||
       session.expiresAt <= new Date() ||
-      session.hospital.status !== 'ACTIVE' ||
+      !hospitalIsOpen(session.hospital) ||
       session.membership.status !== 'ACTIVE' ||
       session.membership.user.status !== 'ACTIVE'
     ) {

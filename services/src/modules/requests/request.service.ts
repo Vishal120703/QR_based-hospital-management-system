@@ -17,6 +17,7 @@ import { recordStaffAudit } from '../audit/audit-log.js';
 import { canAccessLocation, type StaffContext } from '../auth/auth.service.js';
 import { type GuestContext } from '../bed-sessions/guest-session.service.js';
 import { snapshotService } from '../catalog/service-snapshot.js';
+import { hospitalAccessSelect, hospitalIsOpen } from '../hospitals/hospital-access.js';
 import { findEligibleStaff } from '../staff/eligibility.js';
 import { visibleRequestsWhere } from './request-scope.js';
 
@@ -303,7 +304,7 @@ export class RequestService {
     const session = await transaction.guestSession.findUnique({
       where: { id: guest.guestSessionId },
       include: {
-        hospital: { select: { status: true } },
+        hospital: { select: hospitalAccessSelect },
         bedSession: { include: { bed: { select: { active: true, status: true } } } },
       },
     });
@@ -314,7 +315,7 @@ export class RequestService {
       session.bedSessionId !== guest.bedSessionId ||
       session.revokedAt ||
       session.expiresAt <= now ||
-      session.hospital.status !== 'ACTIVE' ||
+      !hospitalIsOpen(session.hospital) ||
       session.bedSession.status !== 'ACTIVE' ||
       !session.bedSession.bed.active ||
       session.bedSession.bed.status !== 'OCCUPIED'

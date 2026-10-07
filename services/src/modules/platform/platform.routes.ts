@@ -26,23 +26,58 @@ const person = {
   managerEmail: z.string().trim().email().max(320),
   managerPassword: z.string().min(12).max(200),
 };
+const code = z
+  .string()
+  .trim()
+  .min(2)
+  .max(32)
+  .regex(/^[A-Za-z0-9-]+$/);
+const contact = {
+  contactName: z.string().trim().min(1).max(120),
+  contactEmail: z.string().trim().email().max(320),
+  contactPhone: z
+    .string()
+    .trim()
+    .min(3)
+    .max(40)
+    .regex(/^[0-9+()\-. ]+$/),
+};
+const newClientSchema = z
+  .object({
+    name: z.string().trim().min(2).max(200),
+    code,
+    contactName: contact.contactName.optional(),
+    contactEmail: contact.contactEmail.optional(),
+    contactPhone: contact.contactPhone.optional(),
+  })
+  .strict();
 const createSchema = z
   .object({
     name: z.string().trim().min(2).max(200),
-    code: z
-      .string()
-      .trim()
-      .min(2)
-      .max(32)
-      .regex(/^[A-Za-z0-9-]+$/),
+    code,
     timezone,
     ...person,
+    clientId: z.string().uuid().optional(),
+    client: newClientSchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => !(value.clientId && value.client), 'Choose an existing client or a new one.');
 const updateSchema = z
   .object({
     name: z.string().trim().min(2).max(200).optional(),
     timezone: timezone.optional(),
+    status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
+    clientId: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'At least one field is required.');
+// Contact fields accept null to clear them.
+const clientUpdateSchema = z
+  .object({
+    name: z.string().trim().min(2).max(200).optional(),
+    contactName: contact.contactName.nullable().optional(),
+    contactEmail: contact.contactEmail.nullable().optional(),
+    contactPhone: contact.contactPhone.nullable().optional(),
     status: z.enum(['ACTIVE', 'SUSPENDED']).optional(),
   })
   .strict()
@@ -85,6 +120,25 @@ export function createPlatformRouter(
 
   const operator = Router();
   operator.use(signedIn);
+  operator.get('/clients', async (request, response) => {
+    empty.parse(request.query);
+    response.status(200).json({ clients: await platform.listClients() });
+  });
+  operator.get('/clients/:id', async (request, response) => {
+    const { id } = idParams.parse(request.params);
+    empty.parse(request.query);
+    response.status(200).json({ client: await platform.getClient(id) });
+  });
+  operator.patch('/clients/:id', async (request, response) => {
+    const { id } = idParams.parse(request.params);
+    const client = await platform.updateClient(
+      getPlatformContext(request),
+      id,
+      clientUpdateSchema.parse(request.body),
+      getRequestId(response),
+    );
+    response.status(200).json({ client });
+  });
   operator.get('/hospitals', async (request, response) => {
     empty.parse(request.query);
     response.status(200).json({ hospitals: await platform.listHospitals() });

@@ -37,7 +37,7 @@ npm run prisma:migrate && npm run seed:test
 | Who | Password |
 |---|---|
 | Every staff account in **CITYCARE** and **GREENVALLEY** | the value of `DEMO_STAFF_PASSWORD` in `services/.env` |
-| Platform admin `platform.demo@careqr.example` | the value of `DEMO_PLATFORM_PASSWORD` in `services/.env` |
+| Super admin `platform.demo@careqr.example` | the value of `DEMO_PLATFORM_PASSWORD` in `services/.env` |
 
 Never paste these passwords, QR links, or tokens into a chat, a ticket, or Git.
 
@@ -48,12 +48,21 @@ The data was created around **22:30 on 6 Oct 2026 (India time)**. "Today" in thi
 ### Signing in
 
 - **Staff:** go to http://localhost:5173, choose **Staff sign in**, and enter the **hospital code**, **email**, and password.
-- **Platform admin:** go to http://localhost:5173/platform/login.
+- **Super admin:** go to http://localhost:5173/platform/login.
 - Use **Sign out** (top right) before switching to another person. To stay signed in as two people at once, use a second browser or a private window.
 
 ---
 
 ## 2. The test hospitals
+
+Each hospital belongs to a **client**, the customer organisation that buys CARE QR. One client can own several hospitals (branches). The super admin manages clients and hospitals only, never what happens inside a hospital.
+
+| Client | Hospitals |
+|---|---|
+| **CityCare Health Group** | CityCare Multispeciality Hospital (`CITYCARE`) |
+| **Green Valley Healthcare** | Green Valley Clinic (`GREENVALLEY`) |
+| Sunrise Multispeciality Hospital | Sunrise (`SUNRISE`) |
+| CARE QR Demo Hospital | CARE QR Demo (`CAREQR-DEMO`) |
 
 ### CityCare Multispeciality Hospital (code `CITYCARE`)
 
@@ -136,11 +145,11 @@ The password for every account below is `DEMO_STAFF_PASSWORD` (see [Passwords](#
 | Dr. Rohan Das | `rohan.das@greenvalley.example` | Hospital Manager |
 | Sneha Kulkarni | `sneha.kulkarni@greenvalley.example` | Care Staff (Nursing, whole clinic, on duty) |
 
-### Platform (no hospital code)
+### Super admin (no hospital code)
 
 | Person | Email | Where to sign in |
 |---|---|---|
-| Demo Platform Admin | `platform.demo@careqr.example` | http://localhost:5173/platform/login |
+| Demo Platform Admin (super admin) | `platform.demo@careqr.example` | http://localhost:5173/platform/login |
 
 ---
 
@@ -148,9 +157,10 @@ The password for every account below is `DEMO_STAFF_PASSWORD` (see [Passwords](#
 
 **"Area"** means the floor, ward, or department the role was given for. For example, Ravi is a Floor Manager **for the First Floor only**.
 
-| What they can do | Platform admin | Hospital Manager | Operations Manager | Admission Desk | Floor / Ward Manager | Department Supervisor | Care Staff | Patient |
+| What they can do | Super admin | Hospital Manager | Operations Manager | Admission Desk | Floor / Ward Manager | Department Supervisor | Care Staff | Patient |
 |---|---|---|---|---|---|---|---|---|
-| Add client hospitals, logos, first manager; suspend a hospital | ✅ | — | — | — | — | — | — | — |
+| Add clients and their hospitals (logo, first manager); edit client contacts; move a hospital to another client | ✅ | — | — | — | — | — | — | — |
+| Suspend or reactivate a whole client, or one hospital | ✅ | — | — | — | — | — | — | — |
 | See patients, requests, or staff of a hospital | ❌ never | ✅ | ✅ | — | own area | own department | own work only | own bed only |
 | Change hospital profile and logo | — | ✅ | — | — | — | — | — | — |
 | See the audit log | — | ✅ | ✅ | — | — | — | — | — |
@@ -223,15 +233,21 @@ These requests were open when the data was loaded, so every role has something t
 
 Expected results are marked ✔. If the screen differs, record **FAIL** with what you saw.
 
-### 6.1 Platform admin (super user): `platform.demo@careqr.example`
+### 6.1 Super admin: `platform.demo@careqr.example`
+
+The super admin manages **clients** (customers) and their **hospitals**. They never see patients, requests, or staff records inside a hospital, only counts.
 
 | ID | Do this | ✔ Expected |
 |---|---|---|
-| P01 | Sign in at `/platform/login`. | **Client hospitals** lists Sunrise, CARE QR Demo, Green Valley (green circle logo), and CityCare (teal square logo), each with beds, staff, and open request counts. Totals at the top. |
-| P02 | Search for `city`. Open **CityCare**. | Only CityCare is shown in the search. Its page shows the logo, code, status **active**, and Hospital Manager Dr. Meera Iyer. No patient or request details are shown. |
-| P03 | **Add hospital**: any name (for example "Test Clinic"), keep the suggested code, choose a time zone, upload a PNG logo, and add a first manager with a new `@example.test` email and a 12+ character password. | The new hospital opens as **active** with its logo and manager. You can sign in with it at the staff sign-in page (see H17). |
-| P04 | Open **Green Valley** → **Suspend hospital** → confirm. Try to sign in as `rohan.das@greenvalley.example`. | The sign-in is refused. CityCare staff are not affected. |
-| P05 | **Reactivate hospital** for Green Valley. Sign in as Rohan again. | Sign-in works again. No data was lost. |
+| P01 | Sign in at `/platform/login`. | The header says **CARE QR Super Admin**, with **Clients** and **Hospitals** tabs. **Clients** lists 4 clients, including **CityCare Health Group** (contact Dr. Meera Iyer) and **Green Valley Healthcare**, each with how many hospitals, beds, and staff it has. Totals at the top. |
+| P02 | Open **CityCare Health Group**. | Client page with its code, status **active**, totals, editable contact details, and its hospital list (CityCare Multispeciality Hospital). No patient or request details. |
+| P03 | Change the contact phone and **Save details**. | "Client details saved." In Meera's **Audit log** it appears as "Platform changed the client (group)". |
+| P04 | On the client page click **Add hospital** → fill in a branch, for example "CityCare Whitefield" with code `CITYCARE-WF`, a first manager with a new `@example.test` email, and **Generate** a password → **Create hospital**. | The new hospital opens and shows "client CityCare Health Group". Back on the client page, CityCare Health Group now has **2 hospitals**. The new branch has none of CityCare's people, beds, or requests (see H17). |
+| P05 | **Clients** → **Add client**: a new client (for example "Lotus Health", with a contact person) and its first hospital and manager → **Create client**. | The new client page opens with 1 hospital. The **Hospitals** tab lists the new hospital with "client Lotus Health". |
+| P06 | **Hospitals** tab → search `green` → open **Green Valley Clinic**. | Shows "client Green Valley Healthcare", its logo, managers, and a **Client** list to move it to another client. |
+| P07 | Open **Green Valley Healthcare** → **Suspend client** → confirm. Try to sign in as `rohan.das@greenvalley.example`. | The warning says all its hospitals close at once. Sign-in is refused, and Green Valley's patient QR codes stop working. The hospital's own status still says **active**, but its page says the client is suspended. CityCare is not affected. **Add hospital** is disabled for a suspended client. |
+| P08 | **Reactivate client**. Sign in as Rohan again. | Sign-in works again. No data was lost. |
+| P09 | Open **CityCare Multispeciality Hospital** → **Suspend hospital** → confirm, then try to sign in as Meera. Then **Reactivate hospital**. | Only that one hospital closes (the CityCare Whitefield branch from P04 stays open); after reactivating, Meera can sign in again. |
 
 ### 6.2 Hospital Manager: Dr. Meera Iyer (`CITYCARE`)
 
@@ -253,7 +269,7 @@ Expected results are marked ✔. If the screen differs, record **FAIL** with wha
 | H14 | Open **Requests**. | **Open** has 11 requests, the most urgent first, with red "overdue by …" where late. **Ready to close** has 3, **History** about 96. Accepted and in-progress cards show **Hand over…**. |
 | H15 | Open **Audit log**. Choose **Request handling**, then **Staff**, then **Load older changes**. | Plain sentences with who and when, for example "Handed a request to someone else" with its reason, "Changed staff status" for Karan (active → suspended), and "Changed duty (on/off)" for Rahul. The oldest entries are the hospital setup about 20 days earlier. |
 | H16 | Open **Profile & logo**. Upload a different PNG logo and save. | The new logo shows in the top bar straight away and on the patient page (PT01). |
-| H17 | Sign out and sign in with the hospital and manager you created in P03. | The new hospital is empty apart from its starter departments and services. None of CityCare's people or beds appear. |
+| H17 | Sign out and sign in with the branch hospital and manager you created in P04. | The new hospital is empty apart from its starter departments and services. None of CityCare's people or beds appear. |
 
 ### 6.3 Operations Manager: Arjun Mehta (custom role)
 
@@ -405,7 +421,7 @@ Copy this table and fill it in as you go.
 
 | ID | Result | Note |
 |---|---|---|
-| P01–P05 | | |
+| P01–P09 | | |
 | H01–H17 | | |
 | O01–O07 | | |
 | K01–K04 | | |

@@ -196,6 +196,148 @@ describe('SaaS platform administration', () => {
     expect(detail.body).toMatchObject({ hospital: { logoUrl } });
   });
 
+  it('groups hospitals under clients and closes every hospital of a suspended client', async () => {
+    const suffix = randomUUID().slice(0, 6).toUpperCase();
+    const clientSchema = z.object({
+      client: z
+        .object({
+          id: z.string().uuid(),
+          name: z.string(),
+          status: z.string(),
+          hospitalCount: z.number(),
+          contactEmail: z.string().nullable(),
+          hospitals: z.array(z.object({ id: z.string(), code: z.string(), status: z.string() })),
+        })
+        .passthrough(),
+    });
+
+    // A new client arrives with its first hospital.
+    const first = newHospital();
+    const created = await as(operator).post('/platform/hospitals', {
+      ...first,
+      client: {
+        name: `Apex Health Group ${suffix}`,
+        code: `APEX-${suffix}`,
+        contactName: 'Ravi Accounts',
+        contactEmail: `Accounts-${suffix}@apex.example`,
+        contactPhone: '+91 80 1234 5678',
+      },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const clientId = z
+      .object({ hospital: z.object({ client: z.object({ id: z.string().uuid() }) }) })
+      .parse(created.body).hospital.client.id;
+
+    // A second branch for the same client.
+    const second = newHospital();
+    expect((await as(operator).post('/platform/hospitals', { ...second, clientId })).status).toBe(
+      201,
+    );
+    const detail = clientSchema.parse(
+      (await as(operator).get(`/platform/clients/${clientId}`)).body,
+    ).client;
+    expect(detail).toMatchObject({
+      name: `Apex Health Group ${suffix}`,
+      hospitalCount: 2,
+      contactEmail: `accounts-${suffix.toLowerCase()}@apex.example`,
+    });
+    expect(detail.hospitals.map((hospital) => hospital.code).sort()).toEqual(
+      [first.code, second.code].sort(),
+    );
+    const listed = z
+      .object({ clients: z.array(z.object({ id: z.string(), hospitalCount: z.number() })) })
+      .parse((await as(operator).get('/platform/clients')).body).clients;
+    expect(listed.find((client) => client.id === clientId)?.hospitalCount).toBe(2);
+
+    // Suspending the client closes both hospitals; their own status is unchanged.
+    const firstToken = await loginStaff(application, first.code, first.managerEmail);
+    const secondFixture = {
+      hospitalId: detail.hospitals.find((hospital) => hospital.code === second.code)!.id,
+      code: second.code,
+      adminToken: await loginStaff(application, second.code, second.managerEmail),
+    };
+    const { bedId } = await createBedFixture(database, secondFixture);
+    const qr = z
+      .object({ token: z.string() })
+      .parse((await as(secondFixture.adminToken).post(`/admin/beds/${bedId}/qr`, {})).body);
+    await as(secondFixture.adminToken).post('/admin/bed-sessions', { bedId });
+
+    const suspended = await as(operator).patch(`/platform/clients/${clientId}`, {
+      status: 'SUSPENDED',
+    });
+    expect(suspended.status, JSON.stringify(suspended.body)).toBe(200);
+    expect(clientSchema.parse(suspended.body).client.hospitals.map((item) => item.status)).toEqual([
+      'ACTIVE',
+      'ACTIVE',
+    ]);
+    expect((await as(firstToken).get('/auth/staff/me')).status).toBe(401);
+    expect((await as(secondFixture.adminToken).get('/auth/staff/me')).status).toBe(401);
+    await expect(loginStaff(application, first.code, first.managerEmail)).rejects.toThrow();
+    expect(
+      (await request(application).post('/public/qr/resolve').send({ token: qr.token })).status,
+    ).toBe(404);
+    // Nothing new can be added to a suspended client.
+    expect(
+      (await as(operator).post('/platform/hospitals', { ...newHospital(), clientId })).status,
+    ).toBe(409);
+    expect(
+      (await as(operator).patch(`/platform/hospitals/${existing.hospitalId}`, { clientId })).status,
+    ).toBe(409);
+    expect(
+      await database.auditLog.count({
+        where: { action: 'platform.client.update', hospital: { clientId } },
+      }),
+    ).toBe(2);
+
+    expect(
+      (await as(operator).patch(`/platform/clients/${clientId}`, { status: 'ACTIVE' })).status,
+    ).toBe(200);
+    expect(
+      (
+        await as(await loginStaff(application, first.code, first.managerEmail)).get(
+          '/auth/staff/me',
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await request(application).post('/public/qr/resolve').send({ token: qr.token })).status,
+    ).toBe(201);
+
+    // A hospital can move to another client, for example after an acquisition.
+    const moved = await as(operator).patch(`/platform/hospitals/${secondFixture.hospitalId}`, {
+      clientId: z
+        .object({ hospital: z.object({ client: z.object({ id: z.string() }) }) })
+        .parse((await as(operator).get(`/platform/hospitals/${existing.hospitalId}`)).body).hospital
+        .client.id,
+    });
+    expect(moved.status, JSON.stringify(moved.body)).toBe(200);
+    expect(
+      clientSchema.parse((await as(operator).get(`/platform/clients/${clientId}`)).body).client
+        .hospitalCount,
+    ).toBe(1);
+
+    // Client codes are unique, and a hospital names one client only.
+    expect(
+      (
+        await as(operator).post('/platform/hospitals', {
+          ...newHospital(),
+          client: { name: 'Copy', code: `APEX-${suffix}` },
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await as(operator).post('/platform/hospitals', {
+          ...newHospital(),
+          clientId,
+          client: { name: 'Both', code: `BOTH-${suffix}` },
+        })
+      ).status,
+    ).toBe(400);
+    // Hospital staff never reach client data.
+    expect((await as(firstToken).get('/platform/clients')).status).toBe(401);
+  });
+
   it('keeps platform and hospital credentials apart', async () => {
     expect((await as(existing.adminToken).get('/platform/hospitals')).status).toBe(401);
     expect((await as(operator).get('/admin/hospital')).status).toBe(401);

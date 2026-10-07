@@ -31,7 +31,9 @@ async function main(): Promise<void> {
       process.stdout.write(`${code} already exists: left unchanged.\n`);
     }
     for (const hospital of result.created) {
-      process.stdout.write(`\nCreated ${hospital.name} (hospital code ${hospital.code})\n`);
+      process.stdout.write(
+        `\nCreated ${hospital.name} (hospital code ${hospital.code}) for client ${hospital.client}\n`,
+      );
       for (const account of hospital.accounts) {
         process.stdout.write(`  ${account.email.padEnd(36)} ${account.name} - ${account.roles}\n`);
       }

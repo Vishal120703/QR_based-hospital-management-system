@@ -8,6 +8,7 @@ import {
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
 import { recordStaffAudit } from '../audit/audit-log.js';
 import { type StaffContext } from '../auth/auth.service.js';
+import { hospitalAccessSelect, hospitalIsOpen } from '../hospitals/hospital-access.js';
 import { areaFilters } from '../locations/location.service.js';
 import {
   type GuestContext,
@@ -399,11 +400,11 @@ export class QrCodeService {
       const qrCode = await transaction.bedQrCode.findUnique({
         where: { hospitalId_id: { hospitalId: key.hospitalId, id: key.id } },
         include: {
-          hospital: { select: { status: true } },
+          hospital: { select: hospitalAccessSelect },
           bed: { select: { active: true } },
         },
       });
-      if (!qrCode || qrCode.hospital.status !== 'ACTIVE' || !qrCode.bed.active) {
+      if (!qrCode || !hospitalIsOpen(qrCode.hospital) || !qrCode.bed.active) {
         throw new QrUnavailableError();
       }
       const session = await this.guestSessions.issue(transaction, qrCode.hospitalId, qrCode.bedId);

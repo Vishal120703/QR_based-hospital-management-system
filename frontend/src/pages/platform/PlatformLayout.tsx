@@ -72,13 +72,13 @@ export function PlatformLayout() {
           <span className="brand-mark" aria-hidden="true">
             +
           </span>{' '}
-          CARE QR Platform
+          CARE QR Super Admin
         </NavLink>
         <span className="topbar-user">
           {user && (
             <span>
               <strong>{user.displayName}</strong>
-              <small>Platform administrator</small>
+              <small>Super admin · clients and hospitals</small>
             </span>
           )}
           <button
@@ -93,6 +93,18 @@ export function PlatformLayout() {
           </button>
         </span>
       </header>
+      <nav className="platform-tabs" aria-label="Super admin">
+        <NavLink
+          to="/platform"
+          className={({ isActive }) =>
+            isActive || location.pathname.startsWith('/platform/clients') ? 'active' : ''
+          }
+          end
+        >
+          Clients
+        </NavLink>
+        <NavLink to="/platform/hospitals">Hospitals</NavLink>
+      </nav>
       <main ref={mainRef} id="main-content" className="admin-main platform-main" tabIndex={-1}>
         {error && <ErrorNotice message={error} onDismiss={() => setError(null)} />}
         {success && (

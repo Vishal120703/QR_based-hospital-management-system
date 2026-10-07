@@ -13,6 +13,11 @@ enum HospitalStatus {
   INACTIVE
 }
 
+enum ClientStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -166,8 +171,26 @@ enum RequestEventType {
   TRANSFERRED
 }
 
+// A customer of the CARE QR platform: a hospital group or a single hospital.
+// It owns one or more hospitals. Super admins manage clients and hospitals;
+// a hospital is open to staff and patients only while it and its client are
+// both active. Nothing clinical is stored here.
+model Client {
+  id           String       @id @default(uuid()) @db.Uuid
+  name         String
+  code         String       @unique
+  status       ClientStatus @default(ACTIVE)
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  hospitals    Hospital[]
+}
+
 model Hospital {
   id                 String               @id @default(uuid()) @db.Uuid
+  clientId           String               @db.Uuid
   name               String
   code               String               @unique
   timezone           String
@@ -190,6 +213,9 @@ model Hospital {
   escalationPolicies EscalationPolicy[]
   serviceRequests    ServiceRequest[]
   logo               HospitalLogo?
+  client             Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([clientId])
 }
 
 // A hospital's logo (SaaS branding), kept out of Hospital so ordinary queries

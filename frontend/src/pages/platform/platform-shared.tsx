@@ -94,3 +94,12 @@ export function PasswordField({
     </label>
   );
 }
+
+// "active" in green, anything else (suspended, or a note such as "client suspended") in red.
+export function StatusBadge({ status, note }: { status: string; note?: string | undefined }) {
+  return (
+    <span className={`badge ${status === 'ACTIVE' ? 'badge-available' : 'badge-danger'}`}>
+      {note ?? status.toLowerCase()}
+    </span>
+  );
+}

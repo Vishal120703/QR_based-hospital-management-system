@@ -1,7 +1,12 @@
-import { type HospitalStatus, type Prisma, type PrismaClient } from '@prisma/client';
+import {
+  type ClientStatus,
+  type HospitalStatus,
+  type Prisma,
+  type PrismaClient,
+} from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
 import { hashPassword } from '../auth/password.js';
-import { bootstrapHospital } from '../hospitals/bootstrap.js';
+import { bootstrapHospital, type NewClientInput } from '../hospitals/bootstrap.js';
 import { logoUrl, storeLogo } from '../hospitals/logo.js';
 import { lockedRoleKey } from '../roles/built-in-roles.js';
 import { type PlatformContext } from './platform-auth.service.js';
@@ -15,12 +20,26 @@ export interface NewHospitalInput {
   readonly managerName: string;
   readonly managerEmail: string;
   readonly managerPassword: string;
+  // Either an existing client, or a new client to create with the hospital.
+  // Without both, the hospital becomes its own new client.
+  readonly clientId?: string | undefined;
+  readonly client?: NewClientInput | undefined;
+}
+
+export interface ClientUpdate {
+  readonly name?: string | undefined;
+  readonly contactName?: string | null | undefined;
+  readonly contactEmail?: string | null | undefined;
+  readonly contactPhone?: string | null | undefined;
+  readonly status?: ClientStatus | undefined;
 }
 
 export interface HospitalUpdate {
   readonly name?: string | undefined;
   readonly timezone?: string | undefined;
   readonly status?: Extract<HospitalStatus, 'ACTIVE' | 'SUSPENDED'> | undefined;
+  // Moves the hospital to another client (for example after an acquisition).
+  readonly clientId?: string | undefined;
 }
 
 // Platform actions are audited in the hospital they change.
@@ -46,34 +65,60 @@ async function recordPlatformAudit(
   });
 }
 
-// Manages client hospitals for the SaaS operator. It never reads patients,
-// requests, or other clinical data beyond simple counts.
+function withTotals<T extends object>(
+  client: T,
+  hospitals: readonly { activeBeds: number; activeStaff: number; openRequests: number }[],
+) {
+  const sum = (pick: (hospital: (typeof hospitals)[number]) => number) =>
+    hospitals.reduce((total, hospital) => total + pick(hospital), 0);
+  return {
+    ...client,
+    hospitalCount: hospitals.length,
+    activeBeds: sum((hospital) => hospital.activeBeds),
+    activeStaff: sum((hospital) => hospital.activeStaff),
+    openRequests: sum((hospital) => hospital.openRequests),
+  };
+}
+
+// The super admin's work: clients (customers) and their hospitals. It never
+// reads patients, requests, or other clinical data beyond simple counts.
 export class PlatformService {
   public constructor(private readonly database: PrismaClient) {}
 
-  public async listHospitals() {
-    const [hospitals, beds, staff, openRequests] = await Promise.all([
-      this.database.hospital.findMany({
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          timezone: true,
-          status: true,
-          createdAt: true,
-          logo: { select: { publicId: true } },
-        },
+  // Hospitals with their client and simple size counts, never clinical data.
+  private async hospitalSummaries(where: Prisma.HospitalWhereInput = {}) {
+    const hospitals = await this.database.hospital.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        timezone: true,
+        status: true,
+        createdAt: true,
+        logo: { select: { publicId: true } },
+        client: { select: { id: true, name: true, code: true, status: true } },
+      },
+    });
+    const ids = hospitals.map((hospital) => hospital.id);
+    const [beds, staff, openRequests] = await Promise.all([
+      this.database.bed.groupBy({
+        by: ['hospitalId'],
+        where: { hospitalId: { in: ids }, active: true },
+        _count: true,
       }),
-      this.database.bed.groupBy({ by: ['hospitalId'], where: { active: true }, _count: true }),
       this.database.hospitalMembership.groupBy({
         by: ['hospitalId'],
-        where: { status: 'ACTIVE' },
+        where: { hospitalId: { in: ids }, status: 'ACTIVE' },
         _count: true,
       }),
       this.database.serviceRequest.groupBy({
         by: ['hospitalId'],
-        where: { status: { in: ['SUBMITTED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] } },
+        where: {
+          hospitalId: { in: ids },
+          status: { in: ['SUBMITTED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'] },
+        },
         _count: true,
       }),
     ]);
@@ -88,6 +133,93 @@ export class PlatformService {
     }));
   }
 
+  public async listHospitals() {
+    return this.hospitalSummaries();
+  }
+
+  // Clients with how many hospitals, beds, staff, and open requests they have.
+  public async listClients() {
+    const [clients, hospitals] = await Promise.all([
+      this.database.client.findMany({ orderBy: { createdAt: 'desc' } }),
+      this.hospitalSummaries(),
+    ]);
+    return clients.map((client) =>
+      withTotals(
+        client,
+        hospitals.filter((hospital) => hospital.client.id === client.id),
+      ),
+    );
+  }
+
+  public async getClient(id: string) {
+    const client = await this.database.client.findUnique({ where: { id } });
+    if (!client) throw new NotFoundError();
+    const hospitals = await this.hospitalSummaries({ clientId: id });
+    return { ...withTotals(client, hospitals), hospitals };
+  }
+
+  // Changes a client's details or status. Suspending a client closes all its
+  // hospitals at once (staff are signed out, QR codes stop) without changing
+  // each hospital's own status, so reactivating restores exactly what was there.
+  public async updateClient(
+    context: PlatformContext,
+    id: string,
+    input: ClientUpdate,
+    requestId: string,
+  ) {
+    await this.database.$transaction(
+      async (transaction) => {
+        const before = await transaction.client.findUnique({
+          where: { id },
+          include: { hospitals: { select: { id: true } } },
+        });
+        if (!before) throw new NotFoundError();
+        const after = await transaction.client.update({
+          where: { id },
+          data: {
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.contactName !== undefined ? { contactName: input.contactName } : {}),
+            ...(input.contactEmail !== undefined
+              ? { contactEmail: input.contactEmail?.toLowerCase() ?? null }
+              : {}),
+            ...(input.contactPhone !== undefined ? { contactPhone: input.contactPhone } : {}),
+            ...(input.status !== undefined ? { status: input.status } : {}),
+          },
+        });
+        const hospitalIds = before.hospitals.map((hospital) => hospital.id);
+        const revokedStaffSessions =
+          input.status === 'SUSPENDED' && before.status !== 'SUSPENDED'
+            ? (
+                await transaction.staffSession.updateMany({
+                  where: { hospitalId: { in: hospitalIds }, revokedAt: null },
+                  data: { revokedAt: new Date() },
+                })
+              ).count
+            : 0;
+        const view = (client: typeof after) => ({
+          name: client.name,
+          status: client.status,
+          contactName: client.contactName,
+          contactEmail: client.contactEmail,
+          contactPhone: client.contactPhone,
+        });
+        // Recorded in each hospital's audit log, where its managers can see it.
+        for (const hospitalId of hospitalIds) {
+          await recordPlatformAudit(
+            transaction,
+            context,
+            requestId,
+            hospitalId,
+            'platform.client.update',
+            { clientId: id, before: view(before), after: view(after), revokedStaffSessions },
+          );
+        }
+      },
+      { isolationLevel: 'Serializable' },
+    );
+    return this.getClient(id);
+  }
+
   public async getHospital(id: string) {
     const hospital = await this.database.hospital.findUnique({
       where: { id },
@@ -99,6 +231,7 @@ export class PlatformService {
         status: true,
         createdAt: true,
         logo: { select: { publicId: true } },
+        client: { select: { id: true, name: true, code: true, status: true } },
       },
     });
     if (!hospital) throw new NotFoundError();
@@ -143,8 +276,23 @@ export class PlatformService {
         adminEmail: input.managerEmail,
         adminName: input.managerName,
         adminPassword: input.managerPassword,
+        ...(input.clientId
+          ? { client: { id: input.clientId } }
+          : input.client
+            ? { client: input.client }
+            : {}),
       },
       async (transaction, created) => {
+        if (created.newClient) {
+          await recordPlatformAudit(
+            transaction,
+            context,
+            requestId,
+            created.hospitalId,
+            'platform.client.create',
+            { clientId: created.clientId, name: input.client?.name ?? input.name },
+          );
+        }
         await recordPlatformAudit(
           transaction,
           context,
@@ -154,6 +302,7 @@ export class PlatformService {
           {
             code: input.code.toUpperCase(),
             managerEmail: input.managerEmail.toLowerCase(),
+            clientId: created.clientId,
           },
         );
       },
@@ -171,12 +320,20 @@ export class PlatformService {
       async (transaction) => {
         const before = await transaction.hospital.findUnique({ where: { id } });
         if (!before) throw new NotFoundError();
+        if (input.clientId !== undefined && input.clientId !== before.clientId) {
+          const target = await transaction.client.findUnique({ where: { id: input.clientId } });
+          if (!target) throw new NotFoundError('The client was not found.');
+          if (target.status !== 'ACTIVE') {
+            throw new ConflictError('Reactivate that client before moving a hospital to it.');
+          }
+        }
         const after = await transaction.hospital.update({
           where: { id },
           data: {
             ...(input.name !== undefined ? { name: input.name } : {}),
             ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
             ...(input.status !== undefined ? { status: input.status } : {}),
+            ...(input.clientId !== undefined ? { clientId: input.clientId } : {}),
           },
         });
         // Suspending signs everyone out straight away; patients' QR access
@@ -191,8 +348,18 @@ export class PlatformService {
               ).count
             : 0;
         await recordPlatformAudit(transaction, context, requestId, id, 'platform.hospital.update', {
-          before: { name: before.name, timezone: before.timezone, status: before.status },
-          after: { name: after.name, timezone: after.timezone, status: after.status },
+          before: {
+            name: before.name,
+            timezone: before.timezone,
+            status: before.status,
+            clientId: before.clientId,
+          },
+          after: {
+            name: after.name,
+            timezone: after.timezone,
+            status: after.status,
+            clientId: after.clientId,
+          },
           revokedStaffSessions,
         });
       },

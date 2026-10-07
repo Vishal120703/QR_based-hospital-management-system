@@ -194,10 +194,19 @@ class HospitalSeeder {
       where: { hospitalId: this.hospitalId, action: 'hospital.bootstrap' },
       data: { createdAt: this.start },
     });
+    await this.transaction.client.update({
+      where: { id: this.created.clientId },
+      data: { createdAt: this.start },
+    });
     this.members.set(this.manager.key, this.created.adminMembershipId);
+    this.audit(this.start, 'platform', 'platform.client.create', hospitalTarget, {
+      clientId: this.created.clientId,
+      name: this.spec.client.name,
+    });
     this.audit(this.start, 'platform', 'platform.hospital.create', hospitalTarget, {
       code: this.spec.code,
       managerEmail: this.email(this.manager),
+      clientId: this.created.clientId,
     });
     const logo = await storeLogo(
       this.transaction,
@@ -1037,6 +1046,7 @@ export interface TestSeedResult {
   readonly created: readonly {
     code: string;
     name: string;
+    client: string;
     accounts: readonly { email: string; name: string; roles: string }[];
   }[];
   readonly skipped: readonly string[];
@@ -1088,6 +1098,7 @@ export async function seedTestHospitals(
         adminEmail: email(manager.key),
         adminName: manager.name,
         adminPassword: input.password,
+        client: spec.client,
       },
       async (transaction, hospital) => {
         await new HospitalSeeder(
@@ -1103,6 +1114,7 @@ export async function seedTestHospitals(
     created.push({
       code: spec.code,
       name: spec.name,
+      client: spec.client.name,
       accounts: spec.people.map((person) => ({
         email: email(person.key),
         name: person.name,

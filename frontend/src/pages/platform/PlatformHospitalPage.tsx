@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
-import { assetUrl, platformApi, type PlatformHospital } from '../../api';
+import { assetUrl, platformApi, type PlatformClient, type PlatformHospital } from '../../api';
 import { LoadState } from '../../components';
 import { acceptedLogoTypes, prepareLogo } from '../../logo-image';
-import { allTimezones, HospitalMark, PasswordField } from './platform-shared';
+import { allTimezones, HospitalMark, PasswordField, StatusBadge } from './platform-shared';
 import { usePlatform } from './PlatformLayout';
 
 export function PlatformHospitalPage() {
@@ -15,17 +15,21 @@ export function PlatformHospitalPage() {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState('');
   const [timezone, setTimezone] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clients, setClients] = useState<PlatformClient[]>([]);
   const [manager, setManager] = useState({ displayName: '', email: '', password: '' });
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let current = true;
-    platformApi.hospital(token, id).then(
-      (loaded) => {
+    Promise.all([platformApi.hospital(token, id), platformApi.clients(token)]).then(
+      ([loaded, loadedClients]) => {
         if (!current) return;
         setHospital(loaded);
         setName(loaded.name);
         setTimezone(loaded.timezone);
+        setClientId(loaded.client.id);
+        setClients(loadedClients);
       },
       (cause: unknown) => {
         if (!current) return;
@@ -46,6 +50,7 @@ export function PlatformHospitalPage() {
       setHospital(fresh);
       setName(fresh.name);
       setTimezone(fresh.timezone);
+      setClientId(fresh.client.id);
       reportSuccess(success);
       return true;
     } catch (cause) {
@@ -71,6 +76,9 @@ export function PlatformHospitalPage() {
   }
 
   const active = hospital.status === 'ACTIVE';
+  const clientActive = hospital.client.status === 'ACTIVE';
+  const movingTo =
+    clientId !== hospital.client.id ? clients.find((client) => client.id === clientId) : undefined;
 
   function saveDetails(event: FormEvent) {
     event.preventDefault();
@@ -79,8 +87,9 @@ export function PlatformHospitalPage() {
         platformApi.updateHospital(token, id, {
           ...(name.trim() !== hospital?.name ? { name: name.trim() } : {}),
           ...(timezone !== hospital?.timezone ? { timezone } : {}),
+          ...(clientId !== hospital?.client.id ? { clientId } : {}),
         }),
-      'Hospital details saved.',
+      movingTo ? `Hospital moved to ${movingTo.name}.` : 'Hospital details saved.',
     );
   }
 
@@ -109,7 +118,7 @@ export function PlatformHospitalPage() {
   return (
     <>
       <p className="breadcrumbs small">
-        <Link to="/platform">Client hospitals</Link> › {hospital.name}
+        <Link to="/platform/hospitals">Hospitals</Link> › {hospital.name}
       </p>
       <header className="panel-header platform-hospital-header">
         <div className="platform-hospital-title">
@@ -117,13 +126,12 @@ export function PlatformHospitalPage() {
           <div>
             <h1>{hospital.name}</h1>
             <p className="muted small">
-              Code <span className="code">{hospital.code}</span> · since{' '}
-              {new Date(hospital.createdAt).toLocaleDateString()}
+              Code <span className="code">{hospital.code}</span> · client{' '}
+              <Link to={`/platform/clients/${hospital.client.id}`}>{hospital.client.name}</Link> ·
+              since {new Date(hospital.createdAt).toLocaleDateString()}
             </p>
           </div>
-          <span className={`badge ${active ? 'badge-available' : 'badge-danger'}`}>
-            {hospital.status.toLowerCase()}
-          </span>
+          <StatusBadge status={hospital.status} />
         </div>
         <div className="panel-header-actions">
           <button
@@ -154,6 +162,13 @@ export function PlatformHospitalPage() {
           Suspended: staff cannot sign in and patient QR codes do not open. Data is kept.
         </p>
       )}
+      {!clientActive && (
+        <p className="notice notice-warning">
+          Its client, {hospital.client.name}, is suspended, so this hospital is closed too.{' '}
+          <Link to={`/platform/clients/${hospital.client.id}`}>Open the client</Link> to reactivate
+          it.
+        </p>
+      )}
 
       <div className="profile-grid">
         <section className="card" aria-labelledby="details-title">
@@ -177,9 +192,31 @@ export function PlatformHospitalPage() {
                 ))}
               </select>
             </label>
+            <label>
+              Client
+              <select value={clientId} onChange={(event) => setClientId(event.target.value)}>
+                {clients
+                  .filter(
+                    (client) => client.status === 'ACTIVE' || client.id === hospital.client.id,
+                  )
+                  .map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+              </select>
+              <small className="muted">
+                Move it to another client, for example when a hospital group takes it over.
+              </small>
+            </label>
             <button
               type="submit"
-              disabled={busy || (name.trim() === hospital.name && timezone === hospital.timezone)}
+              disabled={
+                busy ||
+                (name.trim() === hospital.name &&
+                  timezone === hospital.timezone &&
+                  clientId === hospital.client.id)
+              }
             >
               Save details
             </button>
