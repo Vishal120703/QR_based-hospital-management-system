@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Navigate, NavLink, Outlet, useOutletContext } from 'react-router';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
 import { ApiError, credentials, platformApi } from '../../api';
 import { ErrorNotice, LoadState } from '../../components';
 
@@ -15,11 +15,17 @@ export function usePlatform(): PlatformContext {
 }
 
 export function PlatformLayout() {
+  const location = useLocation();
   const [token, setToken] = useState(() => credentials.platform());
   const [user, setUser] = useState<PlatformContext['user'] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const mainRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, [location.pathname]);
 
   const signOut = useCallback(() => {
     credentials.setPlatform(null);
@@ -87,7 +93,7 @@ export function PlatformLayout() {
           </button>
         </span>
       </header>
-      <main id="main-content" className="admin-main platform-main" tabIndex={-1}>
+      <main ref={mainRef} id="main-content" className="admin-main platform-main" tabIndex={-1}>
         {error && <ErrorNotice message={error} onDismiss={() => setError(null)} />}
         {success && (
           <div className="notice notice-success" role="status">

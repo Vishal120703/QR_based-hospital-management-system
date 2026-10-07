@@ -29,13 +29,24 @@ CARE QR is a SaaS platform: one CARE QR team serves many client hospitals, and e
 | Person | What they do | Where they sign in |
 |---|---|---|
 | **Platform admin** (the CARE QR team) | Adds client hospitals with their logo and first Hospital Manager; suspends or reactivates a hospital. Never sees patients or requests. | `/platform/login` (email + password) |
-| **Hospital Manager** | Runs one hospital: layout, beds, QR labels, staff, departments, services, and **Roles & access** | Staff sign-in (hospital code + email + password) |
-| **Floor Manager** / **Ward Manager** | Admit and discharge patients and assign requests, only on their own floor or ward | Staff sign-in |
-| **Department Supervisor** | Assigns and closes one department's requests (for example Pantry) across the hospital | Staff sign-in |
+| **Hospital Manager** | Runs one hospital: layout, beds, QR labels, staff, departments, services, **Roles & access**, **Reports**, and the **Audit log** | Staff sign-in (hospital code + email + password) |
+| **Floor Manager** / **Ward Manager** | Admit and discharge patients, assign requests, and see **Reports**, only for their own floor or ward | Staff sign-in |
+| **Department Supervisor** | Assigns and closes one department's requests (for example Pantry) across the hospital, and sees that department's **Reports** | Staff sign-in |
 | **Care Staff** (nurse, pantry, housekeeping…) | Accept, start, and complete the requests assigned to them | Staff sign-in |
 | **Patient / family** | Scan the QR, request help, track it | Phone browser, no login |
 
-Every hospital starts with these five built-in roles. A Hospital Manager can add departments and create **their own roles** in **People → Roles & access**: tick what the role may do, and choose whether it applies to the whole hospital, one floor, one ward, or one department. Then, in **Staff & coverage → Manage**, they give the role to a person *for a specific place* (for example "Floor Manager · First Floor"). The Hospital Manager role itself always has every permission and cannot be edited, and a hospital can never lose its last active Hospital Manager.
+Every hospital starts with these five built-in roles. A Hospital Manager can add departments and create **their own roles** in **People → Roles & access**: tick what the role may do, and choose whether it applies to the whole hospital, one floor, one ward, or one department. Then, in **Staff & coverage → Manage**, they give the role to a person *for a specific place* (for example "Floor Manager · First Floor"). The Hospital Manager role itself always has every permission and cannot be edited, and a hospital can never lose its last active Hospital Manager. Nobody can change a role, or suspend a colleague, that has more power than they do themselves.
+
+### Reports and audit (who did what, and why not)
+
+- **Work → Reports** (managers): pick a period (today, 7 days, 30 days, this month, or your own dates). You see how many requests came in, how many were completed, still open, overdue, cancelled (and how many by the patient), or turned down, and how often they were accepted and completed on time.
+  - **Staff work**: for every nurse or staff member, how many requests were assigned to them, accepted, completed (and how many on time), turned down (with their reasons), handed over to someone else, and still open, plus average time to accept and to finish. Managers also show how many requests they assigned and closed. Click a name to see exactly which requests.
+  - **Not completed**: every cancelled, turned-down, or overdue request, with who did it, when, and the reason.
+  - **Request log**: every request with who assigned, accepted, and completed it, and whether each step was on time. Filter it and **Download CSV** for Excel.
+  - **Full history** (also the **History** link on the Requests screen) shows each step of one request: who did it, when, and why.
+- **Hospital → Audit log** (Hospital Manager): every change in the hospital, such as staff added or suspended, roles given, patients admitted, QR codes replaced, and requests assigned or cancelled, with who did it and when. Entries cannot be edited or deleted.
+
+Floor and ward managers and department supervisors see reports only for their own area; care staff see neither.
 
 ---
 
@@ -79,7 +90,7 @@ Every hospital starts with these five built-in roles. A Hospital Manager can add
 
 ## 5. What is finished and what is not
 
-| Done ✅ (Phases 0–8) | Not yet ⏳ (Phases 9–25) |
+| Available now | Still planned |
 |---|---|
 | Admin sign-in, hospital setup, **Overview** home page | Automatic routing of requests to staff |
 | Buildings, floors, 19 unit types (ICU, NICU, ER…), rooms, beds/chairs/cots, bulk bed creation | Full manager dashboard (charts, reports) |
@@ -88,16 +99,16 @@ Every hospital starts with these five built-in roles. A Hospital Manager can add
 | Service catalog + SLA versions | Notifications (push/SMS/WhatsApp), live updates |
 | Patient: scan, request, track, cancel, Hindi/English | Feedback, analytics, deployment, pilot |
 
-Today: a request stays **Submitted** until a manager assigns it. Assigned staff can then accept, start, and complete it in **Requests**, and a manager closes it (or cancels it with a reason). The patient sees a progress bar move through each step.
+Today: a request stays **Submitted** until a manager assigns it. Assigned staff can then accept, start, and complete it in **Requests**, or **turn it down** with a reason, and a manager closes it (or cancels it with a reason). A manager can also **hand over** accepted work to another eligible person, for example at a shift change. The patient sees a progress bar move through each step.
 
 ### Finding your way around the staff area
 
 After signing in you land on **Overview**:
 
 - **Counters** at the top: requests waiting for assignment, being handled, overdue, completed today, occupied beds, and staff on duty. Click any counter to jump to that screen.
-- **Finish setting up** (admins only): a five-step checklist that ticks itself off as you add beds, staff, services, a QR, and handle a first request. It disappears when everything is done.
-- **How CARE QR works**: the four steps from scan to done.
-- **Go to**: a shortcut card for every screen your role can open, with one line saying what it is for.
+- **Finish setting up** (admins only): the next relevant step, with the full checklist available when needed.
+- **How CARE QR works** (admins only): an expandable explanation of the scan-to-completion flow.
+- **Next places to go**: a few useful shortcuts; the navigation has the other screens your role can open.
 
 The **Requests** screen has three tabs: **Open** (still being worked on, most urgent first), **Ready to close** (staff finished; manager closes), and **History** (closed or cancelled). It refreshes itself every 15 seconds. Each card shows the bed, how long ago it was sent, who it is assigned to, and the response-time target, which turns **red** with "overdue by …" when it is missed.
 
@@ -125,9 +136,11 @@ The app is a **modular monolith**: one backend process and one frontend, with se
 |---|---|
 | `/` | Patient-first QR scanner, with a separate staff sign-in link |
 | `/login` | Staff/admin sign-in |
+| `/platform/login`, `/platform` | CARE QR platform administration |
+| `/admin/overview` | Role-relevant summary and next steps |
 | `/admin/requests` | Manager assignment and staff work |
 | `/admin/locations`, `/admin/beds` | Location setup, admissions, QR issuance |
-| `/admin/departments`, `/admin/staff`, `/admin/eligibility` | Teams, people, coverage/duty, eligibility check |
+| `/admin/departments`, `/admin/staff`, `/admin/roles`, `/admin/eligibility` | Teams, people, scoped access, coverage/duty, eligibility check |
 | `/admin/services`, `/admin/sla` | Patient service buttons and response targets |
 | `/q/<secret>`, `/patient` | QR exchange and patient request screen |
 
@@ -219,6 +232,8 @@ To stop: press `Ctrl + C` in each window.
 
 ## 9. Where the dummy data is, and demo logins
 
+> **Full test data for every role:** `npm run seed:test` (from `services/`) adds two dummy client hospitals, **CITYCARE** (19 people in every role, 29 beds, two weeks of request history) and **GREENVALLEY**. Every account uses your `DEMO_STAFF_PASSWORD`. The [full testing guide](./full-testing-guide.md) lists every login, what each role may do, and a step-by-step test for each person. The smaller `CAREQR-DEMO` hospital below still works as before.
+
 | Who | Hospital code | Email | Password |
 |---|---|---|---|
 | Platform admin | — (use `/platform/login`) | `platform.demo@careqr.example` | the private `DEMO_PLATFORM_PASSWORD` (see below) |
@@ -267,11 +282,11 @@ Do these in order. ✔ = what you should see.
 
 **Your hospital's logo.** Each hospital (each client) has its own logo. Open **Hospital → Profile & logo**, choose **Upload logo** (PNG, JPEG, WebP, or SVG), check the preview, then **Save logo**. It appears in the top bar for staff, at the top of the patient page, and on every QR label printed after that. When onboarding a new client from the command line, set `HOSPITAL_LOGO_PATH` before `npm run bootstrap:hospital`.
 
-**Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Every building, floor, unit, and room also has a **Print QR labels (N)** button, and **Beds & QR → Print QR labels** lets you pick any area. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”). Each QR is shown only once: download the PDF straight away, keep it private, and delete it after printing. To reprint a lost label, use **Beds & QR → Print QR labels → Also reprint the existing labels**; the old label stops working.
+**Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Location screens also have QR-label actions. In **Beds & QR → Print QR labels**, choose a floor, then optionally a unit or room. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”). Each new QR is shown only once: download the PDF straight away, keep it private, and delete it after printing. To reprint a lost active label, choose **Also reprint the existing labels**; the old label stops working.
 
 **C. Make a QR code and test it like a patient**
 6. Click **Beds & QR**. On **Bed 02**, click **Generate QR**.
-   ✔ A QR picture appears with buttons Print / Open patient view.
+   ✔ A QR label preview appears with **Download PDF**, **Open PDF to print**, and **Open patient view**.
 7. Click **Open patient view** (opens a new tab).
    ✔ "We couldn't connect" — because no patient is admitted yet. Correct!
 8. Go back, click **Done**, then **Start session** on Bed 02.

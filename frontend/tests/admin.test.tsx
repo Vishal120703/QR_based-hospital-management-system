@@ -149,8 +149,8 @@ describe('Permission-aware workspace', () => {
       skippedInactive: 0,
     });
     renderPage(<BedsPage />, ['bed.read', 'location.read', 'hospital.manage', 'qr.generate']);
-    // The whole hospital is offered first; narrowing to a unit changes the scope.
-    expect(await screen.findByRole('button', { name: 'Create 2 QR labels' })).toBeTruthy();
+    // A floor must be selected before issuing labels in bulk.
+    expect(await screen.findByRole('button', { name: 'Choose a floor' })).toBeTruthy();
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Floor for QR labels' }),
       'floor-1',
@@ -177,10 +177,48 @@ describe('Permission-aware workspace', () => {
     vi.spyOn(staffApi, 'me').mockResolvedValue(me);
     renderShell();
     expect(await screen.findByText('Overview content')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Overview' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Work' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Work' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
     expect(screen.queryByRole('link', { name: 'Beds & QR' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Service catalog' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Response targets (SLA)' })).toBeNull();
+  });
+
+  it('opens the compact navigation and closes it after choosing a page', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(staffApi, 'me').mockResolvedValue(me);
+    renderShell();
+    await screen.findByText('Overview content');
+
+    const toggle = screen.getByRole('button', { name: 'Menu · Overview' });
+    const navigation = screen.getByRole('navigation', { name: 'Hospital administration' });
+    const currentPage = document.querySelector('.topbar-current');
+    const main = document.getElementById('main-content');
+    const sidebar = navigation.closest('aside');
+    expect(main).not.toBeNull();
+    expect(sidebar).not.toBeNull();
+    expect(currentPage?.textContent).toContain('WorkOverview');
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+    main!.scrollTop = 180;
+    sidebar!.scrollTop = 70;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(navigation.classList.contains('is-open')).toBe(false);
+
+    await user.click(toggle);
+    expect(screen.getByRole('button', { name: 'Close menu' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+    await user.click(within(navigation).getByRole('link', { name: 'Service catalog' }));
+    expect(await screen.findByText('Catalog content')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Menu · Service catalog' })).toBeTruthy();
+    expect(currentPage?.textContent).toContain('Patient servicesService catalog');
+    expect(navigation.classList.contains('is-open')).toBe(false);
+    expect(main!.scrollTop).toBe(0);
+    expect(sidebar!.scrollTop).toBe(70);
+    expect(document.activeElement).toBe(main);
   });
 
   it('guards direct links to screens outside the user permissions', async () => {

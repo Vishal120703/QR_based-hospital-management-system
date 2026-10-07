@@ -47,6 +47,7 @@ describe('Patient QR entry', () => {
     const user = userEvent.setup();
     renderEntry();
     expect(screen.getByRole('heading', { name: 'Scan your bedside QR' })).toBeTruthy();
+    expect(screen.queryByText('Camera preview appears here')).toBeNull();
     await user.click(screen.getByRole('link', { name: 'Staff sign in' }));
     expect(screen.getByText('Staff login page')).toBeTruthy();
   });

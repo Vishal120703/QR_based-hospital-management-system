@@ -1,4 +1,23 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  BedDouble,
+  BellRing,
+  ChartColumn,
+  ChevronRight,
+  ClipboardList,
+  History,
+  Hospital,
+  LayoutDashboard,
+  LogOut,
+  MapPinned,
+  Menu,
+  ShieldCheck,
+  Timer,
+  UserRoundCheck,
+  UserRoundCog,
+  UsersRound,
+  X,
+} from 'lucide-react';
 import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
 import { ApiError, assetUrl, credentials, staffApi, type Me } from '../api';
 import { ErrorNotice, LoadState } from '../components';
@@ -6,19 +25,36 @@ import { ErrorNotice, LoadState } from '../components';
 // `anyScope` pages filter their data by floor or ward on the server, so a
 // permission held for only part of the hospital is enough to open them.
 export const adminPages = [
-  { path: 'overview', label: 'Overview', group: 'Work', permissions: [] },
+  { path: 'overview', label: 'Overview', group: 'Work', permissions: [], icon: LayoutDashboard },
   {
     path: 'requests',
     label: 'Requests',
     group: 'Work',
     permissions: ['request.read'],
     anyScope: true,
+    icon: ClipboardList,
+  },
+  {
+    path: 'reports',
+    label: 'Reports',
+    group: 'Work',
+    permissions: ['analytics.read'],
+    anyScope: true,
+    icon: ChartColumn,
   },
   {
     path: 'hospital',
     label: 'Profile & logo',
     group: 'Hospital',
     permissions: ['hospital.manage'],
+    icon: Hospital,
+  },
+  {
+    path: 'audit',
+    label: 'Audit log',
+    group: 'Hospital',
+    permissions: ['audit.read'],
+    icon: History,
   },
   {
     path: 'beds',
@@ -26,48 +62,56 @@ export const adminPages = [
     group: 'Care locations',
     permissions: ['bed.read'],
     anyScope: true,
+    icon: BedDouble,
   },
   {
     path: 'locations',
     label: 'Location setup',
     group: 'Care locations',
     permissions: ['location.read', 'location.manage'],
+    icon: MapPinned,
   },
   {
     path: 'departments',
     label: 'Departments',
     group: 'People',
     permissions: ['staff.read', 'staff.manage'],
+    icon: UsersRound,
   },
   {
     path: 'staff',
     label: 'Staff & coverage',
     group: 'People',
     permissions: ['staff.read', 'staff.manage'],
+    icon: UserRoundCog,
   },
   {
     path: 'roles',
     label: 'Roles & access',
     group: 'People',
     permissions: ['role.read'],
+    icon: ShieldCheck,
   },
   {
     path: 'eligibility',
     label: 'Who can respond?',
     group: 'People',
     permissions: ['staff.read', 'bed.read', 'location.read'],
+    icon: UserRoundCheck,
   },
   {
     path: 'services',
     label: 'Service catalog',
     group: 'Patient services',
     permissions: ['service.read'],
+    icon: BellRing,
   },
   {
     path: 'sla',
     label: 'Response targets (SLA)',
     group: 'Patient services',
     permissions: ['service.read', 'sla.manage'],
+    icon: Timer,
   },
 ] as const;
 
@@ -106,7 +150,13 @@ export function AdminLayout() {
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [version, setVersion] = useState(0);
+  const mainRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, [location.pathname]);
 
   const signOut = useCallback(() => {
     credentials.setStaff(null);
@@ -190,50 +240,77 @@ export function AdminLayout() {
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
-      <header className="topbar">
+      <header className="topbar staff-topbar">
         <NavLink className="brand" to="/admin">
           <span className="brand-mark" aria-hidden="true">
             +
           </span>{' '}
           CARE QR
         </NavLink>
-        <span className="topbar-user">
+        <div className="topbar-current">
+          <span>{current?.group ?? 'Work'}</span>
+          <strong>{current?.label ?? 'Overview'}</strong>
+        </div>
+        <div className="topbar-user">
           {me && (
             <>
-              {me.tenant.logoUrl && (
+              {me.tenant.logoUrl ? (
                 <img className="tenant-logo" src={assetUrl(me.tenant.logoUrl)} alt="" />
+              ) : (
+                <span className="tenant-avatar" aria-hidden="true">
+                  {me.tenant.name.trim().charAt(0)}
+                </span>
               )}
-              <span>
+              <span className="topbar-identity">
                 <strong>{me.tenant.name}</strong>
                 <small>{me.user.displayName}</small>
               </span>
             </>
           )}
-          <button type="button" className="link" onClick={() => logout(token)}>
-            Sign out
+          <button type="button" className="secondary signout-button" onClick={() => logout(token)}>
+            <LogOut size={16} aria-hidden="true" />
+            <span>Sign out</span>
           </button>
-        </span>
+        </div>
       </header>
       <div className="admin-body">
         <aside className="sidebar">
           <p className="eyebrow">Hospital workspace</p>
-          <nav aria-label="Hospital administration">
+          <button
+            type="button"
+            className="mobile-nav-toggle secondary"
+            aria-expanded={menuOpen}
+            aria-controls="admin-navigation"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {menuOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
+            <span>{menuOpen ? 'Close menu' : `Menu · ${current?.label ?? 'Overview'}`}</span>
+          </button>
+          <nav
+            id="admin-navigation"
+            className={menuOpen ? 'is-open' : undefined}
+            aria-label="Hospital administration"
+          >
             {['Work', 'Hospital', 'Care locations', 'People', 'Patient services'].map((group) => {
               const pages = available.filter((page) => page.group === group);
               return (
                 pages.length > 0 && (
                   <div className="nav-group" key={group}>
-                    <span className="nav-label">{group}</span>
+                    <h2 className="nav-label">{group}</h2>
                     {pages.map((page) => (
                       <NavLink
                         key={page.path}
                         to={`/admin/${page.path}`}
                         onClick={() => {
+                          setMenuOpen(false);
                           setError(null);
                           setSuccess(null);
+                          mainRef.current?.focus({ preventScroll: true });
                         }}
                       >
-                        {page.label}
+                        <page.icon size={17} strokeWidth={1.9} aria-hidden="true" />
+                        <span>{page.label}</span>
+                        <ChevronRight className="nav-chevron" size={14} aria-hidden="true" />
                       </NavLink>
                     ))}
                   </div>
@@ -250,7 +327,7 @@ export function AdminLayout() {
             </p>
           </div>
         </aside>
-        <main id="main-content" className="admin-main" tabIndex={-1}>
+        <main ref={mainRef} id="main-content" className="admin-main" tabIndex={-1}>
           {context && error && <ErrorNotice message={error} onDismiss={() => setError(null)} />}
           {success && (
             <div className="notice notice-success" role="status">

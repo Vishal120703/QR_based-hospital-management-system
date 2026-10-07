@@ -64,23 +64,28 @@ export interface StaffFilter {
   readonly departmentId?: string | undefined;
 }
 
-// Only a Hospital Manager may deactivate another Hospital Manager, and the
-// hospital must keep at least one active one.
-async function requireManagerSafeToDeactivate(
+// A staff manager may only change the status of someone whose permissions they
+// hold themselves, and a hospital must keep at least one active Hospital Manager.
+async function requireSafeStatusChange(
   transaction: Prisma.TransactionClient,
   context: StaffContext,
   membershipId: string,
+  deactivating: boolean,
 ): Promise<void> {
   const hospitalId = context.tenant.hospitalId;
-  const managerRole = { hospitalId, role: { systemKey: lockedRoleKey } };
-  const isManager = await transaction.userRole.count({
-    where: { ...managerRole, membershipId },
+  const roles = await transaction.userRole.findMany({
+    where: { hospitalId, membershipId, role: { active: true } },
+    select: {
+      role: { select: { systemKey: true, rolePermissions: { select: { permissionKey: true } } } },
+    },
   });
-  if (isManager === 0) return;
-  if (!context.hospitalPermissions.has('role.manage')) throw new ForbiddenError();
+  const held = roles.flatMap(({ role }) => role.rolePermissions.map((item) => item.permissionKey));
+  if (held.some((key) => !context.hospitalPermissions.has(key))) throw new ForbiddenError();
+  if (!deactivating || !roles.some(({ role }) => role.systemKey === lockedRoleKey)) return;
   const others = await transaction.userRole.count({
     where: {
-      ...managerRole,
+      hospitalId,
+      role: { systemKey: lockedRoleKey },
       membershipId: { not: membershipId },
       membership: { status: 'ACTIVE' },
     },
@@ -171,8 +176,13 @@ export class StaffService {
       async (transaction) => {
         const before = await this.requireMember(transaction, context, id);
         const deactivating = status !== 'ACTIVE';
-        if (deactivating && before.status === 'ACTIVE') {
-          await requireManagerSafeToDeactivate(transaction, context, id);
+        if (status !== before.status) {
+          await requireSafeStatusChange(
+            transaction,
+            context,
+            id,
+            deactivating && before.status === 'ACTIVE',
+          );
         }
         await transaction.hospitalMembership.update({
           where: { hospitalId_id: { hospitalId, id } },

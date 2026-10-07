@@ -1,9 +1,11 @@
-import { type RequestHandler } from 'express';
+import { type Request, type RequestHandler } from 'express';
 import { TooManyRequestsError } from '../common/errors/app-error.js';
 
 export interface RateLimitOptions {
   readonly windowMs: number;
   readonly max: number;
+  // Counts per this key instead of per client IP, for example per account.
+  readonly key?: (request: Request) => string;
 }
 
 const pruneThreshold = 10_000;
@@ -22,7 +24,7 @@ export function rateLimit(options: RateLimitOptions): RequestHandler {
       }
     }
 
-    const key = request.ip ?? 'unknown';
+    const key = options.key ? options.key(request) : (request.ip ?? 'unknown');
     let window = windows.get(key);
     if (!window || window.resetAt <= now) {
       window = { count: 0, resetAt: now + options.windowMs };

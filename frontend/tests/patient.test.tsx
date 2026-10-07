@@ -107,14 +107,14 @@ describe('Patient request flow', () => {
     const submit = vi.spyOn(guestApi, 'submitRequest').mockResolvedValue(submittedRequest);
     renderPatient();
 
-    await user.click(await screen.findByRole('button', { name: 'Request service' }));
+    await user.click(await screen.findByRole('button', { name: 'Request Drinking water' }));
 
     expect(submit).toHaveBeenCalledWith('guest-token', 'service-1');
     expect(await screen.findByText('CR-12345678')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'View request' }).getAttribute('href')).toBe(
-      '#request-CR-12345678',
-    );
-    expect(screen.queryByRole('button', { name: 'Request service' })).toBeNull();
+    expect(
+      screen.getByRole('link', { name: 'View request for Drinking water' }).getAttribute('href'),
+    ).toBe('#request-CR-12345678');
+    expect(screen.queryByRole('button', { name: 'Request Drinking water' })).toBeNull();
     expect(screen.getByRole('list', { name: 'Submitted' })).toBeTruthy();
   });
 
@@ -127,14 +127,17 @@ describe('Patient request flow', () => {
       .mockResolvedValue({ ...submittedRequest, status: 'CANCELLED' });
     renderPatient();
 
-    await user.click(await screen.findByRole('button', { name: 'Cancel request' }));
+    // Cancelling is tucked into the request's details, so it is not tapped by accident.
+    expect(screen.queryByRole('button', { name: 'Cancel request' })).toBeNull();
+    await user.click(await screen.findByRole('button', { name: 'Show request details' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel request' }));
     expect(cancel).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Yes, cancel request' }));
 
     expect(cancel).toHaveBeenCalledWith('guest-token', 'CR-12345678', 'Cancelled by patient');
     expect(await screen.findByText('Cancelled')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Cancel request' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Request service' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Request Drinking water' })).toBeTruthy();
   });
 
   it('recovers from a duplicate conflict by refreshing the existing request', async () => {
@@ -147,11 +150,11 @@ describe('Patient request flow', () => {
     );
     renderPatient();
 
-    await user.click(await screen.findByRole('button', { name: 'Request service' }));
+    await user.click(await screen.findByRole('button', { name: 'Request Drinking water' }));
 
     expect(await screen.findByText('CR-12345678')).toBeTruthy();
     expect(screen.getByText(/active request for this service already exists/)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'View request' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View request for Drinking water' })).toBeTruthy();
   });
 
   it('refreshes tracking and removes cancellation when work has started', async () => {
@@ -166,7 +169,28 @@ describe('Patient request flow', () => {
     await user.click(await screen.findByRole('button', { name: 'Refresh status' }));
 
     expect(await screen.findByRole('list', { name: 'In progress' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Show request details' }));
     expect(screen.queryByRole('button', { name: 'Cancel request' })).toBeNull();
+  });
+
+  it('folds a service category away and shows when each step happened', async () => {
+    const user = userEvent.setup();
+    credentials.setGuest('guest-token');
+    mockPatient([
+      { ...submittedRequest, status: 'ASSIGNED', assignedAt: '2026-10-06T10:05:00.000Z' },
+    ]);
+    renderPatient();
+
+    const category = await screen.findByRole('button', { name: 'Hide Room support services' });
+    expect(category.getAttribute('aria-expanded')).toBe('true');
+    await user.click(category);
+    expect(screen.getByRole('button', { name: 'Show Room support services' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'View request for Drinking water' })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Show request details' }));
+    const history = screen.getByRole('heading', { name: 'What happened' }).nextElementSibling!;
+    expect(history.textContent).toContain('Submitted');
+    expect(history.textContent).toContain('Assigned');
   });
 
   it('switches the key patient controls and emergency guidance to Hindi', async () => {
@@ -178,6 +202,7 @@ describe('Patient request flow', () => {
     await user.selectOptions(await screen.findByLabelText('Language'), 'hi');
 
     expect(screen.getByRole('heading', { name: 'आपके अनुरोध' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'अनुरोध का विवरण देखें' }));
     expect(screen.getByRole('button', { name: 'अनुरोध रद्द करें' })).toBeTruthy();
     expect(screen.getByText('आपातकाल के लिए नहीं।')).toBeTruthy();
   });

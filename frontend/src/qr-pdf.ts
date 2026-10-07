@@ -266,9 +266,14 @@ export async function downloadLabelsPdf(
 export async function openLabelsPdf(labels: Label[], options: LabelOptions): Promise<boolean> {
   const tab = window.open('', '_blank');
   if (!tab) return false;
-  const doc = await buildLabelsPdf(labels, options);
-  const url = URL.createObjectURL(doc.output('blob'));
-  tab.location.href = url;
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  return true;
+  try {
+    const doc = await buildLabelsPdf(labels, options);
+    const url = URL.createObjectURL(doc.output('blob'));
+    tab.location.href = url;
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return true;
+  } catch (error) {
+    tab.close();
+    throw error;
+  }
 }

@@ -33,3 +33,17 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const actual = await derive(password, salt);
   return timingSafeEqual(actual, expected);
 }
+
+let dummyHash: Promise<string> | undefined;
+
+// Checks a password even when the account does not exist, against a throwaway
+// hash, so a failed sign-in takes the same time either way and does not reveal
+// which hospital codes or emails are real.
+export async function verifyPasswordOrDummy(
+  password: string,
+  stored: string | undefined,
+): Promise<boolean> {
+  dummyHash ??= hashPassword('not-a-real-password-for-timing-only');
+  const valid = await verifyPassword(password, stored ?? (await dummyHash));
+  return stored !== undefined && valid;
+}

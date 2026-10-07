@@ -1,7 +1,7 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { logoUrl } from '../hospitals/logo.js';
-import { verifyPassword } from './password.js';
+import { verifyPasswordOrDummy } from './password.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
 
 const sessionDurationMs = 8 * 60 * 60 * 1000;
@@ -89,7 +89,8 @@ export class StaffAuthService {
       where: { email: input.email.toLowerCase() },
     });
 
-    if (!hospital || !user || !(await verifyPassword(input.password, user.passwordHash))) {
+    const passwordOk = await verifyPasswordOrDummy(input.password, user?.passwordHash);
+    if (!hospital || !user || !passwordOk) {
       throw new UnauthorizedError();
     }
 

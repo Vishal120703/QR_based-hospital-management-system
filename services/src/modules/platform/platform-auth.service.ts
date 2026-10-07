@@ -1,7 +1,7 @@
 import { type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
-import { verifyPassword } from '../auth/password.js';
+import { verifyPasswordOrDummy } from '../auth/password.js';
 
 const sessionDurationMs = 8 * 60 * 60 * 1000;
 
@@ -26,12 +26,8 @@ export class PlatformAuthService {
       include: { platformAdmin: true },
     });
     // Same response for unknown email, wrong password, or a non-operator.
-    if (
-      !user ||
-      !(await verifyPassword(input.password, user.passwordHash)) ||
-      !user.platformAdmin ||
-      user.status !== 'ACTIVE'
-    ) {
+    const passwordOk = await verifyPasswordOrDummy(input.password, user?.passwordHash);
+    if (!user || !passwordOk || !user.platformAdmin || user.status !== 'ACTIVE') {
       throw new UnauthorizedError();
     }
     const token = createOpaqueToken();

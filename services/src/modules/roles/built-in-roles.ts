@@ -23,12 +23,14 @@ const areaManager: readonly PermissionKey[] = [
   'request.assign',
   'request.close',
   'request.cancel',
+  'request.transfer',
+  'analytics.read',
 ];
 
 // Every hospital gets these roles. The hierarchy is: Hospital Manager, then
 // Floor and Ward Managers and Department Supervisors, then Care Staff.
-// Migration 09 created them for hospitals that existed before; keep the two in
-// step when changing a permission list (a new migration updates old hospitals).
+// Migrations 09, 10, and 11 created them for hospitals that existed before; keep them
+// in step when changing a permission list (a new migration updates old hospitals).
 export const builtInRoles: readonly BuiltInRole[] = [
   {
     key: 'HOSPITAL_MANAGER',
@@ -63,6 +65,8 @@ export const builtInRoles: readonly BuiltInRole[] = [
       'request.assign',
       'request.close',
       'request.cancel',
+      'request.transfer',
+      'analytics.read',
     ],
   },
   {

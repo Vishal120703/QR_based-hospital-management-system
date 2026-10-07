@@ -793,6 +793,7 @@ model ServiceRequest {
   @@index([hospitalId, status, submittedAt])
   @@index([hospitalId, bedSessionId, submittedAt])
   @@index([hospitalId, assigneeId, status])
+  @@index([hospitalId, submittedAt])
 }
 
 // Append-only history. The migration protects this with a database trigger.
@@ -814,4 +815,5 @@ model RequestEvent {
 
   @@unique([hospitalId, requestId, requestVersion])
   @@index([hospitalId, requestId, occurredAt])
+  @@index([hospitalId, actorId])
 }

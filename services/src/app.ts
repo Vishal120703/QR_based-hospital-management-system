@@ -8,7 +8,10 @@ import { requireStaffAuth } from './middleware/staff-auth.js';
 import { createHealthRouter, type ReadinessProbe } from './routes/health.js';
 import { type PrismaClient } from '@prisma/client';
 import { StaffAuthService } from './modules/auth/auth.service.js';
-import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { createAuthRouter, type LoginRateLimits } from './modules/auth/auth.routes.js';
+import { AuditLogService } from './modules/reports/audit-log.service.js';
+import { createReportRouter } from './modules/reports/report.routes.js';
+import { ReportService } from './modules/reports/report.service.js';
 import { PlatformAuthService } from './modules/platform/platform-auth.service.js';
 import { createPlatformRouter } from './modules/platform/platform.routes.js';
 import { PlatformService } from './modules/platform/platform.service.js';
@@ -61,6 +64,7 @@ export interface CreateAppOptions {
   readonly guestSessionTtlMinutes?: number;
   readonly qrResolveRateLimit?: RateLimitOptions;
   readonly platformLoginRateLimit?: RateLimitOptions;
+  readonly staffLoginRateLimits?: LoginRateLimits;
   readonly configureRoutes?: (application: Express) => void;
 }
 
@@ -96,7 +100,7 @@ export function createApp(options: CreateAppOptions): Express {
       guestSessions,
       options.publicAppUrl ?? 'http://localhost:5173',
     );
-    application.use(createAuthRouter(auth));
+    application.use(createAuthRouter(auth, options.staffLoginRateLimits));
     application.use(
       createPlatformRouter(
         new PlatformAuthService(database),
@@ -121,6 +125,7 @@ export function createApp(options: CreateAppOptions): Express {
       createSlaRouter(new SlaPolicyService(database), new EscalationPolicyService(database)),
     );
     admin.use(createRequestRouter(requests));
+    admin.use(createReportRouter(new ReportService(database), new AuditLogService(database)));
     application.use('/admin', admin);
 
     // Patient/attendant routes. Guest authentication is applied per route.

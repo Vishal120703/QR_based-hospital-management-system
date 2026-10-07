@@ -13,11 +13,13 @@ Architecture decisions are in [`services/docs/architecture`](./services/docs/arc
 
 ## Current progress
 
-Phases **0–8 are implemented** (nine phases including Phase 0). Next is **Phase 9: Manual Routing**. See the [phase-by-phase status and audit results](./services/docs/project-status.md).
+The patient QR flow and manual request workflow are implemented: managers assign requests and staff accept, start, and complete them. Automatic routing, alerts, and production hardening remain. See the [phase-by-phase status and audit results](./services/docs/project-status.md).
 
-Before Phase 9, use the [Phase 0–8 manual test plan](./services/docs/manual-test-plan-phases-0-8.md). It includes a one-time, isolated demo-hospital seed and a one-test-at-a-time prompt for a separate testing chat.
+The [Phase 0–8 manual test plan](./services/docs/manual-test-plan-phases-0-8.md) is a historical baseline, not the full acceptance plan for the newer manager, staff, platform, and QR-label features.
 
 For a plain-language walkthrough of the architecture, demo data, and local setup, read the [easy project guide](./services/docs/easy-guide.md).
+
+To test every role with ready-made dummy hospitals, run `npm run seed:test` in `services/` and follow the [full testing guide](./services/docs/full-testing-guide.md).
 
 Patients can submit, track, and cancel eligible service requests from an active QR session. A floor manager can manually assign requests; assigned staff can accept, start, and mark them complete. Automatic routing, alerts, and notifications are still later work. This is not ready for hospital production use.
 
@@ -57,9 +59,9 @@ If you change `services/.env` (especially `DATABASE_URL`), stop and restart the 
 
 ## Try it
 
-1. Open http://localhost:5173. Patients see **Scan QR** first and can use the live camera, take/choose a QR photo, or paste their bedside QR link without signing in. Staff choose **Staff sign in** and enter the hospital code, email, and password from step 2. Staff land on **Overview**, which shows live counts, a setup checklist, and a shortcut to every screen their role can open.
-2. **Location setup:** add a floor (with its level), then a unit such as a General ward or ICU, then add its beds in one step with **Add beds**. Buildings and rooms are optional; use them for multi-block campuses and private/semi-private rooms. Then use **Print QR labels** on any building, floor, unit, or room to download one A4 PDF of labels (large, medium, or sticker size) for every bed in it.
-3. **Beds & QR:** choose **Start session** for an available bed, then **Generate QR**. In the one-time QR dialog, choose **Open patient view** to test on this computer or **Print** for the bedside. If an active QR already exists but its link was lost, choose **Replace QR** to issue a new one; the old code stops working.
+1. Open http://localhost:5173. Patients see **Scan QR** first and can use the live camera, take/choose a QR photo, or paste their bedside QR link without signing in. Staff choose **Staff sign in** and enter the hospital code, email, and password from step 2. Staff land on **Overview**, with role-relevant counts and a few next-step shortcuts; the navigation lists their other available sections.
+2. **Location setup:** add a floor (with its level), then a unit such as a General ward or ICU, then add its beds in one step with **Add beds**. Buildings and rooms are optional. Use **Beds & QR → Print QR labels** to choose a floor and optionally a unit or room, then download one A4 PDF with a separate QR for each active bed that needs one. Location screens also offer contextual QR-label actions.
+3. **Beds & QR:** choose **Start session** for an available bed, then **Generate QR**. In the one-time QR dialog, choose **Open patient view** to test on this computer, or **Download PDF** and print it at actual size. If an active QR already exists but its link was lost, choose **Replace QR** to issue a new one; the old code stops working.
 4. On the patient page, choose a service and select **Request service**. The request appears under **Your requests**, where the patient can track or cancel it while eligible.
 5. **Close session**, **Replace QR**, or **Disable QR** ends existing patient access. The patient page rechecks access every 30 seconds and when the tab becomes visible.
 6. **Staff:** add a staff member, then **Manage** them: add a department (for example Housekeeping) and coverage (a ward). Turn them **On duty**.

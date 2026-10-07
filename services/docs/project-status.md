@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-10-06
 
-Phases **0–8 are implemented**: nine phases when the architecture phase is counted. Implementation is not the same as production acceptance; each phase must pass its verification gates. The next planned phase is **Phase 9 — Manual Routing**.
+Phases **0–8 passed their earlier verification gates**. Since then, the codebase has added manual routing, an overview dashboard, a staff request workflow, platform administration, built-in scoped roles, richer hospital locations, branding, and printable QR-label batches. These newer features are implemented but have not passed the full database/browser acceptance gates in this status report. Automatic routing is the next major workflow area.
 
 ## Implemented phases
 
@@ -18,15 +18,16 @@ Phases **0–8 are implemented**: nine phases when the architecture phase is cou
 | 7 — Request core and state machine | Tenant-scoped ServiceRequest and append-only RequestEvent persistence, immutable catalog/SLA snapshots, duplicate-active-request protection, manual assignment commands, guarded transitions, and concurrency/rollback tests. |
 | 8 — Public patient request flow | Guest-authenticated submission, tracking, and early cancellation; active duplicate submissions return the existing request. The patient screen includes request history/status, a language choice, and retry/error handling. |
 
-The frontend can administer earlier features and now submit, track, and cancel patient requests. Operational routing, manager and staff request dashboards, realtime updates, and notifications are not implemented yet. A new request stays `SUBMITTED` until staff process it through the existing command API or later workflow screens.
+The current frontend lets a manager assign a submitted request to eligible staff; staff accept, start, and complete it; and a manager closes it. Requests remain `SUBMITTED` until someone assigns them. The overview and request board refresh periodically, but push-based realtime updates and notifications are not implemented.
+
+## Implemented since the Phase 0–8 baseline
+
+Manual assignment, the manager overview, and the staff request screens cover the intended Phase 9–11 workflows. The platform area, scoped role administration, hospital branding, richer location setup, and bulk PDF QR labels are also present. Their complete integration and manual acceptance checks remain open; this is not a production-readiness claim.
 
 ## Pending phases
 
 | Phase | Planned work |
 |---|---|
-| 9 | Manual routing |
-| 10 | Manager dashboard |
-| 11 | Staff request workflow |
 | 12 | Pool routing |
 | 13 | SLA worker and escalation execution |
 | 14 | Realtime updates |
@@ -67,7 +68,7 @@ Demo-seed/documentation verification on 2026-10-06: using Node 24.19.0 and a tem
 
 ## Important limitations
 
-- Phase 8 uses the request core to store real patient submissions. Routing is not automatic yet, so a request can remain `SUBMITTED` until staff use the command API or later dashboard.
+- Routing is still manual. A request can remain `SUBMITTED` until a manager assigns it in the Requests screen.
 - Escalation policies are configuration only; no SLA worker executes them yet.
 - A shift does not automatically switch a staff member on or off duty.
 - QR resolution rate limits are per backend process; shared limits and reverse-proxy configuration remain part of hardening.

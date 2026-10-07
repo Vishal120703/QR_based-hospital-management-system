@@ -14,10 +14,11 @@ import {
   UnauthorizedError,
 } from '../../common/errors/app-error.js';
 import { recordStaffAudit } from '../audit/audit-log.js';
-import { canAccessLocation, scopesFor, type StaffContext } from '../auth/auth.service.js';
+import { canAccessLocation, type StaffContext } from '../auth/auth.service.js';
 import { type GuestContext } from '../bed-sessions/guest-session.service.js';
 import { snapshotService } from '../catalog/service-snapshot.js';
 import { findEligibleStaff } from '../staff/eligibility.js';
+import { visibleRequestsWhere } from './request-scope.js';
 
 type Command =
   'assign' | 'accept' | 'start' | 'complete' | 'close' | 'cancel' | 'reject' | 'transfer';
@@ -86,33 +87,8 @@ export class RequestService {
   // ones, so a long history never hides work that still needs attention.
   public async list(context: StaffContext) {
     if (!context.permissions.has('request.read')) throw new ForbiddenError();
-    const hospitalId = context.tenant.hospitalId;
-    const scopes = scopesFor(context, 'request.read');
-    const hospitalWide = scopes.some(
-      (scope) => scope.type === 'HOSPITAL' && scope.id === hospitalId,
-    );
-    const floorIds = scopes.filter((scope) => scope.type === 'FLOOR').map((scope) => scope.id);
-    const wardIds = scopes.filter((scope) => scope.type === 'WARD').map((scope) => scope.id);
-    const departmentIds = scopes
-      .filter((scope) => scope.type === 'DEPARTMENT')
-      .map((scope) => scope.id);
-    if (!hospitalWide && floorIds.length + wardIds.length + departmentIds.length === 0) return [];
-
-    // A request is visible when its bed is in one of the caller's floors or
-    // wards, or it belongs to one of the caller's departments.
-    const where: Prisma.ServiceRequestWhereInput = {
-      hospitalId,
-      ...(hospitalWide
-        ? {}
-        : {
-            OR: [
-              ...(floorIds.length > 0 ? [{ bed: { ward: { floorId: { in: floorIds } } } }] : []),
-              ...(wardIds.length > 0 ? [{ bed: { wardId: { in: wardIds } } }] : []),
-              ...(departmentIds.length > 0 ? [{ departmentId: { in: departmentIds } }] : []),
-            ],
-          }),
-      ...(!context.permissions.has('request.assign') ? { assigneeId: context.membershipId } : {}),
-    };
+    const where = visibleRequestsWhere(context);
+    if (!where) return [];
     const query = {
       include: {
         bed: { select: { code: true, displayName: true } },
@@ -349,24 +325,14 @@ export class RequestService {
 
   public async get(context: StaffContext, id: string) {
     if (!context.permissions.has('request.read')) throw new ForbiddenError();
-    const request = await this.database.serviceRequest.findUnique({
-      where: { hospitalId_id: { hospitalId: context.tenant.hospitalId, id } },
-      include: { bed: { select: { wardId: true, ward: { select: { floorId: true } } } } },
-    });
+    const where = visibleRequestsWhere(context);
+    const request = where
+      ? await this.database.serviceRequest.findFirst({ where: { AND: [where, { id }] } })
+      : null;
     if (!request) {
       throw new NotFoundError();
     }
-    const { bed, ...visible } = request;
-    if (
-      !canAccessLocation(context, 'request.read', {
-        wardId: bed.wardId,
-        floorId: bed.ward.floorId,
-        departmentId: request.departmentId,
-      })
-    ) {
-      throw new NotFoundError();
-    }
-    return visible;
+    return request;
   }
 
   public async events(context: StaffContext, id: string) {
@@ -520,7 +486,12 @@ export class RequestService {
           action: `request.${action}`,
           targetType: 'ServiceRequest',
           targetId: id,
-          metadata: { previousStatus: current.status, status: transitions[action].to, ...metadata },
+          metadata: {
+            previousStatus: current.status,
+            status: transitions[action].to,
+            ...metadata,
+            ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
+          },
         });
       }
       return transaction.serviceRequest.findUniqueOrThrow({

@@ -11,9 +11,13 @@ src/
 └── pages/
     ├── QrEntryPage.tsx    /: patient-first camera scanner and QR-link entry
     ├── LoginPage.tsx      Staff sign-in
-    ├── AdminLayout.tsx    Staff shell; validates the session once
+    ├── AdminLayout.tsx    Role-aware staff shell
+    ├── OverviewPage.tsx   Relevant counts, setup guidance, and next steps
+    ├── RequestsPage.tsx   Manager assignment and staff work
     ├── LocationsPage.tsx  Building → Floor → Ward → Room → Bed setup
-    ├── BedsPage.tsx       Bed sessions and QR codes (generate, rotate, revoke, print)
+    ├── BedsPage.tsx       Bed sessions and single/bulk QR issuance
+    ├── QrLabelsDialog.tsx One-time QR preview and printable PDF
+    ├── RolesPage.tsx      Built-in and custom scoped access
     ├── DepartmentsPage.tsx
     ├── StaffPage.tsx      Staff list, duty toggle, and adding staff
     ├── StaffDialog.tsx    Status, departments, coverage, roles, and shifts of one person
@@ -22,7 +26,8 @@ src/
     ├── SlaPage.tsx        SLA policies (versioned) and escalation policies
     ├── EligibilityPage.tsx  "Who can respond?" for a bed and department
     ├── ScanPage.tsx       /q/<token>: exchanges a QR token for a guest session
-    └── PatientPage.tsx    Language choice, service requests, status, and cancellation
+    ├── PatientPage.tsx    Language choice, service requests, status, and cancellation
+    └── platform/          Separate CARE QR platform administration
 ```
 
 Run `npm run dev` with the backend running on port 3001; see the root [README](../README.md).
@@ -32,6 +37,8 @@ The website opens on the patient QR entry screen. Staff use **Staff sign in**. T
 Staff tokens are kept in `localStorage` until their 8-hour session ends. Guest tokens are kept in `sessionStorage`, so a patient's access lasts only for the tab that scanned the code.
 
 Navigation and management controls reflect the signed-in staff member's permissions; backend authorization remains authoritative. If a browser blocks storage, credentials remain in memory only until refresh. Network failures offer retry, and the patient page rechecks guest-session revocation/expiry while open.
+
+The staff workspace uses Lucide React icons for navigation cues while keeping text labels; on narrow screens, the menu stays collapsed until opened. Styling remains in the existing CSS rather than adding a second component or styling system.
 
 After scanning, patients can choose English or Hindi, send a request from the published service catalog, track requests from the current bed stay, refresh status, and cancel before staff accepts the request. Active duplicate requests link to the existing request. The page refreshes statuses while visible and clearly warns that automatic routing and staff alerts are not available yet; a newly sent request remains **Submitted** until staff process it. Feedback collection is planned for a later phase.
 

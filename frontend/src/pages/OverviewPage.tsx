@@ -94,13 +94,23 @@ export function OverviewPage() {
   }, [fetchSnapshot, showResult]);
   useAutoRefresh(load, 30_000);
 
-  const shortcuts = adminPages.filter(
-    (page) =>
-      page.path !== 'overview' &&
-      page.permissions.every((permission) =>
-        'anyScope' in page ? canAnywhere(permission) : can(permission),
-      ),
-  );
+  const shortcutOrder = ['requests', 'beds', 'locations', 'staff', 'services', 'roles', 'hospital'];
+  const shortcuts = adminPages
+    .filter(
+      (page) =>
+        page.path !== 'overview' &&
+        page.permissions.every((permission) =>
+          'anyScope' in page ? canAnywhere(permission) : can(permission),
+        ),
+    )
+    .sort((left, right) => {
+      const rank = (path: string) => {
+        const position = shortcutOrder.indexOf(path);
+        return position < 0 ? shortcutOrder.length : position;
+      };
+      return rank(left.path) - rank(right.path);
+    })
+    .slice(0, 4);
 
   return (
     <>
@@ -119,17 +129,20 @@ export function OverviewPage() {
             me={me.membershipId}
           />
           {can('hospital.manage') && (
-            <SetupChecklist data={data} hasLogo={Boolean(me.tenant.logoUrl)} />
+            <SetupChecklist data={data} hasLogo={Boolean(me.tenant.logoUrl)} can={can} />
           )}
-          <HowItWorks />
+          {can('hospital.manage') && <HowItWorks />}
           <section aria-labelledby="shortcuts-title">
             <h2 id="shortcuts-title" className="section-title">
-              Go to
+              Next places to go
             </h2>
             <div className="shortcut-grid">
               {shortcuts.map((page) => (
                 <Link key={page.path} className="card shortcut" to={`/admin/${page.path}`}>
-                  <strong>{page.label}</strong>
+                  <strong>
+                    <page.icon size={18} strokeWidth={1.9} aria-hidden="true" />
+                    {page.label}
+                  </strong>
                   <span className="muted small">{pageHelp[page.path]}</span>
                 </Link>
               ))}
@@ -224,29 +237,41 @@ function Stats({
   );
 }
 
-function SetupChecklist({ data, hasLogo }: { data: Snapshot; hasLogo: boolean }) {
+function SetupChecklist({
+  data,
+  hasLogo,
+  can,
+}: {
+  data: Snapshot;
+  hasLogo: boolean;
+  can: (permission: string) => boolean;
+}) {
   const occupiedBedIds = new Set((data.sessions ?? []).map((session) => session.bedId));
   const steps = [
     {
       done: hasLogo,
+      available: can('hospital.manage'),
       title: 'Add your hospital logo',
       help: 'Shown to staff and patients, and printed on QR labels.',
       to: '/admin/hospital',
     },
     {
       done: (data.beds ?? []).length > 0,
+      available: can('location.manage'),
       title: 'Add floors, wards, and beds',
       help: 'Describe your hospital layout.',
       to: '/admin/locations',
     },
     {
       done: (data.staff ?? []).some((member) => member.departmentIds.length > 0),
+      available: can('staff.manage'),
       title: 'Add staff to departments',
       help: 'Give each person a department and the wards they cover.',
       to: '/admin/staff',
     },
     {
       done: (data.services ?? []).some((service) => service.active),
+      available: can('service.manage'),
       title: 'Turn on patient services',
       help: 'Choose what patients can ask for.',
       to: '/admin/services',
@@ -255,43 +280,52 @@ function SetupChecklist({ data, hasLogo }: { data: Snapshot; hasLogo: boolean })
       done: (data.qrCodes ?? []).some(
         (qr) => qr.status === 'ACTIVE' && occupiedBedIds.has(qr.bedId),
       ),
+      available: can('bed.read') && can('bedSession.manage') && can('qr.generate'),
       title: 'Admit a patient and print the QR',
       help: 'Start a bed session, then generate its QR code.',
       to: '/admin/beds',
     },
     {
       done: (data.requests ?? []).some((request) => request.status !== 'SUBMITTED'),
+      available: can('request.assign'),
       title: 'Handle the first request',
       help: 'Assign a patient request to staff.',
       to: '/admin/requests',
     },
-  ];
+  ].filter((step) => step.available);
   const remaining = steps.filter((step) => !step.done).length;
   if (remaining === 0) return null;
+  const next = steps.find((step) => !step.done)!;
   return (
     <section className="card checklist" aria-labelledby="checklist-title">
       <h2 id="checklist-title">
         Finish setting up ({steps.length - remaining} of {steps.length} done)
       </h2>
-      <ol>
-        {steps.map((step) => (
-          <li key={step.title} className={step.done ? 'done' : ''}>
-            <span aria-hidden="true">{step.done ? '✓' : ''}</span>
-            <div>
-              <Link to={step.to}>{step.title}</Link>
-              <small className="muted">{step.done ? 'Done' : step.help}</small>
-            </div>
-          </li>
-        ))}
-      </ol>
+      <p className="small">
+        Next: <Link to={next.to}>{next.title}</Link>. {next.help}
+      </p>
+      <details>
+        <summary>View all setup steps</summary>
+        <ol>
+          {steps.map((step) => (
+            <li key={step.title} className={step.done ? 'done' : ''}>
+              <span aria-hidden="true">{step.done ? '✓' : ''}</span>
+              <div>
+                <Link to={step.to}>{step.title}</Link>
+                <small className="muted">{step.done ? 'Done' : step.help}</small>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </details>
     </section>
   );
 }
 
 function HowItWorks() {
   return (
-    <section className="card" aria-labelledby="how-title">
-      <h2 id="how-title">How CARE QR works</h2>
+    <details className="card" aria-label="How CARE QR works">
+      <summary>How CARE QR works</summary>
       <ol className="setup-steps flow-steps">
         <li>
           <span>1</span>
@@ -316,6 +350,6 @@ function HowItWorks() {
           <small>Accept, start, and complete. The patient sees each step on their phone.</small>
         </li>
       </ol>
-    </section>
+    </details>
   );
 }

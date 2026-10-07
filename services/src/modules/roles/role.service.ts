@@ -135,6 +135,14 @@ export class RoleService {
             'The Hospital Manager role always has every permission and cannot be changed.',
           );
         }
+        // Nobody may weaken or reshape a role more powerful than their own.
+        if (
+          existing.rolePermissions.some(
+            (item) => !context.hospitalPermissions.has(item.permissionKey),
+          )
+        ) {
+          throw new ForbiddenError();
+        }
         if (existing.systemKey && (input.name !== undefined || input.scopeLevel !== undefined)) {
           throw new ConflictError(
             'Built-in roles keep their name and level. Create a new role instead.',
@@ -202,12 +210,22 @@ export class RoleService {
     const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(
       async (transaction) => {
-        const existing = await transaction.role.findFirst({ where: { hospitalId, id } });
+        const existing = await transaction.role.findFirst({
+          where: { hospitalId, id },
+          include: { rolePermissions: { select: { permissionKey: true } } },
+        });
         if (!existing) {
           throw new NotFoundError();
         }
         if (existing.systemKey) {
           throw new ConflictError('Built-in roles cannot be deleted.');
+        }
+        if (
+          existing.rolePermissions.some(
+            (item) => !context.hospitalPermissions.has(item.permissionKey),
+          )
+        ) {
+          throw new ForbiddenError();
         }
         const assignmentCount = await transaction.userRole.count({
           where: { hospitalId, roleId: id },

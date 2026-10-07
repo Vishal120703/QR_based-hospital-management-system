@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { ConflictError } from '../../common/errors/app-error.js';
 import { createPrismaClient } from '../../database/prisma.js';
 import { demoHospital, seedDemoHospital, seedDemoPlatformAdmin } from './demo-seed.js';
-
-class DemoSeedInputError extends Error {}
+import { requireLocalDatabase, SeedInputError } from './seed-guards.js';
 
 const inputSchema = z.object({
   DATABASE_URL: z.string().url(),
@@ -17,19 +16,9 @@ const inputSchema = z.object({
   PUBLIC_APP_URL: z.string().url().default('http://localhost:5173'),
 });
 
-function requireLocalDatabase(rawUrl: string): void {
-  const url = new URL(rawUrl);
-  if (
-    !['postgres:', 'postgresql:'].includes(url.protocol) ||
-    !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-  ) {
-    throw new DemoSeedInputError('Demo seeding is limited to a local PostgreSQL database.');
-  }
-}
-
 function requirePublicAppUrl(rawUrl: string): void {
   if (!['http:', 'https:'].includes(new URL(rawUrl).protocol)) {
-    throw new DemoSeedInputError('PUBLIC_APP_URL must use http or https.');
+    throw new SeedInputError('PUBLIC_APP_URL must use http or https.');
   }
 }
 
@@ -37,7 +26,7 @@ async function main(): Promise<void> {
   const parsed = inputSchema.safeParse(process.env);
   if (!parsed.success) {
     const fields = parsed.error.issues.map((issue) => issue.path.join('.')).join(', ');
-    throw new DemoSeedInputError(`Missing or invalid demo seed environment fields: ${fields}.`);
+    throw new SeedInputError(`Missing or invalid demo seed environment fields: ${fields}.`);
   }
   const input = parsed.data;
   requireLocalDatabase(input.DATABASE_URL);
@@ -82,7 +71,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  if (error instanceof DemoSeedInputError) {
+  if (error instanceof SeedInputError) {
     process.stderr.write(`${error.message}\n`);
   } else if (error instanceof ConflictError) {
     process.stderr.write(

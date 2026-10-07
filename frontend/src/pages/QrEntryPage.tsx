@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { IScannerControls } from '@zxing/browser';
+import {
+  Camera,
+  ChevronRight,
+  CircleAlert,
+  ClipboardList,
+  Image as ImageIcon,
+  Link2,
+  QrCode,
+  ScanLine,
+  UserRound,
+} from 'lucide-react';
 import { ApiError, credentials, guestApi } from '../api';
-import { EmergencyNotice, ErrorNotice } from '../components';
+import { ErrorNotice } from '../components';
+import bedsideQrArt from '../bedside-qr.svg';
 
 type CameraState = 'idle' | 'starting' | 'scanning';
 
@@ -143,78 +155,132 @@ export function QrEntryPage() {
 
   return (
     <main className="patient qr-entry">
-      <header className="patient-header">
-        <strong>CARE QR</strong>
-        <Link to={credentials.staff() ? '/admin' : '/login'}>Staff sign in</Link>
+      <header className="patient-header qr-entry-header">
+        <span className="qr-entry-brand">
+          <QrCode size={34} strokeWidth={2.8} aria-hidden="true" />
+          <strong>CARE QR</strong>
+        </span>
+        <Link className="qr-staff-link" to={credentials.staff() ? '/admin' : '/login'}>
+          <UserRound size={20} aria-hidden="true" />
+          Staff sign in
+        </Link>
       </header>
       <section className="card qr-entry-intro">
-        <p className="eyebrow">For patients and attendants</p>
-        <h1>Scan your bedside QR</h1>
-        <p>
-          Scan the code placed at your bed to request a hospital service and track its status. No
-          patient login is needed.
-        </p>
-        {hasGuestSession && (
-          <Link className="button secondary" to="/patient">
-            Continue your current requests
-          </Link>
-        )}
+        <div className="qr-entry-intro-copy">
+          <p className="eyebrow">For patients and attendants</p>
+          <h1>Scan your bedside QR</h1>
+          <p>
+            Scan the code placed at your bed to request a hospital service and track its status. No
+            patient login is needed.
+          </p>
+          {hasGuestSession && (
+            <Link className="qr-continue" to="/patient">
+              <ClipboardList size={25} aria-hidden="true" />
+              <span>Continue your current requests</span>
+              <ChevronRight size={20} aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+        <img className="qr-entry-art" src={bedsideQrArt} alt="" aria-hidden="true" />
       </section>
       <section className="card qr-entry-scanner" aria-labelledby="scan-heading">
-        <h2 id="scan-heading">Scan QR</h2>
-        <p className="muted small">
-          Point your camera at the bedside QR. You can also scan it with your phone’s Camera app;
-          its link will open this patient page directly.
-        </p>
+        <div className="qr-entry-choice-head">
+          <span className="qr-entry-choice-icon qr-entry-choice-icon-primary">
+            <ScanLine size={30} aria-hidden="true" />
+          </span>
+          <div>
+            <h2 id="scan-heading">Scan QR</h2>
+            <p>
+              Point your camera at the bedside QR. You can also scan it with your phone’s Camera
+              app; its link will open this patient page directly.
+            </p>
+          </div>
+        </div>
         {error && <ErrorNotice message={error} onDismiss={() => setError(null)} />}
-        <div className={`qr-camera ${cameraState === 'idle' ? 'qr-camera-idle' : ''}`}>
+        <div
+          className={`qr-camera ${cameraState === 'idle' ? 'qr-camera-idle' : ''}`}
+          hidden={cameraState === 'idle'}
+        >
           <video ref={videoRef} autoPlay playsInline muted aria-label="QR scanner camera preview" />
-          {cameraState === 'idle' && <span>Camera preview appears here</span>}
           {cameraState === 'starting' && <span>Starting camera…</span>}
         </div>
         {cameraState === 'idle' ? (
-          <button type="button" disabled={busy} onClick={() => void startCamera()}>
-            Start camera
+          <button
+            type="button"
+            className="qr-primary-action"
+            disabled={busy}
+            onClick={() => void startCamera()}
+          >
+            <Camera size={21} aria-hidden="true" />
+            <span>Start camera</span>
+            <ChevronRight size={20} aria-hidden="true" />
           </button>
         ) : (
-          <button type="button" className="secondary" onClick={stopCamera}>
+          <button type="button" className="secondary qr-primary-action" onClick={stopCamera}>
             Stop camera
           </button>
         )}
-        <label className="qr-photo-input">
-          <span>Or take / choose a QR photo</span>
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            disabled={busy}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = '';
-              if (file) void scanPhoto(file);
-            }}
-          />
-          <small className="muted">The photo is read on this device; it is not uploaded.</small>
-        </label>
+      </section>
+      <div className="qr-entry-divider" aria-hidden="true">
+        <span>Or open in other ways</span>
+      </div>
+      <label className="card qr-photo-choice">
+        <span className="qr-entry-choice-icon qr-entry-choice-icon-photo">
+          <ImageIcon size={29} aria-hidden="true" />
+        </span>
+        <span className="qr-photo-choice-copy">
+          <strong>Upload a QR photo</strong>
+          <small>The photo is read on this device; it is not uploaded.</small>
+        </span>
+        <ChevronRight className="qr-choice-chevron" size={20} aria-hidden="true" />
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          disabled={busy}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (file) void scanPhoto(file);
+          }}
+        />
+      </label>
+      <section className="card qr-link-choice">
         <form className="qr-entry-link" onSubmit={submitLink}>
-          <label>
-            <span>Or paste the bedside QR link</span>
-            <input
-              type="text"
-              value={link}
-              onChange={(event) => setLink(event.target.value)}
-              placeholder="https://your-hospital.example/q/…"
-              autoComplete="off"
-              spellCheck={false}
-              required
-            />
+          <label htmlFor="qr-link">
+            <span className="qr-entry-choice-icon qr-entry-choice-icon-link">
+              <Link2 size={29} aria-hidden="true" />
+            </span>
+            <span className="qr-link-fields">
+              <strong>Paste the bedside QR link</strong>
+              <input
+                id="qr-link"
+                type="text"
+                value={link}
+                onChange={(event) => setLink(event.target.value)}
+                placeholder="https://your-hospital.example/q/…"
+                autoComplete="off"
+                spellCheck={false}
+                required
+              />
+            </span>
           </label>
-          <button type="submit" className="secondary" disabled={busy}>
-            {busy ? 'Connecting…' : 'Open patient page'}
+          <button type="submit" className="secondary qr-open-action" disabled={busy}>
+            <span>{busy ? 'Connecting…' : 'Open patient page'}</span>
+            <ChevronRight size={20} aria-hidden="true" />
           </button>
         </form>
       </section>
-      <EmergencyNotice />
+      <p className="qr-entry-emergency" role="note">
+        <CircleAlert size={29} aria-hidden="true" />
+        <span>
+          <strong>Not for emergencies.</strong>
+          <span>
+            In a medical emergency, press the nurse-call button or tell any staff member
+            immediately.
+          </span>
+        </span>
+      </p>
     </main>
   );
 }

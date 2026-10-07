@@ -134,6 +134,59 @@ describe('Request work screen', () => {
     });
   });
 
+  it('lets assigned staff turn down work with a reason', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(staffApi, 'requests').mockResolvedValue([
+      { ...request, status: 'ASSIGNED', assigneeId: 'staff-1', version: 2 },
+    ]);
+    const action = vi
+      .spyOn(staffApi, 'requestAction')
+      .mockResolvedValue({ ...request, status: 'REJECTED', version: 3 });
+    show(['request.read', 'request.accept', 'request.reject'], 'staff-1');
+    await user.click(await screen.findByRole('button', { name: 'Turn down…' }));
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Reason' }),
+      'Patient not at the bed',
+    );
+    await user.click(screen.getByRole('button', { name: 'Turn down request' }));
+    expect(action).toHaveBeenCalledWith('token', request.id, 'reject', {
+      expectedVersion: 2,
+      reason: 'Patient not at the bed',
+    });
+  });
+
+  it('lets a manager hand accepted work to someone else who is eligible', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(staffApi, 'requests').mockResolvedValue([
+      {
+        ...request,
+        status: 'ACCEPTED',
+        assigneeId: 'staff-1',
+        assigneeName: 'Demo Nurse',
+        version: 3,
+      },
+    ]);
+    vi.spyOn(staffApi, 'eligible').mockResolvedValue([
+      { membershipId: 'staff-1', displayName: 'Demo Nurse', dutyChangedAt: null },
+      { membershipId: 'staff-2', displayName: 'Second Nurse', dutyChangedAt: null },
+    ]);
+    const action = vi
+      .spyOn(staffApi, 'requestAction')
+      .mockResolvedValue({ ...request, status: 'ASSIGNED', version: 4 });
+    show(['request.read', 'request.assign', 'request.transfer']);
+    await user.click(await screen.findByRole('button', { name: 'Hand over…' }));
+    const person = await screen.findByRole('combobox', { name: 'Hand over to' });
+    // The current assignee is not offered; the only other person is preselected.
+    expect(screen.queryByRole('option', { name: 'Demo Nurse' })).toBeNull();
+    expect((person as HTMLSelectElement).value).toBe('staff-2');
+    await user.click(screen.getByRole('button', { name: 'Hand over' }));
+    expect(action).toHaveBeenCalledWith('token', request.id, 'transfer', {
+      expectedVersion: 3,
+      assigneeId: 'staff-2',
+      reason: 'My shift has ended',
+    });
+  });
+
   it('flags open requests that are past their response-time target', async () => {
     vi.spyOn(staffApi, 'requests').mockResolvedValue([
       { ...request, acceptDueAt: new Date(Date.now() - 4 * 60_000).toISOString() },

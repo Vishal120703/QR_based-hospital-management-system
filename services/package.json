@@ -20,6 +20,7 @@
     "bootstrap:hospital": "tsx src/modules/hospitals/bootstrap.cli.ts",
     "bootstrap:platform-admin": "node --env-file=.env --import tsx src/modules/platform/bootstrap-admin.cli.ts",
     "seed:demo": "node --env-file=.env --import tsx src/modules/hospitals/demo-seed.cli.ts",
+    "seed:test": "node --env-file=.env --import tsx src/modules/hospitals/test-seed.cli.ts",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsx watch --env-file=.env src/server.ts",
     "format": "prettier --write src tests",

@@ -28,6 +28,7 @@
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "jspdf": "^4.2.1",
+    "lucide-react": "^1.22.0",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.0",

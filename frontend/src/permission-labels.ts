@@ -60,8 +60,11 @@ export const permissionGroups: {
     permissions: [
       { key: 'hospital.read', label: 'See hospital details' },
       { key: 'hospital.manage', label: 'Change hospital profile and logo' },
-      { key: 'audit.read', label: 'See the audit history (coming later)' },
-      { key: 'analytics.read', label: 'See analytics (coming later)' },
+      { key: 'audit.read', label: 'See the audit log of every change' },
+      {
+        key: 'analytics.read',
+        label: 'See reports: requests, who handled them, delays, and reasons',
+      },
       { key: 'routing.manage', label: 'Change routing rules (coming later)' },
     ],
   },

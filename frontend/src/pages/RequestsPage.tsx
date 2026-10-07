@@ -21,6 +21,7 @@ import {
   useNow,
 } from '../request-status';
 import { useAdmin } from './AdminLayout';
+import { RequestTimelineDialog } from './RequestTimelineDialog';
 
 type Tab = 'open' | 'completed' | 'history';
 
@@ -29,7 +30,22 @@ const cancelReasons = [
   'Duplicate request',
   'Raised by mistake',
   'Other',
-] as const;
+];
+
+const rejectReasons = [
+  'Item or equipment not available',
+  'Not my department or skill',
+  'Patient not at the bed',
+  'Patient refused the service',
+  'Other',
+];
+
+const transferReasons = [
+  'My shift has ended',
+  'Busy with another patient',
+  'Needs someone more experienced',
+  'Other',
+];
 
 const successMessages: Record<StaffRequestAction, string> = {
   assign: 'Request assigned.',
@@ -38,10 +54,12 @@ const successMessages: Record<StaffRequestAction, string> = {
   complete: 'Request completed.',
   close: 'Request closed.',
   cancel: 'Request cancelled.',
+  reject: 'Request turned down. The reason is kept in its history.',
+  transfer: 'Request handed over.',
 };
 
 export function RequestsPage() {
-  const { token, me, canAnywhere, reportError, reportSuccess } = useAdmin();
+  const { token, me, can, canAnywhere, reportError, reportSuccess } = useAdmin();
   const [requests, setRequests] = useState<StaffRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
@@ -50,6 +68,9 @@ export function RequestsPage() {
   const [candidates, setCandidates] = useState<Record<string, EligibleStaff[]>>({});
   const [assignees, setAssignees] = useState<Record<string, string>>({});
   const [cancelTarget, setCancelTarget] = useState<StaffRequest | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<StaffRequest | null>(null);
+  const [transferTarget, setTransferTarget] = useState<StaffRequest | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
   const loading = useRef(false);
   const now = useNow();
 
@@ -109,15 +130,20 @@ export function RequestsPage() {
     }
   }
 
-  async function act(request: StaffRequest, action: StaffRequestAction, reason?: string) {
+  async function act(
+    request: StaffRequest,
+    action: StaffRequestAction,
+    reason?: string,
+    transferTo?: string,
+  ) {
     if (busyId) return false;
-    const assigneeId = assignees[request.id];
-    if (action === 'assign' && !assigneeId) return false;
+    const assigneeId = action === 'transfer' ? transferTo : assignees[request.id];
+    if ((action === 'assign' || action === 'transfer') && !assigneeId) return false;
     setBusyId(request.id);
     try {
       await staffApi.requestAction(token, request.id, action, {
         expectedVersion: request.version,
-        ...(action === 'assign' ? { assigneeId } : {}),
+        ...(assigneeId && (action === 'assign' || action === 'transfer') ? { assigneeId } : {}),
         ...(reason ? { reason } : {}),
       });
       reportSuccess(successMessages[action]);
@@ -303,8 +329,10 @@ export function RequestsPage() {
                           </button>
                         ) : candidates[request.id]?.length === 0 ? (
                           <p className="muted small">
-                            No eligible on-duty staff. Check the department, duty, and bed coverage
-                            on the Staff screen.
+                            No eligible on-duty staff.{' '}
+                            {can('staff.manage')
+                              ? 'Check the department, duty, and bed coverage on the Staff screen.'
+                              : 'Ask a Hospital Manager to check staff duty, department, and bed coverage.'}
                           </p>
                         ) : (
                           <>
@@ -343,6 +371,16 @@ export function RequestsPage() {
                           Accept
                         </button>
                       )}
+                      {isMine && request.status === 'ASSIGNED' && canAnywhere('request.reject') && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={busy}
+                          onClick={() => setRejectTarget(request)}
+                        >
+                          Turn down…
+                        </button>
+                      )}
                       {isMine && request.status === 'ACCEPTED' && canAnywhere('request.start') && (
                         <button
                           type="button"
@@ -372,6 +410,17 @@ export function RequestsPage() {
                           Close request
                         </button>
                       )}
+                      {(request.status === 'ACCEPTED' || request.status === 'IN_PROGRESS') &&
+                        canAnywhere('request.transfer') && (
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={busy}
+                            onClick={() => setTransferTarget(request)}
+                          >
+                            Hand over…
+                          </button>
+                        )}
                       {(request.status === 'SUBMITTED' || request.status === 'ASSIGNED') &&
                         canAnywhere('request.cancel') && (
                           <button
@@ -383,6 +432,15 @@ export function RequestsPage() {
                             Cancel…
                           </button>
                         )}
+                      {canAnywhere('analytics.read') && (
+                        <button
+                          type="button"
+                          className="link"
+                          onClick={() => setHistoryId(request.id)}
+                        >
+                          History
+                        </button>
+                      )}
                     </div>
                   </article>
                 );
@@ -392,9 +450,15 @@ export function RequestsPage() {
         </>
       )}
 
+      {historyId && <RequestTimelineDialog id={historyId} onClose={() => setHistoryId(null)} />}
       {cancelTarget && (
-        <CancelDialog
+        <ReasonDialog
+          title={`Cancel ${cancelTarget.serviceName}?`}
           request={cancelTarget}
+          explanation="The patient will see the request as cancelled. The reason is kept in the request history."
+          reasons={cancelReasons}
+          keepLabel="Keep request"
+          confirmLabel="Cancel request"
           busy={busyId !== null}
           onClose={() => setCancelTarget(null)}
           onConfirm={async (reason) => {
@@ -402,11 +466,37 @@ export function RequestsPage() {
           }}
         />
       )}
+      {rejectTarget && (
+        <ReasonDialog
+          title={`Turn down ${rejectTarget.serviceName}?`}
+          request={rejectTarget}
+          explanation="The request ends and the patient sees it as Rejected; they can send it again. Your manager sees your reason in Reports."
+          reasons={rejectReasons}
+          keepLabel="Keep it"
+          confirmLabel="Turn down request"
+          busy={busyId !== null}
+          onClose={() => setRejectTarget(null)}
+          onConfirm={async (reason) => {
+            if (await act(rejectTarget, 'reject', reason)) setRejectTarget(null);
+          }}
+        />
+      )}
+      {transferTarget && (
+        <TransferDialog
+          request={transferTarget}
+          busy={busyId !== null}
+          onClose={() => setTransferTarget(null)}
+          onConfirm={async (assigneeId, reason) => {
+            if (await act(transferTarget, 'transfer', reason, assigneeId)) setTransferTarget(null);
+          }}
+        />
+      )}
     </>
   );
 }
 
-function CancelDialog({
+// Who can take over this work: eligible on-duty staff other than the current assignee.
+function TransferDialog({
   request,
   busy,
   onClose,
@@ -415,9 +505,160 @@ function CancelDialog({
   request: StaffRequest;
   busy: boolean;
   onClose: () => void;
+  onConfirm: (assigneeId: string, reason: string) => Promise<void>;
+}) {
+  const { token } = useAdmin();
+  const [staff, setStaff] = useState<EligibleStaff[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [assigneeId, setAssigneeId] = useState('');
+  const [choice, setChoice] = useState(transferReasons[0]!);
+  const [details, setDetails] = useState('');
+  const reason = choice === 'Other' ? details.trim() : choice;
+
+  useEffect(() => {
+    let current = true;
+    staffApi.eligible(token, request.bedId, request.departmentId).then(
+      (loaded) => {
+        if (!current) return;
+        const others = loaded.filter((person) => person.membershipId !== request.assigneeId);
+        setStaff(others);
+        if (others.length === 1 && others[0]) setAssigneeId(others[0].membershipId);
+      },
+      (cause: unknown) => {
+        if (current) setError(cause instanceof Error ? cause.message : 'Could not load staff.');
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, [token, request.bedId, request.departmentId, request.assigneeId, attempt]);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (assigneeId && reason) void onConfirm(assigneeId, reason);
+  }
+
+  return (
+    <Modal title={`Hand over ${request.serviceName}`} onClose={onClose}>
+      <form className="create-form" onSubmit={submit}>
+        <p className="muted small">
+          {request.bed.displayName} · {request.publicId} · now with{' '}
+          {request.assigneeName ?? 'nobody'}. The new person must accept it again; the handover and
+          its reason are kept in the request history.
+        </p>
+        {!staff ? (
+          <LoadState
+            loading={!error}
+            error={error}
+            label="Finding eligible staff…"
+            onRetry={() => {
+              setError(null);
+              setAttempt((value) => value + 1);
+            }}
+          />
+        ) : staff.length === 0 ? (
+          <p className="notice notice-warning">
+            Nobody else is eligible right now: they must be on duty, in this department, and cover
+            this bed.
+          </p>
+        ) : (
+          <label>
+            Hand over to
+            <select
+              value={assigneeId}
+              required
+              onChange={(event) => setAssigneeId(event.target.value)}
+            >
+              <option value="">Choose eligible staff…</option>
+              {staff.map((person) => (
+                <option key={person.membershipId} value={person.membershipId}>
+                  {person.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <ReasonFields
+          reasons={transferReasons}
+          choice={choice}
+          details={details}
+          onChoice={setChoice}
+          onDetails={setDetails}
+        />
+        <div className="actions">
+          <button type="button" className="secondary" onClick={onClose}>
+            Keep with {request.assigneeName ?? 'current person'}
+          </button>
+          <button type="submit" disabled={busy || !assigneeId || !reason}>
+            Hand over
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ReasonFields({
+  reasons,
+  choice,
+  details,
+  onChoice,
+  onDetails,
+}: {
+  reasons: readonly string[];
+  choice: string;
+  details: string;
+  onChoice: (choice: string) => void;
+  onDetails: (details: string) => void;
+}) {
+  return (
+    <>
+      <label>
+        Reason
+        <select value={choice} onChange={(event) => onChoice(event.target.value)}>
+          {reasons.map((item) => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
+      </label>
+      {choice === 'Other' && (
+        <label>
+          Describe the reason
+          <input
+            value={details}
+            maxLength={500}
+            required
+            onChange={(event) => onDetails(event.target.value)}
+          />
+        </label>
+      )}
+    </>
+  );
+}
+
+function ReasonDialog({
+  title,
+  request,
+  explanation,
+  reasons,
+  keepLabel,
+  confirmLabel,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  request: StaffRequest;
+  explanation: string;
+  reasons: readonly string[];
+  keepLabel: string;
+  confirmLabel: string;
+  busy: boolean;
+  onClose: () => void;
   onConfirm: (reason: string) => Promise<void>;
 }) {
-  const [choice, setChoice] = useState<(typeof cancelReasons)[number]>(cancelReasons[0]);
+  const [choice, setChoice] = useState(reasons[0] ?? 'Other');
   const [details, setDetails] = useState('');
   const reason = choice === 'Other' ? details.trim() : choice;
 
@@ -427,40 +668,24 @@ function CancelDialog({
   }
 
   return (
-    <Modal title={`Cancel ${request.serviceName}?`} onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <form className="create-form" onSubmit={submit}>
         <p className="muted small">
-          {request.bed.displayName} · {request.publicId}. The patient will see the request as
-          cancelled. The reason is kept in the request history.
+          {request.bed.displayName} · {request.publicId}. {explanation}
         </p>
-        <label>
-          Reason
-          <select
-            value={choice}
-            onChange={(event) => setChoice(event.target.value as (typeof cancelReasons)[number])}
-          >
-            {cancelReasons.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-        {choice === 'Other' && (
-          <label>
-            Describe the reason
-            <input
-              value={details}
-              maxLength={500}
-              required
-              onChange={(event) => setDetails(event.target.value)}
-            />
-          </label>
-        )}
+        <ReasonFields
+          reasons={reasons}
+          choice={choice}
+          details={details}
+          onChoice={setChoice}
+          onDetails={setDetails}
+        />
         <div className="actions">
           <button type="button" className="secondary" onClick={onClose}>
-            Keep request
+            {keepLabel}
           </button>
           <button type="submit" className="danger" disabled={busy || !reason}>
-            Cancel request
+            {confirmLabel}
           </button>
         </div>
       </form>

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 400" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="headboard" x1="246" y1="44" x2="500" y2="277" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8F3F6"/>
+      <stop offset="1" stop-color="#ADCBD9"/>
+    </linearGradient>
+    <linearGradient id="frame" x1="94" y1="222" x2="460" y2="395" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ECF7F8"/>
+      <stop offset="1" stop-color="#AACCDD"/>
+    </linearGradient>
+    <linearGradient id="mattress" x1="184" y1="178" x2="400" y2="340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#CBE2EB"/>
+    </linearGradient>
+    <linearGradient id="blanket" x1="263" y1="187" x2="403" y2="315" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C5E6E4"/>
+      <stop offset="1" stop-color="#80C5CC"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="520" height="400" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="cardShadow" x="315" y="153" width="186" height="170" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="7" stdDeviation="7" flood-color="#679BAA" flood-opacity=".23"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="316" cy="357" rx="190" ry="27" fill="#77A7AF" fill-opacity=".18" filter="url(#shadow)"/>
+
+  <!-- The high headboard and rail place the QR card beside a recognizable hospital bed. -->
+  <path d="M251 49C251 31 268 20 284 27L474 112C493 121 506 139 506 159V268C506 285 490 295 473 287L276 197C261 190 251 174 251 157V49Z" fill="url(#headboard)"/>
+  <path d="M275 65C275 57 283 53 290 56L470 138C478 142 483 150 483 159V259L275 165V65Z" fill="#EFF9F9"/>
+  <path d="M292 81L466 160V237L292 159V81Z" fill="#C9E6E7"/>
+  <path d="M292 81L466 160" stroke="#B6D3DF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M311 94V166M449 153V230" stroke="#D9F0F0" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Isometric mattress, blanket and frame. -->
+  <path d="M65 238C65 222 76 208 92 200L257 116C271 109 287 109 301 116L488 210C502 217 511 230 511 246V281L311 383L65 270V238Z" fill="url(#frame)"/>
+  <path d="M78 238L267 142C278 136 291 136 302 142L491 235L307 339L78 238Z" fill="#F9FFFF"/>
+  <path d="M105 236L267 157C278 152 289 152 300 157L464 236L307 320L105 236Z" fill="url(#mattress)"/>
+  <path d="M253 176C268 167 287 167 302 175L440 240L309 307L166 246L253 176Z" fill="url(#blanket)"/>
+  <path d="M168 245L309 307L440 240" stroke="#ADD7DA" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M132 221L221 174C231 169 244 169 255 175L292 194C300 198 300 207 292 211L209 254C200 259 189 259 180 255L133 233C124 229 124 225 132 221Z" fill="#F5FEFD"/>
+  <path d="M143 218L225 177C234 172 244 173 252 177L283 194" stroke="#D1E8E9" stroke-width="5" stroke-linecap="round"/>
+  <path d="M65 270L307 383V339L78 238L65 244V270Z" fill="#BCD9E4"/>
+  <path d="M307 339L511 246V281L307 383V339Z" fill="#9FC6D7"/>
+  <path d="M86 260L306 360L491 266" stroke="#E9F7F8" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M116 286V332M452 301V348" stroke="#B2D2DD" stroke-width="18" stroke-linecap="round"/>
+
+  <!-- A decorative, intentionally non-scannable bedside QR placard. -->
+  <g filter="url(#cardShadow)" transform="rotate(8 403 234)">
+    <rect x="347" y="178" width="114" height="113" rx="13" fill="#FFFFFF"/>
+    <rect x="358" y="189" width="92" height="91" rx="5" fill="#F8FBFC"/>
+    <g fill="#15324A">
+      <path d="M365 196h24v24h-24v-24Zm5 5v14h14v-14h-14Zm3 3h8v8h-8v-8ZM419 196h24v24h-24v-24Zm5 5v14h14v-14h-14Zm3 3h8v8h-8v-8ZM365 249h24v24h-24v-24Zm5 5v14h14v-14h-14Zm3 3h8v8h-8v-8Z"/>
+      <path d="M395 197h6v6h-6zM407 197h6v12h-6zM396 210h8v5h-8zM405 216h7v7h-7zM393 229h6v6h-6zM403 228h13v5h-13zM422 226h6v12h-6zM433 226h9v6h-9zM365 225h8v6h-8zM379 229h7v10h-7zM391 240h8v7h-8zM402 241h6v10h-6zM413 244h9v6h-9zM428 241h6v7h-6zM438 245h6v6h-6zM396 257h8v7h-8zM409 255h5v7h-5zM419 262h7v8h-7zM432 258h11v6h-11zM394 269h16v5h-16zM431 269h12v5h-12z"/>
+    </g>
+  </g>
+
+  <path d="M83 169l-17-17M72 189l-23-3M101 154l-5-21" stroke="#17C8BC" stroke-width="8" stroke-linecap="round"/>
+</svg>

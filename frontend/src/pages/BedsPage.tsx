@@ -505,7 +505,7 @@ function PrintLabels({
   const wards = floorId ? uniqueOptions(onFloor, (row) => [row.wardId, row.wardName]) : [];
   const inWard = onFloor.filter((row) => !wardId || row.wardId === wardId);
   const rooms = wardId ? uniqueOptions(inWard, (row) => [row.roomId, row.roomName]) : [];
-  const selected = inWard.filter((row) => !roomId || row.roomId === roomId);
+  const selected = floorId ? inWard.filter((row) => !roomId || row.roomId === roomId) : [];
 
   const active = selected.filter((row) => row.bed.active);
   const withQr = active.filter((row) => row.qrCode?.status === 'ACTIVE').length;
@@ -520,7 +520,7 @@ function PrintLabels({
       name(rooms, roomId),
     ]
       .filter(Boolean)
-      .join(' · ') || 'Whole hospital';
+      .join(' · ') || 'Choose a floor';
   const scope: QrBatchScope = roomId
     ? { kind: 'ROOM', id: roomId }
     : wardId
@@ -576,8 +576,8 @@ function PrintLabels({
     <section className="card no-print print-labels" aria-labelledby="print-labels-title">
       <h2 id="print-labels-title">Print QR labels</h2>
       <p className="muted small">
-        Choose an area, then download one PDF with a label for every bed in it, in location order.
-        Beds that already have a printed QR are left alone unless you choose to replace them.
+        Choose a floor, then optionally a unit or room. Download one PDF with a separate label for
+        each bed. Beds with an active QR are left alone unless you choose to replace them.
       </p>
       <div className="field-grid">
         {buildings.length > 0 && (
@@ -604,7 +604,7 @@ function PrintLabels({
             value={floorId}
             onChange={(event) => pick('floor', event.target.value)}
           >
-            <option value="">All floors</option>
+            <option value="">Choose a floor…</option>
             {floors.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -647,7 +647,7 @@ function PrintLabels({
         )}
       </div>
       <p className="small">
-        <strong>{area}</strong>: {active.length} active beds · {withQr} already have a QR label ·{' '}
+        <strong>{area}</strong>: {active.length} active beds · {withQr} already have an active QR ·{' '}
         {active.length - withQr} need one
       </p>
       {canReplace && withQr > 0 && (
@@ -661,10 +661,25 @@ function PrintLabels({
         </label>
       )}
       <div className="actions">
-        <button type="button" disabled={busy || count === 0} onClick={() => void generate()}>
-          {count === 0 ? 'No labels needed' : `Create ${count} QR label${count === 1 ? '' : 's'}`}
+        <button
+          type="button"
+          disabled={busy || !floorId || count === 0 || count > 300}
+          onClick={() => void generate()}
+        >
+          {!floorId
+            ? 'Choose a floor'
+            : count > 300
+              ? 'Choose a smaller area'
+              : count === 0
+                ? 'No labels needed'
+                : `Create ${count} QR label${count === 1 ? '' : 's'}`}
         </button>
       </div>
+      {count > 300 && (
+        <p className="small muted">
+          Choose one unit or room to print no more than 300 labels at a time.
+        </p>
+      )}
       {message && (
         <p role="status" className="small">
           {message}

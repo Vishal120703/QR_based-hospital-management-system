@@ -101,12 +101,17 @@ Record `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN` for each ID. Use `http://localhos
 | M39 | Add a department (**Departments**), then **Create role** with **Applies to: One department**, starting from Department Supervisor. In **Staff & coverage** add a person, **Manage** → choose **Floor Manager** → a second list asks which floor → **Add**. | The role is created with the chosen permissions (permissions you do not hold are greyed out). The person shows a chip such as "Floor Manager · First Floor"; the same role can be added for a second floor, and each place can be removed separately. |
 | M40 | Sign in as that floor manager. | Menu shows only Overview, Requests, and Beds & QR. Beds & QR lists only their floor's beds, with **Start session** but no QR printing. Opening `/admin/staff` or `/admin/roles` shows **Access restricted**. |
 | M41 | In the platform, **Suspend hospital** (confirm), then try the floor manager's tab and a patient QR of that hospital. Then **Reactivate hospital**. | While suspended: staff are signed out and cannot sign in; patient QR links do not open. After reactivation everything works again; the other hospital is never affected. |
+| M42 | As Hospital Manager open **Work → Reports** with **Last 7 days**. | Tiles show requests, completed, still open, overdue now, cancelled (and how many by the patient), turned down, and on-time percentages. **Staff work** lists each person with assigned, accepted, completed, on-time %, turned down (with reasons), handed over, open now, and average times. |
+| M43 | Have a staff member **turn down** an assigned request with a reason (API `reject`), cancel another as a manager with a reason, and leave one past its target. Open **Not completed**. | Each appears with who did it, when, and the reason; the overdue one shows how long it is overdue and who has it. **Full history** shows every step with names. |
+| M44 | In **Request log**, filter by a person and by result, search a reference, and **Download CSV**. | Only matching requests appear; the CSV opens in Excel with names (including Hindi) intact. |
+| M45 | Sign in as a floor manager and as a care staff member. | The floor manager sees **Reports** limited to their floor but no **Audit log**; care staff see neither, and cannot open another person's request by its link. |
+| M46 | As Hospital Manager open **Hospital → Audit log**, choose **Request handling**, then **Load older changes**. | Entries read in plain words (for example "Assigned a request — Drinking Water (CR-…)") with who and when; cancel/turn-down entries include the reason. |
 
 The patient page checks request status and session validity about every 30 seconds while visible and on tab visibility change. After a QR/session change, use **Refresh status**, reload, or wait up to 30 seconds; do not expect an instant push update. The guest credential lasts for a limited time (default 120 minutes), so an expired tab must rescan a valid QR.
 
 ## 3. API and automated checks (Phases 1–8)
 
-The **Requests** screen now covers assign, accept, start, complete, close, and cancel in the browser (M30–M32). Reject and transfer still exist only as backend APIs. The following checks are part of the acceptance plan; let the other ChatGPT chat guide them only when you are comfortable with local developer tools. Never share bearer tokens or database credentials in that chat.
+The **Requests** screen now covers assign, accept, start, complete, close, and cancel in the browser (M30–M32). Staff can also turn down their assigned work and managers can hand accepted work to someone else from the same screen (see the [full testing guide](./full-testing-guide.md)). The following checks are part of the acceptance plan; let the other ChatGPT chat guide them only when you are comfortable with local developer tools. Never share bearer tokens or database credentials in that chat.
 
 | ID | Check | Expected result / method |
 |---|---|---|
@@ -161,7 +166,7 @@ Ask the other ChatGPT chat to keep a table like this (add rows as tests finish):
 
 Before starting Phase 9, require:
 
-- All runnable browser tests M01–M41 pass, or any exceptions are explicitly recorded and accepted.
+- All runnable browser tests M01–M46 pass, or any exceptions are explicitly recorded and accepted.
 - A01 passes against a **separate** test database; no migration drift or build/type/lint failures remain.
 - A02–A09 are covered by the passing integration suite or explicitly marked for a separate API session; no tenant leak or request-state defect remains open.
 - No real patient data, passwords, bearer tokens, or QR URLs were pasted into the shared test chat or committed to the repository.

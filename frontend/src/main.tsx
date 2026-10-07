@@ -16,6 +16,8 @@ import { PlatformLayout } from './pages/platform/PlatformLayout';
 import { PlatformLoginPage } from './pages/platform/PlatformLoginPage';
 import { QrEntryPage } from './pages/QrEntryPage';
 import { RequestsPage } from './pages/RequestsPage';
+import { ReportsPage } from './pages/ReportsPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 import { RolesPage } from './pages/RolesPage';
 import { ScanPage } from './pages/ScanPage';
 import { ServicesPage } from './pages/ServicesPage';
@@ -45,6 +47,8 @@ createRoot(root).render(
           <Route path="overview" element={<OverviewPage />} />
           <Route path="requests" element={<RequestsPage />} />
           <Route path="hospital" element={<HospitalProfilePage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="audit" element={<AuditLogPage />} />
           <Route path="beds" element={<BedsPage />} />
           <Route path="locations" element={<LocationsPage />} />
           <Route path="departments" element={<DepartmentsPage />} />
