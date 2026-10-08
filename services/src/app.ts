@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { NotFoundError } from './common/errors/app-error.js';
 import { createContainer } from './container.js';
 import { createHealthRouter, type ReadinessProbe } from './http/health.routes.js';
+import { cors } from './middleware/cors.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { type RateLimitOptions } from './middleware/rate-limit.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
@@ -23,6 +24,10 @@ export interface CreateAppOptions {
   readonly platformLoginRateLimit?: RateLimitOptions;
   readonly staffLoginRateLimits?: LoginRateLimits;
   readonly configureRoutes?: (application: Express) => void;
+  // Web origins (other than the API's own) allowed to call it.
+  readonly corsOrigins?: readonly string[];
+  // Proxies in front of the API, so rate limits use each visitor's address.
+  readonly trustProxy?: number;
 }
 
 // The HTTP application: shared middleware, health checks, every module's
@@ -30,7 +35,9 @@ export interface CreateAppOptions {
 export function createApp(options: CreateAppOptions): Express {
   const application = express();
   application.disable('x-powered-by');
+  application.set('trust proxy', options.trustProxy ?? 0);
 
+  application.use(cors(options.corsOrigins ?? []));
   application.use(requestIdMiddleware);
   application.use(
     pinoHttp({

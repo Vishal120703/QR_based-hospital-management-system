@@ -9,6 +9,9 @@ export const acceptedLogoTypes = 'image/png,image/jpeg,image/webp,image/svg+xml'
 function loadImage(source: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
+    // The saved logo comes from the API, which may be on another domain; ask
+    // with CORS so it can be drawn onto a canvas for the label PDF.
+    image.crossOrigin = 'anonymous';
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error('This file could not be read as an image.'));
     image.src = source;

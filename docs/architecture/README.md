@@ -15,7 +15,7 @@ flowchart LR
     web["Web app<br/>React + Vite"]
     api["Backend API<br/>Express + TypeScript"]
     db[("PostgreSQL<br/>all data")]
-    redis[("Redis<br/>readiness only today")]
+    redis[("Redis (optional)<br/>readiness only today")]
   end
   patient -- "scans bedside QR,<br/>sends requests" --> web
   staff -- "sets up hospital,<br/>handles requests" --> web
@@ -27,7 +27,7 @@ flowchart LR
 
 - The web app serves three areas: the **patient pages** (`/`, `/q/<token>`, `/patient`), the **staff workspace** (`/login`, `/admin/*`), and the **super admin** (`/platform/*`).
 - The browser always calls `/api/...`; in development Vite forwards it to the backend on port 3001.
-- Redis is required at start-up (readiness), and is reserved for later real-time features and queues.
+- Redis is optional: nothing needs it yet. When `REDIS_URL` is set, the API connects at start-up and includes it in `/ready`; it is reserved for later real-time features and queues.
 
 ## 2. Who controls what (SaaS hierarchy)
 
@@ -113,7 +113,7 @@ An arrow means "uses". The full description of each module (tables, public inter
 
 ```mermaid
 flowchart LR
-  server["server.ts<br/>config, DB + Redis connections,<br/>graceful shutdown"] --> app["app.ts<br/>shared middleware, health,<br/>404 and error handling"]
+  server["server.ts<br/>config, DB (+ optional Redis) connections,<br/>graceful shutdown"] --> app["app.ts<br/>shared middleware, health,<br/>404 and error handling"]
   app --> container["container.ts<br/>creates every service and controller once;<br/>groups routes"]
   container --> root["root routes<br/>/auth/staff/*, /auth/platform/*, /platform/*"]
   container --> admin["/admin/*<br/>staff session checked once"]

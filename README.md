@@ -22,13 +22,15 @@ For a plain-language walkthrough of the architecture, demo data, and local setup
 
 To test every role with ready-made dummy hospitals, run `npm run seed:test` in `services/` and follow the [full testing guide](./docs/guides/full-testing-guide.md).
 
+To put it online (API on Render, web app on Vercel), follow the [deployment guide](./docs/deployment.md).
+
 Patients can submit, track, and cancel eligible service requests from an active QR session. A floor manager can manually assign requests; assigned staff can accept, start, and mark them complete. Automatic routing, alerts, and notifications are still later work. This is not ready for hospital production use.
 
 ## Prerequisites
 
 - Node.js 24 or newer and npm 10 or newer (`.nvmrc` pins the tested version)
 - PostgreSQL 17 or newer (for example Postgres.app)
-- Redis 7 or newer (for example `brew install redis`, then `brew services start redis`). The server waits for Redis at startup; tests do not need it.
+- Optional: Redis 7 or newer (for example `brew install redis`, then `brew services start redis`). Nothing needs Redis yet; leave `REDIS_URL` empty to start without it.
 
 If you use nvm, run `nvm use` from the repository root before running either app. `.nvmrc` pins Node 24.19.0.
 

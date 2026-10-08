@@ -1,5 +1,8 @@
-// Typed client for the CARE QR backend. All requests go to /api, which the
-// dev server (and later the reverse proxy) forwards to the backend.
+// Typed client for the CARE QR backend. In development requests go to /api,
+// which the Vite dev server forwards to the backend. A deployed web app set
+// VITE_API_URL at build time to the API's address (for example
+// https://careqr-api.onrender.com) and calls it directly.
+const apiBase = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
 
 export class ApiError extends Error {
   public constructor(
@@ -25,7 +28,7 @@ export async function call<T>(
   const timeout = window.setTimeout(() => controller.abort(), 20_000);
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${apiBase}${path}`, {
       method,
       signal: controller.signal,
       headers: {
@@ -113,5 +116,5 @@ export const credentials = {
 
 // Server paths such as a logo URL, as the browser must request them.
 export function assetUrl(path: string): string {
-  return `/api${path}`;
+  return `${apiBase}${path}`;
 }

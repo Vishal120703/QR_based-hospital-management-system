@@ -15,6 +15,41 @@ describe('HTTP foundation', () => {
     expect(response.body).toMatchObject({ status: 'ok' });
   });
 
+  it('lets only the listed web app origins call the API', async () => {
+    const application = createApp({ logger, corsOrigins: ['https://care-qr.vercel.app'] });
+    const preflight = await request(application)
+      .options('/health')
+      .set('origin', 'https://care-qr.vercel.app')
+      .set('access-control-request-method', 'POST')
+      .set('access-control-request-headers', 'authorization, content-type');
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers['access-control-allow-origin']).toBe('https://care-qr.vercel.app');
+    expect(preflight.headers['access-control-allow-headers']).toContain('authorization');
+
+    const allowed = await request(application)
+      .get('/health')
+      .set('origin', 'https://care-qr.vercel.app');
+    expect(allowed.headers['access-control-allow-origin']).toBe('https://care-qr.vercel.app');
+    const other = await request(application).get('/health').set('origin', 'https://evil.example');
+    expect(other.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('uses the visitor address from the proxy when told to trust it', async () => {
+    const seen: string[] = [];
+    const application = createApp({
+      logger,
+      trustProxy: 1,
+      configureRoutes(app) {
+        app.get('/test/ip', (request, response) => {
+          seen.push(request.ip ?? '');
+          response.status(204).end();
+        });
+      },
+    });
+    await request(application).get('/test/ip').set('x-forwarded-for', '203.0.113.7');
+    expect(seen).toEqual(['203.0.113.7']);
+  });
+
   it('rejects unknown query input', async () => {
     const response = await request(createApp({ logger })).get('/health?hospitalId=forged');
 

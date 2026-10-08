@@ -1,0 +1,36 @@
+# Render Blueprint for the CARE QR API and its PostgreSQL database.
+# Render dashboard → New → Blueprint → choose this repository. When asked,
+# set PUBLIC_APP_URL to the web app's address (for example the Vercel URL).
+# Step-by-step guide: docs/deployment.md
+services:
+  - type: web
+    name: careqr-api
+    runtime: node
+    rootDir: services
+    plan: free
+    # Dev dependencies are needed to build (TypeScript, Prisma CLI).
+    buildCommand: npm ci --include=dev && npm run build
+    # Applies new database migrations, then starts the API.
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: careqr-db
+          property: connectionString
+      # The web app address, e.g. https://care-qr.vercel.app (no trailing slash).
+      - key: PUBLIC_APP_URL
+        sync: false
+      # Optional: other web addresses allowed to call the API, comma-separated.
+      - key: CORS_ORIGINS
+        sync: false
+
+databases:
+  - name: careqr-db
+    plan: free
+    databaseName: careqr
+    user: careqr

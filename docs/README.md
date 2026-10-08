@@ -11,6 +11,7 @@ CARE QR is one React frontend and one Express/Prisma backend. Start with the gui
 | Add a feature without breaking the boundaries | [Adding a feature](./adding-a-feature.md) |
 | Test every role and workflow | [Full testing guide](./guides/full-testing-guide.md) |
 | Check what is implemented versus still planned | [Project status](./project-status.md) |
+| Deploy the API on Render and the web app on Vercel | [Deployment guide](./deployment.md) |
 
 The [Phase 0–8 test plan](./testing/manual-test-plan-phases-0-8.md) and [historical report](./testing/test-report-phases-0-8.md) cover an earlier baseline; use the full testing guide for later platform, reports, audit, and staff features.
 

@@ -128,7 +128,7 @@ QR_Hospital_management/
 └── docs/       ← architecture, ER/data-flow diagrams, guides, and test plans (you are here)
 ```
 
-The frontend runs at `http://localhost:5173`; it talks to the backend at `http://localhost:3001`. Data is stored in **PostgreSQL** (database). **Redis** is a helper the backend needs to start.
+The frontend runs at `http://localhost:5173`; it talks to the backend at `http://localhost:3001`. Data is stored in **PostgreSQL** (database). **Redis** is optional for now: nothing needs it yet, and the backend starts without it when `REDIS_URL` is empty.
 
 The app is a **modular monolith**: one backend process and one frontend, with separate backend modules for authentication, locations, QR/session handling, staff, catalog/SLA, and requests. This keeps today's setup small while preserving boundaries for possible later extraction into microservices. See the [module rules](../../services/src/modules/README.md) and the [architecture decisions](../architecture/adr-0001-single-app-layout.md).
 
@@ -163,7 +163,7 @@ See the [request-state rules](../architecture/request-state-machine.md), [QR/ses
 
 ## 7. One-time local setup
 
-The project requires Node.js 24+, npm 10+, PostgreSQL 17+, and Redis 7+. On a Mac with nvm and Homebrew, these commands are examples:
+The project requires Node.js 24+, npm 10+, and PostgreSQL 17+. Redis 7+ is optional. On a Mac with nvm and Homebrew, these commands are examples:
 
 ```bash
 cd ~/Downloads/QR_Hospital_management
@@ -172,7 +172,7 @@ brew install redis
 brew services start redis
 ```
 
-Start your local PostgreSQL server (for example Postgres.app). The database named in `services/.env` must exist and be accessible to its configured user. Copy `services/.env.example` to `services/.env` if needed, then set the **local** `DATABASE_URL`, `REDIS_URL`, and `PUBLIC_APP_URL`. Do not share or commit `.env`.
+Start your local PostgreSQL server (for example Postgres.app). The database named in `services/.env` must exist and be accessible to its configured user. Copy `services/.env.example` to `services/.env` if needed, then set the **local** `DATABASE_URL` and `PUBLIC_APP_URL` (and `REDIS_URL` only if you run Redis). Do not share or commit `.env`.
 
 Install dependencies and apply migrations:
 
@@ -184,7 +184,7 @@ cd ../frontend
 npm ci
 ```
 
-If any command fails, stop and fix that prerequisite before testing. `http://localhost:3001/ready` should return HTTP 200 only when PostgreSQL and Redis are both available. This machine's services can change between runs; the existence of `.env` or a previous report does not prove they are running now.
+If any command fails, stop and fix that prerequisite before testing. `http://localhost:3001/ready` should return HTTP 200 only when PostgreSQL (and Redis, if `REDIS_URL` is set) is available. This machine's services can change between runs; the existence of `.env` or a previous report does not prove they are running now.
 
 **After changing `DATABASE_URL`:** stop the running backend with `Ctrl + C`, run `npm run prisma:status` inside `services/` to check the **new** database, then run migrations and the demo seed if that database is empty. Restart the backend. The old backend process will keep using the previous database until it is restarted, even if you edit `.env` and the new database has been seeded.
 
@@ -352,7 +352,7 @@ For one-by-one tests of the current roles, platform, reports, and audit, use the
 
 | Problem | Fix |
 |---|---|
-| Backend window does not say "listening" | Check that PostgreSQL and Redis are running and that the URLs in `services/.env` point to them. Normal startup waits for both connections. |
+| Backend window does not say "listening" | Check that PostgreSQL is running and that `DATABASE_URL` in `services/.env` points to it. If `REDIS_URL` is set, Redis must be running too; leave it empty to start without Redis. |
 | Error `P1010` or "denied access" | The PostgreSQL user in `DATABASE_URL` lacks access; check your local PostgreSQL roles and database permissions. Do not paste the URL into ChatGPT. |
 | Website shows "Cannot reach the hospital system" | The backend (Window 1) isn't running. |
 | Sign-in fails | Check hospital code `CAREQR-DEMO`, that the seed completed, and the private password you chose. |
