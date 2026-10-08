@@ -677,6 +677,27 @@ describe('Phase 3 location hierarchy', () => {
     });
     expect(tooMany.status).toBe(400);
 
+    // Floor and unit in the prefix (as the screen suggests), up to 24 characters.
+    const withFloor = await admin.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+      mode: 'BEDS',
+      codePrefix: 'MAIN-F2-GENERAL-WARD-AB-',
+      namePrefix: 'Bed',
+      start: 1,
+      count: 1,
+      bedType: 'STANDARD',
+    });
+    expect(withFloor.status, JSON.stringify(withFloor.body)).toBe(201);
+    expect(withFloor.body).toMatchObject({ beds: [{ code: 'MAIN-F2-GENERAL-WARD-AB-01' }] });
+    const tooLong = await admin.post(`/admin/wards/${owned.ward.id}/bulk-beds`, {
+      mode: 'BEDS',
+      codePrefix: 'MAIN-F2-GENERAL-WARD-ABC-',
+      namePrefix: 'Bed',
+      start: 1,
+      count: 1,
+      bedType: 'STANDARD',
+    });
+    expect(tooLong.status).toBe(400);
+
     const foreign = await createHierarchy(hospitalB, 'BULK');
     expect(
       (

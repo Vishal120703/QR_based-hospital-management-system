@@ -44,11 +44,12 @@ const bedTypeSchema = z.enum([
   'OTHER',
 ]);
 const levelSchema = z.number().int().min(-10).max(200);
-// A prefix may be empty ("101") or end in a separator ("GW-", "GW ").
+// A prefix may be empty ("101") or end in a separator ("F2-GW-"). 24
+// characters leave room for the number within the 32-character code limit.
 const prefixSchema = z
   .string()
   .trim()
-  .max(16)
+  .max(24)
   .regex(/^([A-Za-z0-9][A-Za-z0-9._-]*)?$/);
 
 // Buildings

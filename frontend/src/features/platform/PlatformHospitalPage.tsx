@@ -7,7 +7,7 @@ import {
   type PlatformClient,
   type PlatformHospital,
 } from '../../api';
-import { LoadState } from '../../components';
+import { LoadState, useConfirm } from '../../components';
 import { acceptedLogoTypes, prepareLogo } from '../../lib/logo-image';
 import { allTimezones, HospitalMark, PasswordField, StatusBadge } from './platform-shared';
 import { usePlatform } from './PlatformLayout';
@@ -16,6 +16,7 @@ import { emailMaxLength } from '../../lib/field-rules';
 export function PlatformHospitalPage() {
   const { id = '' } = useParams();
   const { token, reportError, reportSuccess } = usePlatform();
+  const confirm = useConfirm();
   const [hospital, setHospital] = useState<PlatformHospital | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -146,20 +147,22 @@ export function PlatformHospitalPage() {
             type="button"
             className={active ? 'danger' : ''}
             disabled={busy}
-            onClick={() => {
-              const message = active
-                ? `Suspend ${hospital.name}? All its staff are signed out and patients can no longer use its QR codes until you reactivate it. No data is deleted.`
-                : `Reactivate ${hospital.name}? Staff can sign in and QR codes work again.`;
-              if (window.confirm(message)) {
-                void run(
-                  () =>
-                    platformApi.updateHospital(token, id, {
-                      status: active ? 'SUSPENDED' : 'ACTIVE',
-                    }),
-                  active ? `${hospital.name} suspended.` : `${hospital.name} reactivated.`,
-                );
-              }
-            }}
+            onClick={() =>
+              void (async () => {
+                const message = active
+                  ? `Suspend ${hospital.name}? All its staff are signed out and patients can no longer use its QR codes until you reactivate it. No data is deleted.`
+                  : `Reactivate ${hospital.name}? Staff can sign in and QR codes work again.`;
+                if (await confirm(message)) {
+                  await run(
+                    () =>
+                      platformApi.updateHospital(token, id, {
+                        status: active ? 'SUSPENDED' : 'ACTIVE',
+                      }),
+                    active ? `${hospital.name} suspended.` : `${hospital.name} reactivated.`,
+                  );
+                }
+              })()
+            }
           >
             {active ? 'Suspend hospital' : 'Reactivate hospital'}
           </button>

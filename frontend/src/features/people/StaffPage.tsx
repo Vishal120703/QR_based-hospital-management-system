@@ -114,7 +114,11 @@ export function StaffPage() {
               <th>Departments</th>
               <th>Coverage</th>
               <th>Roles</th>
-              {canManage && <th className="visually-hidden">Actions</th>}
+              {canManage && (
+                <th className="actions-column">
+                  <span className="visually-hidden">Actions</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>

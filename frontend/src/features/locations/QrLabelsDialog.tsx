@@ -1,7 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { assetUrl, type QrBatch, type QrIssue } from '../../api';
-import { Modal } from '../../components';
+import { Modal, useConfirm } from '../../components';
 import {
   downloadLabelsPdf,
   labelSizes,
@@ -50,6 +50,7 @@ export function QrLabelsDialog({
   children?: ReactNode;
 }) {
   const { me } = useAdmin();
+  const confirm = useConfirm();
   const [size, setSize] = useState<LabelSize>(items.length === 1 ? 'large' : 'medium');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -101,12 +102,16 @@ export function QrLabelsDialog({
     }
   }
 
-  function close() {
+  async function close() {
     if (
       !saved &&
-      !window.confirm(
-        'You have not downloaded or printed these labels. Their QR codes cannot be shown again; you would have to replace them. Close anyway?',
-      )
+      !(await confirm({
+        title: 'Close without saving these labels?',
+        message:
+          'You have not downloaded or printed them. Their QR codes cannot be shown again; you would have to replace them.',
+        confirmLabel: 'Close anyway',
+        danger: true,
+      }))
     ) {
       return;
     }
@@ -118,7 +123,7 @@ export function QrLabelsDialog({
       title={
         items.length === 1 ? `QR label for ${items[0]!.bedName}` : `${items.length} QR labels ready`
       }
-      onClose={close}
+      onClose={() => void close()}
       wide
     >
       <p className="notice notice-warning">
@@ -174,7 +179,7 @@ export function QrLabelsDialog({
           Open PDF to print
         </button>
         {children}
-        <button type="button" className="secondary" onClick={close}>
+        <button type="button" className="secondary" onClick={() => void close()}>
           Done
         </button>
       </div>

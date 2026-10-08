@@ -1049,6 +1049,8 @@ label.checkbox {
 }
 label.checkbox input {
   width: auto;
+  /* Keep the box full size when a long label wraps to two lines. */
+  flex: none;
 }
 
 /* Hospital layout explorer */
@@ -2352,6 +2354,11 @@ td .badge {
 
 /* A state badge with its toggle underneath, so the column shows the
    current state rather than the action. */
+/* The Manage column is only as wide as its button, so the space on both
+   sides of the button matches. */
+.staff-table th.actions-column {
+  width: 1%;
+}
 .duty-cell {
   display: grid;
   justify-items: start;
@@ -3735,5 +3742,58 @@ tbody tr:hover td {
   }
   .platform-hospital-title > .badge {
     margin: -0.4rem 0 0 calc(44px + 0.9rem);
+  }
+}
+
+/* Confirmation dialog (replaces the browser's confirm box). */
+.confirm-dialog {
+  width: min(100% - 2rem, 440px);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.9rem;
+  padding: 1.25rem 1.25rem 1.1rem;
+}
+.confirm-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.confirm-icon.danger {
+  background: var(--error-bg);
+  color: var(--danger);
+}
+.confirm-text h2 {
+  margin: 0.45rem 0 0.3rem;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.confirm-text p {
+  margin: 0;
+  line-height: 1.5;
+}
+.confirm-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+button.danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+button.danger-solid:hover:not(:disabled) {
+  background: #912018;
+  border-color: #912018;
+}
+@media (max-width: 480px) {
+  .confirm-actions button {
+    flex: 1;
   }
 }

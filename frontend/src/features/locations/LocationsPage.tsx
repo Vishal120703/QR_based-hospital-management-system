@@ -10,7 +10,7 @@ import {
   type Ward,
   type WardType,
 } from '../../api';
-import { LoadState, PageHeading } from '../../components';
+import { LoadState, PageHeading, useConfirm } from '../../components';
 import { useLoad } from '../../lib/use-load';
 import {
   floorLevelLabel,
@@ -57,6 +57,7 @@ function parseSelection(value: string | null): Selection {
 
 export function LocationsPage() {
   const { token, reportError, reportSuccess, can } = useAdmin();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -83,7 +84,7 @@ export function LocationsPage() {
   const run = useCallback(
     async (action: () => Promise<unknown>, success: string, confirmText?: string) => {
       if (busy) return false;
-      if (confirmText && !window.confirm(confirmText)) return false;
+      if (confirmText && !(await confirm(confirmText))) return false;
       setBusy(true);
       try {
         await action();
@@ -97,7 +98,7 @@ export function LocationsPage() {
         setBusy(false);
       }
     },
-    [busy, refresh, reportError, reportSuccess],
+    [busy, confirm, refresh, reportError, reportSuccess],
   );
 
   if (!layout) {

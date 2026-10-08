@@ -13,7 +13,7 @@ import {
   type Room,
   type Ward,
 } from '../../api';
-import { LoadState, PageHeading } from '../../components';
+import { type ConfirmQuestion, LoadState, PageHeading, useConfirm } from '../../components';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
 import { labelFromIssue, labelsFromBatch, QrLabelsDialog, type LabelItem } from './QrLabelsDialog';
@@ -75,6 +75,7 @@ async function loadRows(token: string, canReadLocations: boolean): Promise<BedRo
 
 export function BedsPage() {
   const { token, me, reportError, reportSuccess, canAnywhere } = useAdmin();
+  const confirm = useConfirm();
   const [busyBedId, setBusyBedId] = useState<string | null>(null);
   const [issued, setIssued] = useState<Issued | null>(null);
   const [search, setSearch] = useState('');
@@ -99,9 +100,9 @@ export function BedsPage() {
   const canManageQr = can('hospital.manage');
   const canManageSessions = canAnywhere('bedSession.manage');
 
-  async function act(row: BedRow, action: () => Promise<unknown>, confirmText?: string) {
+  async function act(row: BedRow, action: () => Promise<unknown>, question?: ConfirmQuestion) {
     if (pending.current) return;
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (question && !(await confirm(question))) return;
     pending.current = true;
     setBusyBedId(row.bed.id);
     try {
@@ -305,11 +306,11 @@ export function BedsPage() {
                               className="secondary"
                               disabled={busy}
                               onClick={() =>
-                                void act(
-                                  row,
-                                  () => staffApi.closeSession(token, session.id),
-                                  `Close the session for ${bed.displayName}? Patients connected to this bed will be signed out.`,
-                                )
+                                void act(row, () => staffApi.closeSession(token, session.id), {
+                                  title: `Close the session for ${bed.displayName}?`,
+                                  message: 'Patients connected to this bed will be signed out.',
+                                  confirmLabel: 'Close session',
+                                })
                               }
                             >
                               Close session
@@ -349,7 +350,13 @@ export function BedsPage() {
                                   void act(
                                     row,
                                     issueQr(row, () => staffApi.rotateQr(token, bed.id)),
-                                    'Issue a new QR code? The printed code stops working and connected patients must scan the new one.',
+                                    {
+                                      title: 'Issue a new QR code?',
+                                      message:
+                                        'The printed code stops working and connected patients must scan the new one.',
+                                      confirmLabel: 'Issue new code',
+                                      danger: true,
+                                    },
                                   )
                                 }
                               >
@@ -465,6 +472,7 @@ function PrintLabels({
   busy: boolean;
   onGenerate: (scope: QrBatchScope, area: string, replace: boolean) => Promise<QrBatch | null>;
 }) {
+  const confirm = useConfirm();
   const [buildingId, setBuildingId] = useState('');
   const [floorId, setFloorId] = useState('');
   const [wardId, setWardId] = useState('');
@@ -524,9 +532,9 @@ function PrintLabels({
     if (
       replace &&
       withQr > 0 &&
-      !window.confirm(
+      !(await confirm(
         `Replace ${withQr} printed QR label${withQr === 1 ? '' : 's'} in ${area}? The old labels stop working at once and patients using them must scan the new ones.`,
-      )
+      ))
     ) {
       return;
     }

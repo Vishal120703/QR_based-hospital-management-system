@@ -1,7 +1,7 @@
 import { useCallback, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { staffApi, type Role, type RoleScopeLevel } from '../../api';
-import { LoadState, Modal, PageHeading } from '../../components';
+import { LoadState, Modal, PageHeading, useConfirm } from '../../components';
 import { levelLabels, permissionGroups, permissionLabel } from '../../lib/permission-labels';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
@@ -10,6 +10,7 @@ const levels = Object.keys(levelLabels) as RoleScopeLevel[];
 
 export function RolesPage() {
   const { token, can, reportError, reportSuccess } = useAdmin();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState<Role | 'new' | null>(null);
   const [busy, setBusy] = useState(false);
   const canManage = can('role.manage');
@@ -24,7 +25,7 @@ export function RolesPage() {
   );
 
   async function remove(role: Role) {
-    if (!window.confirm(`Delete the role “${role.name}”?`)) return;
+    if (!(await confirm(`Delete the role “${role.name}”?`))) return;
     setBusy(true);
     try {
       await staffApi.deleteRole(token, role.id);

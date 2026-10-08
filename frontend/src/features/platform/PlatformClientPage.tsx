@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { ApiError, platformApi, type PlatformClient } from '../../api';
-import { LoadState } from '../../components';
+import { LoadState, useConfirm } from '../../components';
 import { NewHospitalDialog } from './NewHospitalDialog';
 import { HospitalMark, StatusBadge } from './platform-shared';
 import { usePlatform } from './PlatformLayout';
@@ -31,6 +31,7 @@ function detailsOf(client: PlatformClient) {
 export function PlatformClientPage() {
   const { id = '' } = useParams();
   const { token, reportError, reportSuccess } = usePlatform();
+  const confirm = useConfirm();
   const [client, setClient] = useState<PlatformClient | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -139,18 +140,20 @@ export function PlatformClientPage() {
             type="button"
             className={active ? 'danger' : ''}
             disabled={busy}
-            onClick={() => {
-              const count = `${hospitals.length} ${hospitals.length === 1 ? 'hospital' : 'hospitals'}`;
-              const message = active
-                ? `Suspend ${client.name}? All ${count} close at once: staff are signed out and patients can no longer use their QR codes. No data is deleted.`
-                : `Reactivate ${client.name}? Its ${count} open again (any hospital you suspended on its own stays suspended).`;
-              if (window.confirm(message)) {
-                void update(
-                  { status: active ? 'SUSPENDED' : 'ACTIVE' },
-                  active ? `${client.name} suspended.` : `${client.name} reactivated.`,
-                );
-              }
-            }}
+            onClick={() =>
+              void (async () => {
+                const count = `${hospitals.length} ${hospitals.length === 1 ? 'hospital' : 'hospitals'}`;
+                const message = active
+                  ? `Suspend ${client.name}? All ${count} close at once: staff are signed out and patients can no longer use their QR codes. No data is deleted.`
+                  : `Reactivate ${client.name}? Its ${count} open again (any hospital you suspended on its own stays suspended).`;
+                if (await confirm(message)) {
+                  await update(
+                    { status: active ? 'SUSPENDED' : 'ACTIVE' },
+                    active ? `${client.name} suspended.` : `${client.name} reactivated.`,
+                  );
+                }
+              })()
+            }
           >
             {active ? 'Suspend client' : 'Reactivate client'}
           </button>

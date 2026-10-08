@@ -7,7 +7,7 @@ import {
   type Shift,
   type StaffMember,
 } from '../../api';
-import { ErrorNotice, LoadState, Modal } from '../../components';
+import { ErrorNotice, LoadState, Modal, useConfirm } from '../../components';
 import { useAdmin } from '../workspace/AdminLayout';
 import { coverageLabel, nameOf, type Directory } from './staff-directory';
 
@@ -30,6 +30,7 @@ export function StaffDialog({
   onClose: () => void;
 }) {
   const { token, reportError, reportSuccess, can } = useAdmin();
+  const confirm = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<MembershipStatus>(member.status);
@@ -93,6 +94,20 @@ export function StaffDialog({
       pending.current = false;
       setBusy(false);
     }
+  }
+
+  async function saveStatus() {
+    if (
+      status !== 'ACTIVE' &&
+      !(await confirm({
+        title: `Set ${member.displayName} to ${status.toLowerCase()}?`,
+        message: 'This signs them out and takes them off duty.',
+        confirmLabel: status === 'SUSPENDED' ? 'Suspend' : 'Deactivate',
+        danger: true,
+      }))
+    )
+      return;
+    await run(() => staffApi.setStaffStatus(token, member.id, status));
   }
 
   const availableDepartments = directory.departments.filter(
@@ -167,16 +182,7 @@ export function StaffDialog({
             <button
               type="button"
               disabled={busy || status === member.status}
-              onClick={() => {
-                if (
-                  status !== 'ACTIVE' &&
-                  !window.confirm(
-                    `Set ${member.displayName} to ${status.toLowerCase()}? This signs them out and takes them off duty.`,
-                  )
-                )
-                  return;
-                void run(() => staffApi.setStaffStatus(token, member.id, status));
-              }}
+              onClick={() => void saveStatus()}
             >
               Save
             </button>

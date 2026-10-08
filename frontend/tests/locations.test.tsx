@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { staffApi, type Bed, type Building, type Floor, type Ward } from '../src/api';
-import { planBulkBeds } from '../src/features/locations/location-types';
+import { bedCodePrefix, planBulkBeds } from '../src/features/locations/location-types';
 import { type AdminContext } from '../src/features/workspace/AdminLayout';
 import { LocationsPage } from '../src/features/locations/LocationsPage';
 
@@ -72,6 +72,32 @@ function show(path: string, permissions: string[]) {
 
 const manager = ['location.read', 'location.manage', 'bed.read', 'bed.manage'];
 
+describe('Bed code prefix', () => {
+  const main = { id: 'b1', code: 'MAIN' };
+  const dayCare = { id: 'b2', code: 'DAY' };
+
+  it('names the floor and unit, so two floors never share codes', () => {
+    const general = { code: 'GW' };
+    expect(bedCodePrefix(general, { code: 'G', buildingId: null }, [])).toBe('G-GW-');
+    expect(bedCodePrefix(general, { code: 'F2', buildingId: null }, [])).toBe('F2-GW-');
+  });
+
+  it('adds the building only when the hospital has several', () => {
+    const floor = { code: 'G', buildingId: 'b1' };
+    expect(bedCodePrefix({ code: 'GW' }, floor, [main])).toBe('G-GW-');
+    expect(bedCodePrefix({ code: 'GW' }, floor, [main, dayCare])).toBe('MAIN-G-GW-');
+  });
+
+  it('drops the building, then the floor, to stay within 24 characters', () => {
+    const floor = { code: 'FIRST-FLOOR', buildingId: 'b1' };
+    expect(bedCodePrefix({ code: 'GENERAL' }, floor, [main, dayCare])).toBe('FIRST-FLOOR-GENERAL-');
+    expect(bedCodePrefix({ code: 'MALE-MEDICAL-WARD' }, floor, [main, dayCare])).toBe(
+      'MALE-MEDICAL-WARD-',
+    );
+    expect(bedCodePrefix({ code: 'A'.repeat(32) }, floor, []).length).toBe(24);
+  });
+});
+
 describe('Bulk bed numbering', () => {
   it('numbers beds with zero padding and rooms with a floor prefix', () => {
     const beds = planBulkBeds({
@@ -131,11 +157,12 @@ describe('Hospital layout screen', () => {
     const count = screen.getByRole('spinbutton', { name: 'How many beds' });
     await user.clear(count);
     await user.type(count, '3');
-    expect(screen.getByRole('status').textContent).toContain('Bed 03 (GW-03)');
+    // New codes name the floor too, so the same unit on two floors never repeats.
+    expect(screen.getByRole('status').textContent).toContain('Bed 03 (F1-GW-03)');
     await user.click(screen.getByRole('button', { name: 'Add 3 beds' }));
     expect(bulk).toHaveBeenCalledWith('token', 'w1', {
       mode: 'BEDS',
-      codePrefix: 'GW-',
+      codePrefix: 'F1-GW-',
       namePrefix: 'Bed',
       start: 3,
       count: 3,

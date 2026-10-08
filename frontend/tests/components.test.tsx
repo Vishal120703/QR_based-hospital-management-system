@@ -85,4 +85,18 @@ describe('Modal', () => {
     fireEvent(dialog, new Event('cancel', { bubbles: true, cancelable: true }));
     expect(close).toHaveBeenCalledTimes(1);
   });
+
+  it('stays open when a file picker inside it is cancelled', () => {
+    const close = vi.fn();
+    render(
+      <Modal title="Add hospital" onClose={close}>
+        <input type="file" aria-label="Logo" />
+      </Modal>,
+    );
+    // Browsers fire a bubbling "cancel" on the input when its picker closes
+    // without a file; that must not close the dialog and lose the form.
+    fireEvent(screen.getByLabelText('Logo'), new Event('cancel', { bubbles: true }));
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Add hospital' }).hasAttribute('open')).toBe(true);
+  });
 });

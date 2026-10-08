@@ -1,4 +1,5 @@
-import type { BedType, BulkBedsInput, Floor, RoomType, WardType } from '../../api';
+import type { BedType, Building, BulkBedsInput, Floor, RoomType, Ward, WardType } from '../../api';
+import { prefixInput } from '../../lib/field-rules';
 
 export interface UnitPreset {
   label: string;
@@ -165,6 +166,25 @@ export function floorSuggestion(level: number): { code: string; name: string } {
   if (level === 0) return { code: 'G', name: 'Ground Floor' };
   const ordinals = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth'];
   return { code: `F${level}`, name: `${ordinals[level - 1] ?? `Level ${level}`} Floor` };
+}
+
+// How new bed codes start: the floor and unit codes, plus the building's when
+// the hospital has more than one, so a code says where the bed is and the same
+// unit type on two floors does not repeat codes: "F2-GW-" gives F2-GW-01, …
+// Long codes drop the building, then the floor, to fit the prefix limit.
+export function bedCodePrefix(
+  ward: Pick<Ward, 'code'>,
+  floor: Pick<Floor, 'code' | 'buildingId'> | undefined,
+  buildings: readonly Pick<Building, 'id' | 'code'>[],
+): string {
+  const building =
+    buildings.length > 1 ? buildings.find((item) => item.id === floor?.buildingId) : undefined;
+  const choices = [[building?.code, floor?.code, ward.code], [floor?.code, ward.code], [ward.code]];
+  for (const parts of choices) {
+    const prefix = `${parts.filter(Boolean).join('-')}-`.toUpperCase();
+    if (prefix.length <= prefixInput.maxLength) return prefix;
+  }
+  return `${ward.code.slice(0, prefixInput.maxLength - 1)}-`.toUpperCase();
 }
 
 export function sortFloors(floors: Floor[]): Floor[] {

@@ -8,8 +8,8 @@ export const codeInput = {
   title: 'Use letters, digits, dots, dashes, or underscores, starting with a letter or digit.',
 } as const;
 
-// A prefix for numbered beds or rooms ("GW-", "2"); it may be left empty.
-export const prefixInput = { ...codeInput, maxLength: 16 } as const;
+// A prefix for numbered beds or rooms ("F2-GW-", "2"); it may be left empty.
+export const prefixInput = { ...codeInput, maxLength: 24 } as const;
 
 export const nameMaxLength = 120;
 export const emailMaxLength = 320;

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { assetUrl, staffApi, type Hospital } from '../../api';
-import { LoadState, PageHeading } from '../../components';
+import { LoadState, PageHeading, useConfirm } from '../../components';
 import { acceptedLogoTypes, prepareLogo } from '../../lib/logo-image';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
 
 export function HospitalProfilePage() {
   const { token, reportError, reportSuccess, refreshMe } = useAdmin();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   // What the manager is typing; null shows the saved name.
   const [draftName, setDraftName] = useState<string | null>(null);
@@ -43,6 +44,12 @@ export function HospitalProfilePage() {
       return false;
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function removeLogo() {
+    if (await confirm('Remove the logo? New QR labels will print without it.')) {
+      await run(() => staffApi.removeLogo(token), 'Logo removed.');
     }
   }
 
@@ -152,11 +159,7 @@ export function HospitalProfilePage() {
                   type="button"
                   className="danger"
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm('Remove the logo? New QR labels will print without it.')) {
-                      void run(() => staffApi.removeLogo(token), 'Logo removed.');
-                    }
-                  }}
+                  onClick={() => void removeLogo()}
                 >
                   Remove logo
                 </button>

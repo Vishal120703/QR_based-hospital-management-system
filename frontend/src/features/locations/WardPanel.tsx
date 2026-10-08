@@ -9,6 +9,7 @@ import {
   type WardType,
 } from '../../api';
 import {
+  bedCodePrefix,
   bedTypeLabels,
   floorLevelLabel,
   planBulkBeds,
@@ -62,6 +63,7 @@ export function WardPanel({ tools, id }: { tools: PanelTools; id: string }) {
     .sort((left, right) => left.code.localeCompare(right.code, undefined, { numeric: true }));
   const stats = bedStats(beds);
   const preset = unitPresets[ward.unitType];
+  const codePrefix = bedCodePrefix(ward, floor, layout.buildings);
   const area = [floor?.name, ward.name].filter(Boolean).join(' · ');
   const fresh = beds.filter((bed) => justCreated.includes(bed.id));
   const groups = [
@@ -123,7 +125,7 @@ export function WardPanel({ tools, id }: { tools: PanelTools; id: string }) {
           tools={tools}
           wardId={id}
           wardType={ward.unitType}
-          wardCode={ward.code}
+          codePrefix={codePrefix}
           floorLevel={floor?.level ?? null}
           rooms={rooms}
           beds={beds}
@@ -179,7 +181,13 @@ export function WardPanel({ tools, id }: { tools: PanelTools; id: string }) {
           <div className="form-pair">
             {tools.canManage && <AddRoomForm tools={tools} wardId={id} />}
             {tools.canManageBeds && (
-              <AddBedForm tools={tools} wardId={id} rooms={rooms} defaultType={preset.bedType} />
+              <AddBedForm
+                tools={tools}
+                wardId={id}
+                rooms={rooms}
+                defaultType={preset.bedType}
+                codePrefix={codePrefix}
+              />
             )}
           </div>
         </details>
@@ -242,7 +250,11 @@ function RoomGroup({ tools, room, beds }: { tools: PanelTools; room: Room | null
                 <th>Type</th>
                 <th>QR label</th>
                 <th>Status</th>
-                {tools.canManageBeds && <th className="visually-hidden">Actions</th>}
+                {tools.canManageBeds && (
+                  <th>
+                    <span className="visually-hidden">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -333,7 +345,7 @@ function BulkBedsForm({
   tools,
   wardId,
   wardType,
-  wardCode,
+  codePrefix: suggestedPrefix,
   floorLevel,
   rooms,
   beds,
@@ -342,7 +354,8 @@ function BulkBedsForm({
   tools: PanelTools;
   wardId: string;
   wardType: WardType;
-  wardCode: string;
+  // Where new bed codes start, from bedCodePrefix().
+  codePrefix: string;
   floorLevel: number | null;
   rooms: Room[];
   beds: Bed[];
@@ -355,7 +368,7 @@ function BulkBedsForm({
     canRooms && preset.layout.mode === 'ROOMS' ? 'ROOMS' : 'BEDS',
   );
   const [bedType, setBedType] = useState<BedType>(preset.bedType);
-  const [codePrefix, setCodePrefix] = useState(`${wardCode}-`);
+  const [codePrefix, setCodePrefix] = useState(suggestedPrefix);
   const [namePrefix, setNamePrefix] = useState(bedNoun(preset.bedType));
   const [roomPrefix, setRoomPrefix] = useState(
     floorLevel !== null && floorLevel > 0 ? String(floorLevel) : '',
@@ -373,7 +386,7 @@ function BulkBedsForm({
     Math.max(
       nextNumber(
         beds.map((bed) => bed.code),
-        `${wardCode}-`,
+        suggestedPrefix,
       ),
       nextNumber(
         beds.map((bed) => bed.displayName),
@@ -649,11 +662,13 @@ function AddBedForm({
   wardId,
   rooms,
   defaultType,
+  codePrefix,
 }: {
   tools: PanelTools;
   wardId: string;
   rooms: Room[];
   defaultType: BedType;
+  codePrefix: string;
 }) {
   const { token } = useAdmin();
   const [code, setCode] = useState('');
@@ -692,7 +707,7 @@ function AddBedForm({
           value={code}
           required
           {...codeInput}
-          placeholder="GW-21"
+          placeholder={`${codePrefix}21`}
           onChange={(event) => setCode(event.target.value)}
         />
       </label>

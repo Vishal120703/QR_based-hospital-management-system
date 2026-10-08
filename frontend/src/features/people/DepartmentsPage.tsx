@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { staffApi, type Department } from '../../api';
-import { CreateForm, LoadState, PageHeading } from '../../components';
+import { CreateForm, LoadState, PageHeading, useConfirm } from '../../components';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
 
 export function DepartmentsPage() {
   const { token, reportError, reportSuccess, can } = useAdmin();
+  const confirm = useConfirm();
   const {
     data: departments,
     loading,
@@ -23,9 +24,9 @@ export function DepartmentsPage() {
     if (pending.current) return;
     if (
       department.active &&
-      !window.confirm(
+      !(await confirm(
         `Deactivate ${department.name}? Its services will be hidden from patients and its staff will not be eligible for that department.`,
-      )
+      ))
     )
       return;
     pending.current = true;

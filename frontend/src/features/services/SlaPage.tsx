@@ -7,7 +7,7 @@ import {
   type Role,
   type SlaPolicy,
 } from '../../api';
-import { CreateForm, ErrorNotice, LoadState, PageHeading } from '../../components';
+import { CreateForm, ErrorNotice, LoadState, PageHeading, useConfirm } from '../../components';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
 
@@ -46,6 +46,7 @@ function timings(accept: string | undefined, complete: string | undefined) {
 
 export function SlaPage() {
   const { token, reportError, reportSuccess, can } = useAdmin();
+  const confirm = useConfirm();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const pendingDelete = useRef(false);
   const canManage = can('sla.manage');
@@ -64,9 +65,9 @@ export function SlaPage() {
   async function removePolicy(policy: EscalationPolicy) {
     if (
       pendingDelete.current ||
-      !window.confirm(
+      !(await confirm(
         `Delete ${policy.name}? This cannot be undone. Policies used by services cannot be deleted.`,
-      )
+      ))
     )
       return;
     pendingDelete.current = true;
