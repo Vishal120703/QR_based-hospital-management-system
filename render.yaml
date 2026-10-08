@@ -28,6 +28,11 @@ services:
       # Optional: other web addresses allowed to call the API, comma-separated.
       - key: CORS_ORIGINS
         sync: false
+      # Requests reach the API through Cloudflare, Render's load balancer, and
+      # a local proxy, so rate limits must look three hops back for the
+      # visitor's own address.
+      - key: TRUST_PROXY
+        value: "3"
 
 databases:
   - name: careqr-db

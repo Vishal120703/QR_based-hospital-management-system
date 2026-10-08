@@ -50,6 +50,14 @@ describe('HTTP foundation', () => {
     expect(seen).toEqual(['203.0.113.7']);
   });
 
+  it('answers at the bare address, including a HEAD check', async () => {
+    const application = createApp({ logger });
+    const root = await request(application).get('/');
+    expect(root.status).toBe(200);
+    expect(root.body).toMatchObject({ service: 'CARE QR API', status: 'ok' });
+    expect((await request(application).head('/')).status).toBe(200);
+  });
+
   it('rejects unknown query input', async () => {
     const response = await request(createApp({ logger })).get('/health?hospitalId=forged');
 

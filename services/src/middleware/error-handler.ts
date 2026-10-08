@@ -26,7 +26,16 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, request, respo
   }
 
   if (error instanceof AppError) {
-    request.log.warn({ err: error, requestId }, 'Request failed');
+    // A 4xx is an expected answer (not found, not allowed, bad input), not a
+    // fault in the API: log it in one line, without a stack trace.
+    if (error.statusCode < 500) {
+      request.log.info(
+        { code: error.code, statusCode: error.statusCode, requestId },
+        error.message,
+      );
+    } else {
+      request.log.warn({ err: error, requestId }, 'Request failed');
+    }
     response.status(error.statusCode).json({
       error: {
         code: error.code,

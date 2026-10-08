@@ -12,6 +12,18 @@ const emptyQuerySchema = z.object({}).strict();
 export function createHealthRouter(readinessProbes: readonly ReadinessProbe[]): Router {
   const router = Router();
 
+  // The bare address answers too, so a person opening the API in a browser,
+  // or a host checking "/" before going live (Render does), sees it is up.
+  router.get('/', (request, response) => {
+    emptyQuerySchema.parse(request.query);
+    response.status(200).json({
+      service: 'CARE QR API',
+      status: 'ok',
+      health: '/health',
+      requestId: response.getHeader('x-request-id'),
+    });
+  });
+
   router.get('/health', (request, response) => {
     emptyQuerySchema.parse(request.query);
     response.status(200).json({

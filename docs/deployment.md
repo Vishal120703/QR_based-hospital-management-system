@@ -37,8 +37,9 @@ Create a PostgreSQL database in Render first, then set these on the web service 
 | `DATABASE_URL` | the database's **Internal Database URL** |
 | `PUBLIC_APP_URL` | your Vercel address, e.g. `https://care-qr.vercel.app` (no trailing slash) |
 | `CORS_ORIGINS` | optional: other web addresses allowed to call the API, comma-separated |
+| `TRUST_PROXY` | `3` (Cloudflare, Render's load balancer, and a local proxy sit in front of the API) |
 
-Do **not** set `HOST` or `PORT`; Render provides the port. `REDIS_URL` is optional (nothing needs Redis yet), and `TRUST_PROXY` defaults to `1` in production, which is right for Render.
+Do **not** set `HOST`, `PORT`, or `REDIS_URL`; Render provides the port, and nothing needs Redis yet. Without `TRUST_PROXY=3`, every visitor looks like Render's internal address, so sign-in and QR-scan rate limits would be shared by everyone.
 
 `npm run build` generates the database client and compiles the API. `npm run start:prod` applies any new database migrations, then starts the API, so the database is always up to date.
 
@@ -79,6 +80,7 @@ The demo and test seeds (`seed:demo`, `seed:test`) refuse to run against anythin
 
 | Check | Expected |
 |---|---|
+| `https://<api>.onrender.com/` | `{"service":"CARE QR API","status":"ok",...}` |
 | `https://<api>.onrender.com/health` | `{"status":"ok"}` |
 | `https://<api>.onrender.com/ready` | `"status":"ok"` with `postgresql` ok |
 | Render logs at start-up | `CARE QR API listening` with your `publicAppUrl` and `corsOrigins` |
@@ -97,6 +99,8 @@ The demo and test seeds (`seed:demo`, `seed:test`) refuse to run against anythin
 | Web app: "Cannot reach the hospital system" | `VITE_API_URL` is missing or wrong on Vercel (redeploy after fixing it), or the API is asleep (below). |
 | Browser console: blocked by CORS policy | `PUBLIC_APP_URL` on Render must match the web address exactly (`https`, no trailing slash). Add other addresses to `CORS_ORIGINS`. |
 | Refreshing `/admin/...` on Vercel shows 404 | `frontend/vercel.json` must be deployed (Root Directory `frontend`). |
+| Opening the API address shows `{"service":"CARE QR API","status":"ok",...}` | Expected: that is the API, not the web app. Open the Vercel address to use CARE QR. |
+| Many people get "Too many requests" at sign-in | Set `TRUST_PROXY=3` on Render so each visitor is counted separately. |
 | The first request takes about a minute | Render's free plan sleeps after 15 minutes without traffic. A paid instance stays awake. |
 | Free database stops working | Render's free PostgreSQL expires after a trial period; upgrade the database plan before going live. |
 

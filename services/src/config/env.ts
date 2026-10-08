@@ -37,9 +37,10 @@ const environmentSchema = z
     // Other web origins allowed to call the API, comma-separated (for example
     // a preview deployment). The PUBLIC_APP_URL origin is always allowed.
     CORS_ORIGINS: optional(z.string()),
-    // How many proxies sit in front of the API (Render has one), so rate
-    // limits see each visitor's own address. "0" when the API is reached
-    // directly. Defaults to 1 in production, 0 otherwise.
+    // How many proxies sit in front of the API, so rate limits see each
+    // visitor's own address: 3 on Render (Cloudflare, Render's load balancer,
+    // and a local proxy). "0" when the API is reached directly. Defaults to 1
+    // in production, 0 otherwise.
     TRUST_PROXY: optional(z.coerce.number().int().min(0).max(5)),
     GUEST_SESSION_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(120),
   })
