@@ -20,6 +20,10 @@ const AdminIndex = page(workspace, 'AdminIndex');
 const OverviewPage = page(() => import('./features/workspace/OverviewPage'), 'OverviewPage');
 const RequestsPage = page(() => import('./features/requests/RequestsPage'), 'RequestsPage');
 const ReportsPage = page(() => import('./features/reports/ReportsPage'), 'ReportsPage');
+const PersonReportPage = page(
+  () => import('./features/reports/PersonReportPage'),
+  'PersonReportPage',
+);
 const AuditLogPage = page(() => import('./features/reports/AuditLogPage'), 'AuditLogPage');
 const HospitalProfilePage = page(
   () => import('./features/hospital/HospitalProfilePage'),
@@ -87,6 +91,7 @@ root.render(
               <Route path="requests" element={<RequestsPage />} />
               <Route path="hospital" element={<HospitalProfilePage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="reports/people/:membershipId" element={<PersonReportPage />} />
               <Route path="audit" element={<AuditLogPage />} />
               <Route path="beds" element={<BedsPage />} />
               <Route path="locations" element={<LocationsPage />} />

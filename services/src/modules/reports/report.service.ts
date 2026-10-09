@@ -305,7 +305,7 @@ export class ReportService {
         (fact) => fact.serviceName,
         (fact) => fact.serviceName,
       ),
-      byStaff: staffPerformance(facts),
+      byStaff: staffPerformance(facts).rows,
       notCompleted: facts
         .filter(
           (fact) =>
@@ -360,6 +360,41 @@ export class ReportService {
     };
   }
 
+  // One person's work in the period: the same figures as their row in the
+  // hospital report, the hospital-wide averages to compare with, and every
+  // action they took or that was given to them, newest first.
+  public async personReport(
+    context: StaffContext,
+    membershipId: string,
+    range: ReportRange,
+    now = new Date(),
+  ) {
+    const { facts, truncated } = await this.requestFacts(context, range, now);
+    const performance = staffPerformance(facts);
+    let work = performance.rows.find((row) => row.membershipId === membershipId);
+    if (!work) {
+      // No work in this period: still a valid person of this hospital?
+      const [member] = await this.reports.findMemberNames(
+        this.database,
+        context.tenant.hospitalId,
+        [membershipId],
+      );
+      if (!member) throw new NotFoundError();
+      work = emptyWork(membershipId, member.user.displayName);
+    }
+    return {
+      range,
+      truncated,
+      person: { membershipId, name: work.name },
+      work,
+      hospital: performance.overall,
+      people: performance.rows
+        .map((row) => ({ membershipId: row.membershipId, name: row.name }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+      activity: personActivity(facts, membershipId),
+    };
+  }
+
   // One request's full history, if it is in the caller's report area.
   public async requestTimeline(context: StaffContext, id: string, now = new Date()) {
     const area = requestAreaWhere(context, 'analytics.read');
@@ -387,6 +422,7 @@ export class ReportService {
 
 // Per person: work assigned to them and what they did with it, plus the
 // assignments and closures they made as a manager. Counted by staff ID.
+// `overall` is the same measures across everyone, for comparison.
 function staffPerformance(facts: readonly RequestFacts[]) {
   interface Row {
     membershipId: string;
@@ -481,17 +517,158 @@ function staffPerformance(facts: readonly RequestFacts[]) {
       row(fact.assigneeId, fact.assigneeName).openNow += 1;
     }
   }
-  return [...rows.values()]
-    .map(({ acceptMinutes, workMinutes, rejectReasons, ...item }) => ({
-      ...item,
-      averageMinutesToAccept: average(acceptMinutes),
-      averageMinutesOfWork: average(workMinutes),
-      completedOnTimePercent: percent(item.completedOnTime, item.completed),
-      rejectReasons: [...new Set(rejectReasons)].slice(0, 5),
-    }))
-    .sort(
-      (left, right) =>
-        right.assigned + right.assignmentsMade - (left.assigned + left.assignmentsMade) ||
-        left.name.localeCompare(right.name),
-    );
+  const everyone = [...rows.values()];
+  const completedAll = everyone.reduce((sum, item) => sum + item.completed, 0);
+  const overall = {
+    averageMinutesToAccept: average(everyone.flatMap((item) => item.acceptMinutes)),
+    averageMinutesOfWork: average(everyone.flatMap((item) => item.workMinutes)),
+    completedOnTimePercent: percent(
+      everyone.reduce((sum, item) => sum + item.completedOnTime, 0),
+      completedAll,
+    ),
+  };
+  return {
+    overall,
+    rows: everyone
+      .map(({ acceptMinutes, workMinutes, rejectReasons, ...item }) => ({
+        ...item,
+        averageMinutesToAccept: average(acceptMinutes),
+        averageMinutesOfWork: average(workMinutes),
+        completedOnTimePercent: percent(item.completedOnTime, item.completed),
+        rejectReasons: [...new Set(rejectReasons)].slice(0, 5),
+      }))
+      .sort(
+        (left, right) =>
+          right.assigned + right.assignmentsMade - (left.assigned + left.assignmentsMade) ||
+          left.name.localeCompare(right.name),
+      ),
+  };
+}
+
+type StaffWork = ReturnType<typeof staffPerformance>['rows'][number];
+
+function emptyWork(membershipId: string, name: string): StaffWork {
+  return {
+    membershipId,
+    name,
+    assigned: 0,
+    accepted: 0,
+    completed: 0,
+    completedOnTime: 0,
+    rejected: 0,
+    transferredAway: 0,
+    openNow: 0,
+    assignmentsMade: 0,
+    closed: 0,
+    cancelled: 0,
+    averageMinutesToAccept: null,
+    averageMinutesOfWork: null,
+    completedOnTimePercent: null,
+    rejectReasons: [],
+  };
+}
+
+export type ActivityKind =
+  | 'assignedToThem'
+  | 'accepted'
+  | 'started'
+  | 'completed'
+  | 'rejected'
+  | 'handedOver'
+  | 'assignedOthers'
+  | 'closed'
+  | 'cancelled';
+
+// Everything one person did, or that was given to them, newest first: what,
+// when, on which request, with whom, how long it took, and whether on time.
+function personActivity(facts: readonly RequestFacts[], membershipId: string) {
+  const items: {
+    kind: ActivityKind;
+    at: Date;
+    requestId: string;
+    publicId: string;
+    serviceName: string;
+    location: string;
+    // The other person: who assigned it to them, or whom they gave it to.
+    otherName: string | null;
+    // Minutes from being assigned to accepting, or from accepting to completing.
+    minutes: number | null;
+    onTime: boolean | null;
+    reason: string | null;
+  }[] = [];
+
+  for (const fact of facts) {
+    let assignedAt: Date | null = null;
+    let acceptedAt: Date | null = null;
+    const add = (
+      kind: ActivityKind,
+      at: Date,
+      extra: Partial<Pick<(typeof items)[number], 'otherName' | 'minutes' | 'onTime' | 'reason'>>,
+    ) =>
+      items.push({
+        kind,
+        at,
+        requestId: fact.id,
+        publicId: fact.publicId,
+        serviceName: fact.serviceName,
+        location: fact.location,
+        otherName: extra.otherName ?? null,
+        minutes: extra.minutes ?? null,
+        onTime: extra.onTime ?? null,
+        reason: extra.reason ?? null,
+      });
+
+    for (const event of fact.events) {
+      const byThem = event.actor.membershipId === membershipId;
+      switch (event.type) {
+        case 'ASSIGNED':
+        case 'TRANSFERRED':
+          assignedAt = event.at;
+          acceptedAt = null;
+          if (event.assigneeId === membershipId) {
+            add('assignedToThem', event.at, { otherName: event.actor.name, reason: event.reason });
+          }
+          if (event.type === 'TRANSFERRED' && event.previousAssigneeId === membershipId) {
+            add('handedOver', event.at, { otherName: event.assigneeName, reason: event.reason });
+          }
+          if (byThem) {
+            add('assignedOthers', event.at, {
+              otherName: event.assigneeName,
+              reason: event.reason,
+            });
+          }
+          break;
+        case 'ACCEPTED':
+          acceptedAt = event.at;
+          if (byThem) {
+            add('accepted', event.at, {
+              minutes: assignedAt ? minutes(assignedAt, event.at) : null,
+              onTime: event.at <= fact.acceptDueAt,
+            });
+          }
+          break;
+        case 'STARTED':
+          if (byThem) add('started', event.at, {});
+          break;
+        case 'COMPLETED':
+          if (byThem) {
+            add('completed', event.at, {
+              minutes: acceptedAt ? minutes(acceptedAt, event.at) : null,
+              onTime: event.at <= fact.completeDueAt,
+            });
+          }
+          break;
+        case 'REJECTED':
+          if (byThem) add('rejected', event.at, { reason: event.reason });
+          break;
+        case 'CLOSED':
+          if (byThem) add('closed', event.at, {});
+          break;
+        case 'CANCELLED':
+          if (byThem) add('cancelled', event.at, { reason: event.reason });
+          break;
+      }
+    }
+  }
+  return items.sort((left, right) => right.at.getTime() - left.at.getTime());
 }

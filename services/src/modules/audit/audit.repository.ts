@@ -1,5 +1,8 @@
 import { type Prisma } from '@prisma/client';
 import { type Db } from '../../database/client.js';
+import { type NamedKind } from './audit-details.js';
+
+type NameRow = { id: string; name: string };
 
 // Audit entries, plus the names the log shows for people and things.
 export class AuditRepository {
@@ -22,113 +25,107 @@ export class AuditRepository {
     });
   }
 
-  public findMemberNames(db: Db, hospitalId: string, ids: readonly string[]) {
-    return db.hospitalMembership.findMany({
-      where: { hospitalId, id: { in: [...ids] } },
+  // Everyone on the staff who has made a recorded change in this hospital.
+  public async findActors(db: Db, hospitalId: string): Promise<NameRow[]> {
+    const rows = await db.auditLog.findMany({
+      where: { hospitalId, actorMembershipId: { not: null } },
+      distinct: ['actorMembershipId'],
+      select: { actorMembershipId: true },
+    });
+    const ids = rows.flatMap((row) => (row.actorMembershipId ? [row.actorMembershipId] : []));
+    const people = await db.hospitalMembership.findMany({
+      where: { hospitalId, id: { in: ids } },
       select: { id: true, user: { select: { displayName: true } } },
     });
+    return people
+      .map((person) => ({ id: person.id, name: person.user.displayName }))
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  public findUserNames(db: Db, ids: readonly string[]) {
-    return db.user.findMany({
-      where: { id: { in: [...ids] } },
-      select: { id: true, displayName: true },
-    });
-  }
-
-  // Plain names for the things audit entries point at, so the log reads
-  // "Role: Floor Manager" rather than an ID.
-  public async findTargetNames(
+  // Plain names for the people and things entries point at, keyed
+  // "kind:id", so the log reads "Role: Floor Manager" rather than an id.
+  // Only kinds that are asked for are queried.
+  public async findNames(
     db: Db,
     hospitalId: string,
-    entries: readonly { targetType: string; targetId: string }[],
+    wanted: ReadonlyMap<NamedKind, ReadonlySet<string>>,
   ): Promise<Map<string, string>> {
-    const ids = (type: string) => [
-      ...new Set(
-        entries.filter((entry) => entry.targetType === type).map((entry) => entry.targetId),
+    const lookup = async (kind: NamedKind, query: (ids: string[]) => Promise<NameRow[]>) => {
+      const ids = [...(wanted.get(kind) ?? [])];
+      if (ids.length === 0) return [];
+      return (await query(ids)).map((row) => [`${kind}:${row.id}`, row.name] as const);
+    };
+    const where = (ids: string[]) => ({ hospitalId, id: { in: ids } });
+    const byName = { id: true, name: true } as const;
+
+    const found = await Promise.all([
+      lookup('membership', async (ids) =>
+        (
+          await db.hospitalMembership.findMany({
+            where: where(ids),
+            select: { id: true, user: { select: { displayName: true } } },
+          })
+        ).map((row) => ({ id: row.id, name: row.user.displayName })),
       ),
-    ];
-    const named = (rows: { id: string; name: string }[]) =>
-      rows.map((row) => [row.id, row.name] as const);
-    const lookups = await Promise.all([
-      db.hospitalMembership
-        .findMany({
-          where: { hospitalId, id: { in: ids('HospitalMembership') } },
-          select: { id: true, user: { select: { displayName: true } } },
-        })
-        .then((rows) => rows.map((row) => [row.id, row.user.displayName] as const)),
-      db.role
-        .findMany({
-          where: { hospitalId, id: { in: ids('Role') } },
-          select: { id: true, name: true },
-        })
-        .then(named),
-      db.bed
-        .findMany({
-          where: { hospitalId, id: { in: ids('Bed') } },
-          select: { id: true, displayName: true },
-        })
-        .then((rows) => rows.map((row) => [row.id, row.displayName] as const)),
-      db.ward
-        .findMany({
-          where: { hospitalId, id: { in: ids('Ward') } },
-          select: { id: true, name: true },
-        })
-        .then(named),
-      db.floor
-        .findMany({
-          where: { hospitalId, id: { in: ids('Floor') } },
-          select: { id: true, name: true },
-        })
-        .then(named),
-      db.building
-        .findMany({
-          where: { hospitalId, id: { in: ids('Building') } },
-          select: { id: true, name: true },
-        })
-        .then(named),
-      db.room
-        .findMany({
-          where: { hospitalId, id: { in: ids('Room') } },
-          select: { id: true, name: true },
-        })
-        .then(named),
-      db.department
-        .findMany({
-          where: { hospitalId, id: { in: ids('Department') } },
-          select: { id: true, name: true },
-        })
-        .then(named),
-      db.serviceItem
-        .findMany({
-          where: { hospitalId, id: { in: ids('ServiceItem') } },
-          select: { id: true, name: true },
-        })
-        .then(named),
-      db.serviceRequest
-        .findMany({
-          where: { hospitalId, id: { in: ids('ServiceRequest') } },
-          select: { id: true, publicId: true, serviceName: true },
-        })
-        .then((rows) =>
-          rows.map((row) => [row.id, `${row.serviceName} (${row.publicId})`] as const),
+      // Super admins are global users, not hospital members.
+      lookup('user', async (ids) =>
+        (
+          await db.user.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, displayName: true },
+          })
+        ).map((row) => ({ id: row.id, name: row.displayName })),
+      ),
+      lookup('role', (ids) => db.role.findMany({ where: where(ids), select: byName })),
+      lookup('department', (ids) => db.department.findMany({ where: where(ids), select: byName })),
+      lookup('building', (ids) => db.building.findMany({ where: where(ids), select: byName })),
+      lookup('floor', (ids) => db.floor.findMany({ where: where(ids), select: byName })),
+      lookup('ward', (ids) => db.ward.findMany({ where: where(ids), select: byName })),
+      lookup('room', (ids) => db.room.findMany({ where: where(ids), select: byName })),
+      lookup('bed', async (ids) =>
+        (await db.bed.findMany({ where: where(ids), select: { id: true, displayName: true } })).map(
+          (row) => ({ id: row.id, name: row.displayName }),
         ),
-      db.bedSession
-        .findMany({
-          where: { hospitalId, id: { in: ids('BedSession') } },
-          select: { id: true, bed: { select: { displayName: true } } },
-        })
-        .then((rows) => rows.map((row) => [row.id, row.bed.displayName] as const)),
-      db.bedQrCode
-        .findMany({
-          where: { hospitalId, id: { in: ids('BedQrCode') } },
-          select: { id: true, bed: { select: { displayName: true } } },
-        })
-        .then((rows) => rows.map((row) => [row.id, row.bed.displayName] as const)),
-      db.hospital
-        .findMany({ where: { id: { in: ids('Hospital') } }, select: { id: true, name: true } })
-        .then(named),
+      ),
+      lookup('category', (ids) =>
+        db.serviceCategory.findMany({ where: where(ids), select: byName }),
+      ),
+      lookup('service', (ids) => db.serviceItem.findMany({ where: where(ids), select: byName })),
+      lookup('sla', (ids) => db.slaPolicy.findMany({ where: where(ids), select: byName })),
+      lookup('escalation', (ids) =>
+        db.escalationPolicy.findMany({ where: where(ids), select: byName }),
+      ),
+      lookup('request', async (ids) =>
+        (
+          await db.serviceRequest.findMany({
+            where: where(ids),
+            select: { id: true, publicId: true, serviceName: true },
+          })
+        ).map((row) => ({ id: row.id, name: `${row.serviceName} (${row.publicId})` })),
+      ),
+      lookup('bedSession', async (ids) =>
+        (
+          await db.bedSession.findMany({
+            where: where(ids),
+            select: { id: true, bed: { select: { displayName: true } } },
+          })
+        ).map((row) => ({ id: row.id, name: row.bed.displayName })),
+      ),
+      lookup('qr', async (ids) =>
+        (
+          await db.bedQrCode.findMany({
+            where: where(ids),
+            select: { id: true, bed: { select: { displayName: true } } },
+          })
+        ).map((row) => ({ id: row.id, name: row.bed.displayName })),
+      ),
+      lookup('hospital', (ids) =>
+        db.hospital.findMany({
+          where: { id: { in: ids.filter((id) => id === hospitalId) } },
+          select: byName,
+        }),
+      ),
     ]);
-    return new Map(lookups.flat());
+    return new Map(found.flat());
   }
 }

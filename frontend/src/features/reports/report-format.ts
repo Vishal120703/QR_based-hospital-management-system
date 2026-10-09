@@ -1,4 +1,12 @@
-import type { ReportOutcome, RequestLogRow } from '../../api';
+import type {
+  ActivityKind,
+  AuditEntry,
+  PersonActivity,
+  PersonReport,
+  ReportOutcome,
+  RequestLogRow,
+  RequestReport,
+} from '../../api';
 
 export function formatMinutes(value: number | null): string {
   if (value === null) return '—';
@@ -167,6 +175,340 @@ export function requestLogCsv(rows: readonly RequestLogRow[]): string {
       row.endReason,
       row.minutesToAccept,
       row.minutesToComplete,
+    ]),
+  ]);
+}
+
+// The audit entries shown, one row per change, for a spreadsheet.
+export function auditCsv(entries: readonly AuditEntry[]): string {
+  return toCsv([
+    ['When', 'Who', 'What happened', 'Item', 'What changed', 'Details'],
+    ...entries.map((entry) => [
+      formatWhen(entry.createdAt),
+      entry.actorName,
+      actionLabel(entry.action),
+      entry.targetName,
+      entry.changes.map((item) => `${item.field}: ${item.before} → ${item.after}`).join('; '),
+      entry.details.map((item) => `${item.label}: ${item.value}`).join('; '),
+    ]),
+  ]);
+}
+
+// "to" is exclusive (the next midnight, or now): the last day it covers.
+const lastDay = (range: { to: string }) => new Date(new Date(range.to).getTime() - 1).toISOString();
+
+// File name for a report download, using the period's local dates.
+export function reportFileName(kind: string, range: { from: string; to: string }): string {
+  return `care-qr-${kind}-${fileDate(range.from)}-to-${fileDate(lastDay(range))}.csv`;
+}
+
+const dayOf = (value: string) =>
+  new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
+
+// A local calendar date for file names: 2026-10-09 (not the UTC date).
+export function fileDate(value: string | Date): string {
+  const date = new Date(value);
+  const pad = (number: number) => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// The report's period in words. "to" is exclusive (the next midnight, or now).
+export function periodLabel(range: { from: string; to: string }): string {
+  return `${dayOf(range.from)} – ${dayOf(lastDay(range))}`;
+}
+
+// Spreadsheet cells: minutes and percentages as plain numbers, so Excel can
+// sort, total, and chart them; the unit is in the column heading.
+const minutesCell = (value: number | null) => (value === null ? null : Math.round(value));
+const percentCell = (value: number | null) => value;
+
+// The whole report in one spreadsheet: totals, staff work, departments,
+// services, and the requests that were not completed.
+export function reportCsv(report: RequestReport, hospitalName: string): string {
+  const { summary } = report;
+  const group = (rows: RequestReport['byService']) => [
+    [
+      'Name',
+      'Total',
+      'Completed',
+      'Completed (%)',
+      'Open',
+      'Cancelled',
+      'Turned down',
+      'Overdue',
+      'Average time to complete (minutes)',
+    ],
+    ...rows.map((row) => [
+      row.name,
+      row.total,
+      row.completed,
+      row.total ? Math.round((row.completed / row.total) * 1000) / 10 : null,
+      row.open,
+      row.cancelled,
+      row.rejected,
+      row.overdue,
+      minutesCell(row.averageMinutesToComplete),
+    ]),
+  ];
+  return toCsv([
+    ['CARE QR request report'],
+    ['Hospital', hospitalName],
+    ['Period', periodLabel(report.range)],
+    ['Downloaded', formatWhen(new Date().toISOString())],
+    [],
+    ['Summary'],
+    ['Requests', summary.total],
+    ['Completed', summary.completed],
+    ['Still open', summary.open],
+    ['Overdue now', summary.overdueOpen],
+    ['Cancelled', summary.cancelled],
+    ['Cancelled by the patient', summary.cancelledByPatient],
+    ['Turned down', summary.rejected],
+    ['Accepted on time (%)', percentCell(summary.acceptedOnTimePercent)],
+    ['Completed on time (%)', percentCell(summary.completedOnTimePercent)],
+    ['Average time to accept (minutes)', minutesCell(summary.averageMinutesToAccept)],
+    ['Average time to complete (minutes)', minutesCell(summary.averageMinutesToComplete)],
+    [],
+    ['Staff work'],
+    [
+      'Person',
+      'Assigned',
+      'Accepted',
+      'Completed',
+      'Completed on time (%)',
+      'Turned down',
+      'Handed over',
+      'Open now',
+      'Average time to accept (minutes)',
+      'Average work time (minutes)',
+      'Assigned to others',
+      'Closed',
+      'Reasons for turning down',
+    ],
+    ...report.byStaff.map((person) => [
+      person.name,
+      person.assigned,
+      person.accepted,
+      person.completed,
+      percentCell(person.completedOnTimePercent),
+      person.rejected,
+      person.transferredAway,
+      person.openNow,
+      minutesCell(person.averageMinutesToAccept),
+      minutesCell(person.averageMinutesOfWork),
+      person.assignmentsMade,
+      person.closed,
+      person.rejectReasons.join('; '),
+    ]),
+    [],
+    ['By department'],
+    ...group(report.byDepartment),
+    [],
+    ['By service'],
+    ...group(report.byService),
+    [],
+    ['Not completed'],
+    [
+      'Reference',
+      'Service',
+      'Where',
+      'Result',
+      'Sent',
+      'With / ended by',
+      'Reason',
+      'Overdue by (minutes)',
+    ],
+    ...report.notCompleted.map((item) => [
+      item.publicId,
+      item.serviceName,
+      item.location,
+      outcomeLabels[item.outcome],
+      formatWhen(item.submittedAt),
+      item.endedBy ?? item.assigneeName,
+      item.reason,
+      minutesCell(item.overdueMinutes),
+    ]),
+  ]);
+}
+
+export const activityLabels: Record<ActivityKind, string> = {
+  assignedToThem: 'Assigned to them',
+  accepted: 'Accepted',
+  started: 'Started work',
+  completed: 'Completed',
+  rejected: 'Turned down',
+  handedOver: 'Handed over',
+  assignedOthers: 'Assigned to someone',
+  closed: 'Closed',
+  cancelled: 'Cancelled',
+};
+
+// One line about an action: with whom, how long it took, on time, and why.
+export function activityDetail(item: PersonActivity): string {
+  const parts: string[] = [];
+  if (item.kind === 'assignedToThem' && item.otherName) parts.push(`by ${item.otherName}`);
+  if ((item.kind === 'handedOver' || item.kind === 'assignedOthers') && item.otherName) {
+    parts.push(`to ${item.otherName}`);
+  }
+  if (item.minutes !== null) {
+    parts.push(
+      item.kind === 'accepted'
+        ? `${formatMinutes(item.minutes)} after being assigned`
+        : `work took ${formatMinutes(item.minutes)}`,
+    );
+  }
+  if (item.onTime !== null) parts.push(item.onTime ? 'on time' : 'late');
+  if (item.reason) parts.push(`reason: ${item.reason}`);
+  return parts.join(' · ');
+}
+
+export interface ServiceWork {
+  name: string;
+  accepted: number;
+  completed: number;
+  onTime: number;
+  rejected: number;
+  averageWorkMinutes: number | null;
+}
+export interface DayWork {
+  // Local day, for sorting: 2026-10-09.
+  date: string;
+  label: string;
+  accepted: number;
+  completed: number;
+  rejected: number;
+}
+
+// A person's work per service and per day, from their actions.
+export function personBreakdown(activity: readonly PersonActivity[]): {
+  byService: ServiceWork[];
+  byDay: DayWork[];
+} {
+  const services = new Map<string, ServiceWork & { minutes: number[] }>();
+  const days = new Map<string, DayWork>();
+  for (const item of activity) {
+    if (item.kind !== 'accepted' && item.kind !== 'completed' && item.kind !== 'rejected') continue;
+    const service = services.get(item.serviceName) ?? {
+      name: item.serviceName,
+      accepted: 0,
+      completed: 0,
+      onTime: 0,
+      rejected: 0,
+      averageWorkMinutes: null,
+      minutes: [],
+    };
+    const date = fileDate(item.at);
+    const day = days.get(date) ?? {
+      date,
+      label: new Date(item.at).toLocaleDateString(undefined, {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      }),
+      accepted: 0,
+      completed: 0,
+      rejected: 0,
+    };
+    if (item.kind === 'accepted') {
+      service.accepted += 1;
+      day.accepted += 1;
+    } else if (item.kind === 'completed') {
+      service.completed += 1;
+      day.completed += 1;
+      if (item.onTime) service.onTime += 1;
+      if (item.minutes !== null) service.minutes.push(item.minutes);
+    } else {
+      service.rejected += 1;
+      day.rejected += 1;
+    }
+    services.set(item.serviceName, service);
+    days.set(date, day);
+  }
+  return {
+    byService: [...services.values()]
+      .map(({ minutes, ...service }) => ({
+        ...service,
+        averageWorkMinutes: minutes.length
+          ? Math.round((minutes.reduce((sum, value) => sum + value, 0) / minutes.length) * 10) / 10
+          : null,
+      }))
+      .sort(
+        (left, right) => right.completed - left.completed || left.name.localeCompare(right.name),
+      ),
+    byDay: [...days.values()].sort((left, right) => right.date.localeCompare(left.date)),
+  };
+}
+
+// One person's report in one spreadsheet.
+export function personCsv(report: PersonReport, hospitalName: string): string {
+  const { work, hospital } = report;
+  const { byService, byDay } = personBreakdown(report.activity);
+  return toCsv([
+    ['CARE QR staff work report'],
+    ['Person', report.person.name],
+    ['Hospital', hospitalName],
+    ['Period', periodLabel(report.range)],
+    ['Downloaded', formatWhen(new Date().toISOString())],
+    [],
+    ['Summary', 'This person', 'Whole hospital'],
+    ['Assigned to them', work.assigned, null],
+    ['Accepted', work.accepted, null],
+    ['Completed', work.completed, null],
+    [
+      'Completed on time (%)',
+      percentCell(work.completedOnTimePercent),
+      percentCell(hospital.completedOnTimePercent),
+    ],
+    [
+      'Average time to accept (minutes)',
+      minutesCell(work.averageMinutesToAccept),
+      minutesCell(hospital.averageMinutesToAccept),
+    ],
+    [
+      'Average work time (minutes)',
+      minutesCell(work.averageMinutesOfWork),
+      minutesCell(hospital.averageMinutesOfWork),
+    ],
+    ['Turned down', work.rejected, null],
+    ['Handed over to others', work.transferredAway, null],
+    ['Open now', work.openNow, null],
+    ['Assigned to others (as a manager)', work.assignmentsMade, null],
+    ['Closed (as a manager)', work.closed, null],
+    [],
+    ['By service'],
+    [
+      'Service',
+      'Accepted',
+      'Completed',
+      'Completed on time',
+      'Turned down',
+      'Average work time (minutes)',
+    ],
+    ...byService.map((item) => [
+      item.name,
+      item.accepted,
+      item.completed,
+      item.onTime,
+      item.rejected,
+      minutesCell(item.averageWorkMinutes),
+    ]),
+    [],
+    ['Day by day'],
+    ['Date', 'Accepted', 'Completed', 'Turned down'],
+    ...byDay.map((item) => [item.date, item.accepted, item.completed, item.rejected]),
+    [],
+    ['Every action'],
+    ['When', 'What', 'Request', 'Service', 'Where', 'With', 'Minutes', 'On time', 'Reason'],
+    ...report.activity.map((item) => [
+      formatWhen(item.at),
+      activityLabels[item.kind],
+      item.publicId,
+      item.serviceName,
+      item.location,
+      item.otherName,
+      item.minutes,
+      item.onTime === null ? null : item.onTime ? 'yes' : 'no',
+      item.reason,
     ]),
   ]);
 }

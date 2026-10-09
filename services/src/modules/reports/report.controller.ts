@@ -23,6 +23,14 @@ export class ReportController {
       );
   };
 
+  public readonly person: RequestHandler = async (request, response) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const query = reportQuerySchema.parse(request.query);
+    response
+      .status(200)
+      .json(await this.reports.personReport(getStaffContext(request), id, reportRange(query)));
+  };
+
   public readonly timeline: RequestHandler = async (request, response) => {
     const { id } = idParamsSchema.parse(request.params);
     emptySchema.parse(request.query);

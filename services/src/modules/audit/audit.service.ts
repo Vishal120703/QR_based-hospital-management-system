@@ -1,5 +1,6 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { type StaffContext } from '../auth/index.js';
+import { describeAuditEntry, type NamedKind, referencesIn, targetKinds } from './audit-details.js';
 import { AuditRepository } from './audit.repository.js';
 
 const repository = new AuditRepository();
@@ -75,7 +76,10 @@ export interface AuditFilter {
   readonly to?: Date | undefined;
   // An action family such as "staff", "role", "request", or "qr".
   readonly category?: string | undefined;
+  // Changes made by one person (who).
   readonly membershipId?: string | undefined;
+  // Everything that happened to one item (what).
+  readonly targetId?: string | undefined;
   readonly before?: string | undefined;
   readonly limit: number;
 }
@@ -96,7 +100,8 @@ function nameFromMetadata(metadata: Prisma.JsonValue): string | null {
   return null;
 }
 
-// The hospital's audit log in plain words: who did what, to what, and when.
+// The hospital's audit log in plain words: who did what, to what, and when,
+// with the fields that changed (before → after) and names instead of ids.
 export class AuditService {
   public constructor(
     private readonly database: PrismaClient,
@@ -104,6 +109,7 @@ export class AuditService {
   ) {}
 
   // Newest first. Pass the last entry's id as `before` for the next page.
+  // The first page also lists everyone who has made changes, for filtering.
   public async list(context: StaffContext, filter: AuditFilter) {
     const hospitalId = context.tenant.hospitalId;
     const where: Prisma.AuditLogWhereInput = {
@@ -118,40 +124,56 @@ export class AuditService {
         : {}),
       ...(filter.category ? { action: { startsWith: `${filter.category}.` } } : {}),
       ...(filter.membershipId ? { actorMembershipId: filter.membershipId } : {}),
+      ...(filter.targetId ? { targetId: filter.targetId } : {}),
     };
     const rows = await this.audit.findPage(this.database, where, filter.limit + 1, filter.before);
     const page = rows.slice(0, filter.limit);
 
-    const memberIds = [
-      ...new Set(page.flatMap((row) => (row.actorMembershipId ? [row.actorMembershipId] : []))),
-    ];
-    const platformIds = [
-      ...new Set(page.flatMap((row) => (row.actorPlatformUserId ? [row.actorPlatformUserId] : []))),
-    ];
-    const [members, operators, targets] = await Promise.all([
-      this.audit.findMemberNames(this.database, hospitalId, memberIds),
-      this.audit.findUserNames(this.database, platformIds),
-      this.audit.findTargetNames(this.database, hospitalId, page),
+    // Every person and thing the page mentions, looked up in one go.
+    const wanted = new Map<NamedKind, Set<string>>();
+    const want = (kind: NamedKind | undefined, id: string | null) => {
+      if (!kind || !id) return;
+      const ids = wanted.get(kind) ?? new Set<string>();
+      ids.add(id);
+      wanted.set(kind, ids);
+    };
+    for (const row of page) {
+      want('membership', row.actorMembershipId);
+      want('user', row.actorPlatformUserId);
+      want(targetKinds[row.targetType], row.targetId);
+      for (const reference of referencesIn(row.metadata)) want(reference.kind, reference.id);
+    }
+    const [names, people] = await Promise.all([
+      this.audit.findNames(this.database, hospitalId, wanted),
+      filter.before ? Promise.resolve(undefined) : this.audit.findActors(this.database, hospitalId),
     ]);
+    const nameOf = (kind: NamedKind, id: string) => names.get(`${kind}:${id}`) ?? null;
+
     return {
-      entries: page.map((row) => ({
-        id: row.id,
-        createdAt: row.createdAt,
-        action: row.action,
-        actorType: row.actorType,
-        actorName:
-          row.actorType === 'SYSTEM'
-            ? 'System'
-            : row.actorType === 'PLATFORM'
-              ? `${operators.find((user) => user.id === row.actorPlatformUserId)?.displayName ?? 'Platform admin'} (CARE QR platform)`
-              : (members.find((member) => member.id === row.actorMembershipId)?.user.displayName ??
-                'Former staff'),
-        targetType: row.targetType,
-        targetId: row.targetId,
-        targetName: targets.get(row.targetId) ?? nameFromMetadata(row.metadata),
-        metadata: row.metadata,
-      })),
+      entries: page.map((row) => {
+        const kind = targetKinds[row.targetType];
+        return {
+          id: row.id,
+          createdAt: row.createdAt,
+          action: row.action,
+          actorType: row.actorType,
+          // Set for staff, so the log can show everything one person changed.
+          actorId: row.actorMembershipId,
+          actorName:
+            row.actorType === 'SYSTEM'
+              ? 'System'
+              : row.actorType === 'PLATFORM'
+                ? `${(row.actorPlatformUserId && nameOf('user', row.actorPlatformUserId)) || 'Platform admin'} (CARE QR platform)`
+                : (row.actorMembershipId && nameOf('membership', row.actorMembershipId)) ||
+                  'Former staff',
+          targetType: row.targetType,
+          targetId: row.targetId,
+          targetName: (kind && nameOf(kind, row.targetId)) ?? nameFromMetadata(row.metadata),
+          ...describeAuditEntry(row.action, row.metadata, nameOf),
+        };
+      }),
       nextBefore: rows.length > filter.limit ? (page.at(-1)?.id ?? null) : null,
+      ...(people ? { people } : {}),
     };
   }
 }

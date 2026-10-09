@@ -232,7 +232,13 @@ export function AdminLayout() {
     refreshMe: () => setVersion((value) => value + 1),
   };
   const available = adminPages.filter((page) => pageAllowed(page, { can, canAnywhere }));
-  const current = adminPages.find((page) => location.pathname === `/admin/${page.path}`);
+  // A page's own sub-pages (such as one person's report) count as that page,
+  // for the title and for the permission check.
+  const current = adminPages.find(
+    (page) =>
+      location.pathname === `/admin/${page.path}` ||
+      location.pathname.startsWith(`/admin/${page.path}/`),
+  );
   const allowed = !current || pageAllowed(current, { can, canAnywhere });
 
   return (

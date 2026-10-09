@@ -107,16 +107,65 @@ export interface RequestTimeline extends RequestLogRow {
     previousAssigneeName: string | null;
   }[];
 }
+export type ActivityKind =
+  | 'assignedToThem'
+  | 'accepted'
+  | 'started'
+  | 'completed'
+  | 'rejected'
+  | 'handedOver'
+  | 'assignedOthers'
+  | 'closed'
+  | 'cancelled';
+export interface PersonActivity {
+  kind: ActivityKind;
+  at: string;
+  requestId: string;
+  publicId: string;
+  serviceName: string;
+  location: string;
+  // Who assigned it to them, or whom they gave it to.
+  otherName: string | null;
+  // Minutes from being assigned to accepting, or from accepting to completing.
+  minutes: number | null;
+  onTime: boolean | null;
+  reason: string | null;
+}
+// One person's work in a period, with the hospital-wide figures to compare.
+export interface PersonReport {
+  range: { from: string; to: string };
+  truncated: boolean;
+  person: { membershipId: string; name: string };
+  work: StaffWork;
+  hospital: {
+    averageMinutesToAccept: number | null;
+    averageMinutesOfWork: number | null;
+    completedOnTimePercent: number | null;
+  };
+  people: { membershipId: string; name: string }[];
+  activity: PersonActivity[];
+}
 export interface AuditEntry {
   id: string;
   createdAt: string;
   action: string;
   actorType: 'SYSTEM' | 'STAFF' | 'PLATFORM';
+  // The staff member who made the change (null for the system or platform).
+  actorId: string | null;
   actorName: string;
   targetType: string;
   targetId: string;
   targetName: string | null;
-  metadata: unknown;
+  // Facts recorded with the change, with names instead of ids.
+  details: { label: string; value: string }[];
+  // Fields that changed.
+  changes: { field: string; before: string; after: string }[];
+}
+export interface AuditPage {
+  entries: AuditEntry[];
+  nextBefore: string | null;
+  // Everyone who has made changes (first page only), for the "Who" filter.
+  people?: { id: string; name: string }[];
 }
 
 function query(params: Record<string, string | undefined>): string {
@@ -145,6 +194,8 @@ export const reportApi = {
       `/admin/reports/requests/log${query(params)}`,
       token,
     ),
+  person: (token: string, membershipId: string, range: { from: string; to: string }) =>
+    call<PersonReport>('GET', `/admin/reports/people/${membershipId}${query(range)}`, token),
   timeline: async (token: string, id: string) =>
     (await call<{ request: RequestTimeline }>('GET', `/admin/reports/requests/${id}`, token))
       .request,
@@ -154,13 +205,10 @@ export const reportApi = {
       from?: string | undefined;
       to?: string | undefined;
       category?: string | undefined;
+      membershipId?: string | undefined;
+      targetId?: string | undefined;
       before?: string | undefined;
       limit?: string | undefined;
     },
-  ) =>
-    call<{ entries: AuditEntry[]; nextBefore: string | null }>(
-      'GET',
-      `/admin/audit-log${query(params)}`,
-      token,
-    ),
+  ) => call<AuditPage>('GET', `/admin/audit-log${query(params)}`, token),
 };

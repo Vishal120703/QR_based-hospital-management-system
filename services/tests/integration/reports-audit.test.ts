@@ -262,6 +262,89 @@ describe('Request reports and audit', () => {
     expect(why[requests.overdue!.publicId]).toMatchObject({ outcome: 'overdue' });
   });
 
+  it('builds one person’s report from their own actions', async () => {
+    const personSchema = z
+      .object({
+        person: z.object({ membershipId: uuid, name: z.string() }),
+        work: z.object({ membershipId: uuid }).passthrough(),
+        hospital: z.object({
+          averageMinutesToAccept: z.number().nullable(),
+          averageMinutesOfWork: z.number().nullable(),
+          completedOnTimePercent: z.number().nullable(),
+        }),
+        people: z.array(z.object({ membershipId: uuid, name: z.string() })),
+        activity: z.array(
+          z
+            .object({
+              kind: z.string(),
+              publicId: z.string(),
+              otherName: z.string().nullable(),
+              reason: z.string().nullable(),
+            })
+            .passthrough(),
+        ),
+      })
+      .passthrough();
+    const personReport = async (id: string, query = '') => {
+      const response = await admin().get(`/admin/reports/people/${id}${query}`);
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      return personSchema.parse(response.body);
+    };
+    const kinds = (report: z.infer<typeof personSchema>) =>
+      report.activity.map((item) => item.kind).sort();
+    const hospitalReport = reportSchema.parse((await admin().get('/admin/reports/requests')).body);
+    const row = (name: string) => hospitalReport.byStaff.find((item) => item.name === name);
+
+    // Their figures are the same as their row in the hospital report.
+    const pavan = await personReport(people.Pavan!.id);
+    expect(pavan.person).toEqual({ membershipId: people.Pavan!.id, name: 'Pavan' });
+    expect(pavan.work).toEqual(row('Pavan'));
+    expect(kinds(pavan)).toEqual(
+      ['accepted', 'assignedToThem', 'assignedToThem', 'completed', 'rejected', 'started'].sort(),
+    );
+    expect(pavan.activity.find((item) => item.kind === 'rejected')).toMatchObject({
+      publicId: requests.rejected!.publicId,
+      reason: 'Out of stock',
+    });
+    expect(pavan.activity.find((item) => item.kind === 'assignedToThem')?.otherName).toBe(
+      'AUDIT Admin',
+    );
+    expect(pavan.people.map((item) => item.name)).toEqual(
+      expect.arrayContaining(['AUDIT Admin', 'Neel', 'Nisha', 'Pavan']),
+    );
+
+    // Work handed to someone else, and a manager's assigning and closing.
+    const nisha = await personReport(people.Nisha!.id);
+    expect(kinds(nisha)).toEqual(['accepted', 'assignedToThem', 'handedOver']);
+    expect(nisha.activity.find((item) => item.kind === 'handedOver')).toMatchObject({
+      otherName: 'Neel',
+      reason: 'Shift change',
+    });
+    const adminId = row('AUDIT Admin')!.membershipId;
+    const manager = await personReport(adminId);
+    expect(manager.activity.filter((item) => item.kind === 'assignedOthers')).toHaveLength(4);
+    expect(manager.activity.filter((item) => item.kind === 'closed')).toHaveLength(1);
+
+    // A period with no work still names the person.
+    const quiet = await personReport(people.Pavan!.id, '?from=2020-01-01&to=2020-01-02');
+    expect(quiet.person.name).toBe('Pavan');
+    expect(quiet.work).toMatchObject({ assigned: 0, completed: 0 });
+    expect(quiet.activity).toEqual([]);
+
+    // Nobody here by that id, or someone from another hospital.
+    expect((await admin().get(`/admin/reports/people/${randomUUID()}`)).status).toBe(404);
+    const other = await createHospitalFixture(database, application, 'AUDIT-OTHER');
+    const outsider = await database.hospitalMembership.findFirstOrThrow({
+      where: { hospitalId: other.hospitalId },
+    });
+    expect((await admin().get(`/admin/reports/people/${outsider.id}`)).status).toBe(404);
+    expect((await admin().get('/admin/reports/people/not-an-id')).status).toBe(400);
+    // Care staff cannot open anyone's report, not even their own.
+    expect(
+      (await as(people.Pavan!.token).get(`/admin/reports/people/${people.Pavan!.id}`)).status,
+    ).toBe(403);
+  });
+
   it('lists and filters the request log and shows one request’s full history', async () => {
     const log = (query: string) =>
       admin()
@@ -377,6 +460,54 @@ describe('Request reports and audit', () => {
       .parse(staffEntries.body)
       .entries.map((entry) => entry.targetName);
     expect(names).toContain('Pavan');
+
+    // Names instead of ids, what changed, and who has made changes.
+    const assigned = await admin().get('/admin/audit-log?category=request&limit=50');
+    const readable = z
+      .object({
+        people: z.array(z.object({ id: uuid, name: z.string() })),
+        entries: z.array(
+          z
+            .object({
+              action: z.string(),
+              actorId: uuid.nullable(),
+              targetId: uuid,
+              details: z.array(z.object({ label: z.string(), value: z.string() })),
+              changes: z.array(
+                z.object({ field: z.string(), before: z.string(), after: z.string() }),
+              ),
+            })
+            .passthrough(),
+        ),
+      })
+      .parse(assigned.body);
+    expect(readable.people.map((person) => person.name)).toContain('AUDIT Admin');
+    const assignment = readable.entries.find((entry) => entry.action === 'request.assign')!;
+    expect(assignment.details.find((item) => item.label === 'Assigned to')?.value).toMatch(/\w/);
+    expect(JSON.stringify(assignment.details)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
+    expect(assignment.changes).toContainEqual({
+      field: 'Status',
+      before: 'submitted',
+      after: 'assigned',
+    });
+
+    // Everything one person did, and everything that happened to one item.
+    const byAdmin = await admin().get(
+      `/admin/audit-log?membershipId=${assignment.actorId}&limit=200`,
+    );
+    const adminActors = z
+      .object({ entries: z.array(z.object({ actorId: uuid.nullable() })) })
+      .parse(byAdmin.body)
+      .entries.map((entry) => entry.actorId);
+    expect(adminActors.length).toBeGreaterThan(0);
+    expect(new Set(adminActors)).toEqual(new Set([assignment.actorId]));
+    const history = await admin().get(`/admin/audit-log?targetId=${assignment.targetId}`);
+    const targets = z
+      .object({ entries: z.array(z.object({ targetId: uuid })) })
+      .parse(history.body)
+      .entries.map((entry) => entry.targetId);
+    expect(new Set(targets)).toEqual(new Set([assignment.targetId]));
+
     expect(
       (await admin().get('/admin/reports/requests?from=2026-12-01&to=2026-01-01')).status,
     ).toBe(400);

@@ -267,7 +267,8 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 | H12 | Open **Service catalog**. | 10 services in 6 groups. **Newspaper** is inactive. Nurse Assistance shows the "Nursing overdue" escalation policy (alerts are configured but do not fire yet). |
 | H13 | Open **Response targets (SLA)**. Change **Within 30 minutes** to 10 / 40 and save. | A new version **v2** is added; v1 stays in history. Old requests keep their old target. |
 | H14 | Open **Requests**. | **Open** has 11 requests, the most urgent first, with red "overdue by …" where late. **Ready to close** has 3, **History** about 96. Accepted and in-progress cards show **Hand over…**. |
-| H15 | Open **Audit log**. Choose **Request handling**, then **Staff**, then **Load older changes**. | Plain sentences with who and when, for example "Handed a request to someone else" with its reason, "Changed staff status" for Karan (active → suspended), and "Changed duty (on/off)" for Rahul. The oldest entries are the hospital setup about 20 days earlier. |
+| H15 | Open **Audit log**. Set **What** to **Request handling**, then **Staff**, then **Load older changes**. | Changes grouped by day, each with who, what, and the item, for example "Handed a request to someone else" showing **Assigned to: Pavan → Neha** and the reason, "Changed staff status" for Karan (**Status: active → suspended**), and "Changed duty (on/off)" for Rahul. The oldest entries are the hospital setup about 20 days earlier. |
+| H15b | In the audit log click a person's name (for example **Arjun Mehta**), then an item name (for example **Karan Malhotra**). Then **Clear filters**. | First only Arjun's changes ("Changes by Arjun Mehta" chip), then only what happened to Karan ("History of Karan Malhotra"); the **Who** filter does the same. **Download CSV** saves the changes shown. |
 | H16 | Open **Profile & logo**. Upload a different PNG logo and save. | The new logo shows in the top bar straight away and on the patient page (PT01). |
 | H17 | Sign out and sign in with the branch hospital and manager you created in P04. | The new hospital is empty apart from its starter departments and services. None of CityCare's people or beds appear. |
 
@@ -359,12 +360,17 @@ The numbers below are what the data had when loaded, for **Last 30 days**. Your 
 |---|---|---|
 | R01 | **Reports** → **Last 30 days**. | About **110** requests, **85** completed, **11** still open, **10** cancelled (**7** by the patient), **4** turned down, and on-time percentages of about 85–90%. "Overdue now" grows as time passes. |
 | R02 | **Staff work** tab. | 18 rows. Care staff show assigned, accepted, completed, on time, turned down (with reasons), handed over, open now, and average times. Managers (Ravi, Imran, Lakshmi, Priya, …) show **Assigned others** and **Closed**. |
-| R03 | Click **Pavan Kumar**. | The **Request log** opens filtered to Pavan's requests. |
+| R03 | Click **Pavan Kumar**. | **Pavan Kumar's own report** opens for the same period (the address ends in `?period=30d`): tiles for assigned, completed (with % on time), accepted, turned down, and handed over; bars comparing him with the whole hospital for completed on time, time to accept, and work time; **Day by day** and **By service** tables; and **Every action** (assigned to him by whom, accepted after how long, completed on time or late, turned down with the reason). |
 | R04 | **Not completed** tab. | About 22 items: each cancelled, turned-down, or overdue request with who, when, and the reason. |
 | R05 | On any item click **Full history**. | Every step in order with who did it and when: **Request sent** by Patient, **Assigned** by a manager to a staff member, **Handed over** from one person to another (with the reason), and so on. |
 | R06 | **Request log** → filter by result **Turned down**, then search a `CR-` reference, then **Download CSV**. | The filters work. The CSV opens in Excel with one row per request and names intact. |
 | R07 | **Departments & services** tab. | Counts per team and per service; Pantry and Nursing are the busiest. |
 | R08 | Try **Today**, **Last 7 days**, **This month**, and **Choose dates**. | Each period changes the numbers. The date pickers do not let the end date fall before the start date. |
+| R09 | At the top of **Reports** click **Download report**. | One spreadsheet (`care-qr-report-<from>-to-<to>.csv`) with the hospital, period, summary, staff work, departments, services, and the not-completed requests; it opens in Excel with names intact. |
+| R10 | Click **Print / PDF** and choose **Save as PDF**. | A clean document with every section (not only the open tab), without the menu or buttons, headed by the hospital's logo and name, the period, and when it was printed. |
+| R11 | On Pavan's report, in **Every action** choose **Show → Turned down**; click a request name. | Only his turned-down requests remain, each with its reason. The request's **full history** opens. |
+| R12 | Use the **Person** list to switch to **Neha Gupta**, then click **Last 7 days**. | Neha's report opens for the same period, then updates for 7 days. **Reports** (the link at the top) returns to the hospital report with the same period. |
+| R13 | On a person's report click **Download** and then **Print / PDF**. | A spreadsheet (`care-qr-work-<name>-<from>-to-<to>.csv`) with the summary beside the whole hospital, by service, day by day, and every action; the printout has the same sections under the hospital's logo. |
 
 ### 6.11 Separation between hospitals
 
@@ -430,6 +436,6 @@ Copy this table and fill it in as you go.
 | D01–D05 | | |
 | C01–C08 | | |
 | PT01–PT07 | | |
-| R01–R08 | | |
+| R01–R13 | | |
 | S01–S04 | | |
 | N01–N04 | | |

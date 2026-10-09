@@ -10,5 +10,7 @@ export function createReportRoutes(controller: ReportController): Router {
   router.get('/reports/requests', canReport, controller.summary);
   router.get('/reports/requests/log', canReport, controller.log);
   router.get('/reports/requests/:id', canReport, controller.timeline);
+  // One person's work: :id is their staff membership.
+  router.get('/reports/people/:id', canReport, controller.person);
   return router;
 }

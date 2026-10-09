@@ -9,6 +9,7 @@ export const auditQuerySchema = z
       .regex(/^[a-zA-Z]+$/)
       .optional(),
     membershipId: z.string().uuid().optional(),
+    targetId: z.string().uuid().optional(),
     before: z.string().uuid().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   })
