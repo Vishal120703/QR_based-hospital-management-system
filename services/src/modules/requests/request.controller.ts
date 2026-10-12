@@ -23,6 +23,12 @@ export class RequestController {
     response.status(200).json(await this.requests.list(getStaffContext(request), query));
   };
 
+  // What needs this person's attention: new, overdue, and escalated work.
+  public readonly alerts: RequestHandler = async (request, response) => {
+    emptySchema.parse(request.query);
+    response.status(200).json(await this.requests.alerts(getStaffContext(request)));
+  };
+
   public readonly get: RequestHandler = async (request, response) => {
     const { id } = idParamsSchema.parse(request.params);
     emptySchema.parse(request.query);

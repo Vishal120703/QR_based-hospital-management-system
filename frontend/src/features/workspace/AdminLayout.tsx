@@ -22,6 +22,7 @@ import {
 import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
 import { ApiError, assetUrl, credentials, staffApi, type Me } from '../../api';
 import { BrandMark, LoadState, NoticeStack, PoweredBy, RouteLoading } from '../../components';
+import { useRequestAlerts } from '../../lib/request-alerts';
 import { ChangePasswordForm } from '../auth/ChangePassword';
 
 // `anyScope` pages filter their data by floor or ward on the server, so a
@@ -216,6 +217,21 @@ export function AdminLayout() {
     return () => window.removeEventListener('storage', syncSession);
   }, [token]);
 
+  // New, overdue, and escalated work: a badge on Requests, a chime, and a
+  // desktop notification if allowed (see request-alerts.ts).
+  const alerts = useRequestAlerts({
+    token: token ?? '',
+    membershipId: me?.membershipId ?? '',
+    enabled: Boolean(
+      token &&
+      me &&
+      !me.mustChangePassword &&
+      (me.scopedPermissions ?? me.permissions).includes('request.read'),
+    ),
+    onUnauthorized: reportError,
+  });
+  const attention = alerts.data ? alerts.data.counts.waiting + alerts.data.counts.overdue : 0;
+
   if (!token) {
     return <Navigate to="/login" replace />;
   }
@@ -335,6 +351,15 @@ export function AdminLayout() {
                       >
                         <page.icon size={17} strokeWidth={1.9} aria-hidden="true" />
                         <span>{page.label}</span>
+                        {page.path === 'requests' && attention > 0 && (
+                          <span
+                            className="nav-badge"
+                            aria-label={`${attention} need attention`}
+                            title="New or overdue requests"
+                          >
+                            {attention}
+                          </span>
+                        )}
                         <ChevronRight className="nav-chevron" size={14} aria-hidden="true" />
                       </NavLink>
                     ))}
@@ -356,6 +381,10 @@ export function AdminLayout() {
           </div>
         </aside>
         <main ref={mainRef} id="main-content" className="admin-main" tabIndex={-1}>
+          {/* Read out new alerts to screen-reader users. */}
+          <p className="visually-hidden" aria-live="polite" aria-atomic="true">
+            {alerts.announcement}
+          </p>
           <NoticeStack
             error={context ? error : null}
             success={success}

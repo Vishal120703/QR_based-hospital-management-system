@@ -5,6 +5,7 @@ import { loadConfig } from './config/env.js';
 import { createLogger } from './config/logger.js';
 import { checkDatabaseConnection, createPrismaClient } from './database/prisma.js';
 import { checkRedisConnection, createRedisClient } from './database/redis.js';
+import { EscalationService, startEscalationWorker } from './modules/requests/index.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -32,10 +33,20 @@ async function main(): Promise<void> {
     ],
   });
   const server = createServer(application);
+  // The SLA worker escalates overdue requests from this process.
+  const escalations =
+    config.escalationIntervalSeconds > 0
+      ? startEscalationWorker(
+          new EscalationService(prisma),
+          logger,
+          config.escalationIntervalSeconds * 1000,
+        )
+      : null;
 
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     logger.info({ signal }, 'Shutting down API');
     server.close();
+    await escalations?.stop();
     await Promise.allSettled([prisma.$disconnect(), redis?.quit()]);
   };
 

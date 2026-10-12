@@ -107,6 +107,7 @@ export class StaffAuthService {
       membershipId: session.membershipId,
       sessionId: session.id,
       mustChangePassword: session.membership.user.mustChangePassword,
+      roleIds: [...new Set(activeRoles.map((entry) => entry.role.id))],
       permissions: new Set(permissionScopes.keys()),
       hospitalPermissions: new Set(hospitalPermissions),
       permissionScopes,

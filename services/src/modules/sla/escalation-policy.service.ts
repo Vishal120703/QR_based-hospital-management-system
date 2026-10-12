@@ -16,6 +16,16 @@ import {
 const snapshot = (policy: PolicyRow) => ({ name: policy.name, levels: policy.levels });
 
 // Levels are configuration only; the SLA worker phase executes them.
+// The levels of these policies, for the SLA worker that carries them out.
+export function findEscalationLevels(
+  db: Db,
+  policies: readonly { hospitalId: string; id: string }[],
+) {
+  return policies.length === 0
+    ? Promise.resolve([])
+    : new EscalationPolicyRepository().findLevels(db, policies);
+}
+
 export class EscalationPolicyService {
   public constructor(
     private readonly database: PrismaClient,

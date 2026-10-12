@@ -21,6 +21,7 @@ import {
   useNow,
 } from '../../lib/request-status';
 import { useAdmin } from '../workspace/AdminLayout';
+import { AlertSettings } from './AlertSettings';
 import { RequestTimelineDialog } from './RequestTimelineDialog';
 
 type Tab = 'open' | 'completed' | 'history';
@@ -223,6 +224,7 @@ export function RequestsPage() {
         }
       >
         <div className="heading-actions">
+          <AlertSettings />
           {updatedAt && (
             <span className="muted small" aria-live="polite">
               Updated {clockTime(updatedAt)}
@@ -325,7 +327,13 @@ export function RequestsPage() {
                 const busy = busyId !== null;
                 return (
                   <article
-                    className={late ? 'card request-card late' : 'card request-card'}
+                    className={[
+                      'card request-card',
+                      late ? 'late' : request.status === 'SUBMITTED' ? 'waiting' : '',
+                      request.isEscalated ? 'escalated' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
                     key={request.id}
                   >
                     <div className="request-card-head">
@@ -337,6 +345,11 @@ export function RequestsPage() {
                         </p>
                       </div>
                       <div className="request-badges">
+                        {request.isEscalated && (
+                          <span className="badge badge-danger">
+                            Escalated · level {request.escalationLevel}
+                          </span>
+                        )}
                         {request.priority !== 'NORMAL' && (
                           <span className="badge badge-danger">
                             {request.priority.toLowerCase()}

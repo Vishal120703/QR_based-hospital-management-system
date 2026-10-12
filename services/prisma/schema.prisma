@@ -128,6 +128,12 @@ enum EscalationTarget {
   ROLE
 }
 
+// Which deadline an escalation is about: accepting, or completing the work.
+enum EscalationStage {
+  ACCEPT
+  COMPLETE
+}
+
 enum RequestStatus {
   SUBMITTED
   ASSIGNED
@@ -810,6 +816,7 @@ model ServiceRequest {
   slaPolicyVersionRow SlaPolicyVersion    @relation(fields: [hospitalId, slaPolicyVersionId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
   escalationPolicy    EscalationPolicy?   @relation(fields: [hospitalId, escalationPolicyId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
   events              RequestEvent[]
+  escalations         RequestEscalation[]
 
   @@unique([hospitalId, id])
   @@index([hospitalId, status, submittedAt])
@@ -838,4 +845,25 @@ model RequestEvent {
   @@unique([hospitalId, requestId, requestVersion])
   @@index([hospitalId, requestId, occurredAt])
   @@index([hospitalId, actorId])
+}
+
+// An escalation step the SLA worker took after a missed deadline. Written once
+// per request, deadline, and level (the unique key), however many API
+// processes run the worker or how often it restarts. roleId is kept as it was
+// (not a foreign key), so a role can still be deleted later.
+model RequestEscalation {
+  id         String           @id @default(uuid()) @db.Uuid
+  hospitalId String           @db.Uuid
+  requestId  String           @db.Uuid
+  stage      EscalationStage
+  level      Int
+  targetType EscalationTarget
+  roleId     String?          @db.Uuid
+  // The missed deadline.
+  dueAt      DateTime
+  createdAt  DateTime         @default(now())
+  request    ServiceRequest   @relation(fields: [hospitalId, requestId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([hospitalId, requestId, stage, level])
+  @@index([hospitalId, createdAt])
 }

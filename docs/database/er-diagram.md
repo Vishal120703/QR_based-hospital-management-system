@@ -64,6 +64,7 @@ erDiagram
   SlaPolicyVersion ||--o{ ServiceRequest : "slaPolicyVersionRow"
   EscalationPolicy |o--o{ ServiceRequest : "escalationPolicy"
   ServiceRequest ||--o{ RequestEvent : "request"
+  ServiceRequest ||--o{ RequestEscalation : "request"
 ```
 
 ## Clients, hospitals, and sign-in
@@ -686,6 +687,7 @@ erDiagram
 | `DutyStatus` | `ON_DUTY`, `OFF_DUTY` |
 | `RequestPriority` | `NORMAL`, `HIGH`, `URGENT` |
 | `EscalationTarget` | `ASSIGNEE`, `ROLE` |
+| `EscalationStage` | `ACCEPT`, `COMPLETE` |
 | `RequestStatus` | `SUBMITTED`, `ASSIGNED`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `CLOSED`, `CANCELLED`, `REJECTED` |
 | `AssignmentMode` | `MANUAL`, `POOL`, `DIRECT`, `AUTO_ASSIGN` |
 | `RequestActorType` | `GUEST`, `STAFF`, `SYSTEM` |

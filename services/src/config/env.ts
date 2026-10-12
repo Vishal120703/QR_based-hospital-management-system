@@ -43,6 +43,9 @@ const environmentSchema = z
     // in production, 0 otherwise.
     TRUST_PROXY: optional(z.coerce.number().int().min(0).max(5)),
     GUEST_SESSION_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(120),
+    // How often the SLA worker checks for overdue requests to escalate; 0
+    // turns it off in this process (another one must then run it).
+    ESCALATION_INTERVAL_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV === 'production' && !value.PUBLIC_APP_URL) {
@@ -65,6 +68,7 @@ export interface AppConfig {
   readonly corsOrigins: readonly string[];
   readonly trustProxy: number;
   readonly guestSessionTtlMinutes: number;
+  readonly escalationIntervalSeconds: number;
 }
 
 // "https://app.example.com/" → "https://app.example.com" (what browsers send).
@@ -102,5 +106,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     corsOrigins: [...new Set([originOf(publicAppUrl), ...extraOrigins])],
     trustProxy: parsed.TRUST_PROXY ?? (parsed.NODE_ENV === 'production' ? 1 : 0),
     guestSessionTtlMinutes: parsed.GUEST_SESSION_TTL_MINUTES,
+    escalationIntervalSeconds: parsed.ESCALATION_INTERVAL_SECONDS,
   };
 }

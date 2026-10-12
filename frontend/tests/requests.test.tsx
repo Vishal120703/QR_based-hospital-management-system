@@ -22,6 +22,8 @@ const request: StaffRequest = {
   acceptDueAt: '2026-10-06T08:05:00Z',
   completeDueAt: '2026-10-06T08:30:00Z',
   completedAt: null,
+  isEscalated: false,
+  escalationLevel: 0,
   version: 1,
 };
 
@@ -289,5 +291,33 @@ describe('Request work screen', () => {
       'token',
       expect.objectContaining({ status: 'SUBMITTED' }),
     );
+  });
+
+  it('marks escalated, overdue, and unassigned requests so they stand out', async () => {
+    serve([
+      {
+        ...request,
+        id: 'escalated',
+        serviceName: 'Escalated water',
+        isEscalated: true,
+        escalationLevel: 2,
+        acceptDueAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+      },
+      {
+        ...request,
+        id: 'waiting',
+        serviceName: 'Fresh request',
+        acceptDueAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+        completeDueAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
+    ]);
+    show(['request.read', 'request.assign']);
+    const escalated = (await screen.findByText('Escalated water')).closest('article')!;
+    expect(escalated.className).toContain('late');
+    expect(escalated.className).toContain('escalated');
+    expect(escalated.textContent).toContain('Escalated · level 2');
+    const waiting = screen.getByText('Fresh request').closest('article')!;
+    expect(waiting.className).toContain('waiting');
+    expect(waiting.textContent).not.toContain('Escalated');
   });
 });

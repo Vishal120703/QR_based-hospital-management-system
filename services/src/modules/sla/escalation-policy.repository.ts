@@ -14,6 +14,27 @@ export type EscalationPolicyRow = Prisma.EscalationPolicyGetPayload<{
 
 // Escalation policies and their ordered levels.
 export class EscalationPolicyRepository {
+  // The levels of these policies (each in its own hospital), in order.
+  public findLevels(db: Db, policies: readonly { hospitalId: string; id: string }[]) {
+    return db.escalationLevel.findMany({
+      where: {
+        OR: policies.map((policy) => ({
+          hospitalId: policy.hospitalId,
+          escalationPolicyId: policy.id,
+        })),
+      },
+      orderBy: { level: 'asc' },
+      select: {
+        hospitalId: true,
+        escalationPolicyId: true,
+        level: true,
+        afterMinutes: true,
+        targetType: true,
+        roleId: true,
+      },
+    });
+  }
+
   public list(db: Db, hospitalId: string) {
     return db.escalationPolicy.findMany({
       where: { hospitalId },

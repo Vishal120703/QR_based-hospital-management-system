@@ -224,7 +224,28 @@ export interface StaffRequest {
   acceptDueAt: string;
   completeDueAt: string;
   completedAt: string | null;
+  // Set by the SLA worker when the current deadline was missed and the
+  // service's escalation policy acted; cleared when a new deadline applies.
+  isEscalated: boolean;
+  escalationLevel: number;
   version: number;
+}
+// Something that needs a staff member's attention (see GET /admin/requests/alerts).
+export interface RequestAlert {
+  // Stable per event, so the screen alerts once for it.
+  key: string;
+  kind: 'new' | 'overdue' | 'escalated';
+  requestId: string;
+  publicId: string;
+  serviceName: string;
+  bed: string;
+  at: string;
+  deadline: 'accept' | 'complete' | null;
+  level: number | null;
+}
+export interface RequestAlerts {
+  counts: { waiting: number; overdue: number; escalated: number };
+  alerts: RequestAlert[];
 }
 // One page of a work list, with how many requests every list holds.
 export interface RequestQueue {

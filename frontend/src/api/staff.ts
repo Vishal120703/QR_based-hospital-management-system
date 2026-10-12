@@ -24,6 +24,7 @@ import {
   type Shift,
   type SlaPolicy,
   type StaffMember,
+  type RequestAlerts,
   type RequestQueue,
   type RequestQueueQuery,
   type StaffRequest,
@@ -171,6 +172,8 @@ export const staffApi = {
         token,
       )
     ).staff,
+  // New, overdue, and escalated work for the signed-in person.
+  requestAlerts: (token: string) => call<RequestAlerts>('GET', '/admin/requests/alerts', token),
   // One page of open, completed, or finished work: overdue first, then oldest.
   requests: (token: string, options: RequestQueueQuery = {}) =>
     call<RequestQueue>('GET', `/admin/requests${query({ ...options })}`, token),

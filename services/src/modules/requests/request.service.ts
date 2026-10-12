@@ -21,6 +21,7 @@ import { snapshotService } from '../catalog/index.js';
 import { hospitalIsOpen } from '../hospitals/index.js';
 import { findEligibleStaff } from '../staff/index.js';
 import { visibleRequestsWhere } from './request-scope.js';
+import { EscalationRepository } from './escalation.repository.js';
 import { RequestRepository } from './request.repository.js';
 import { queueStatuses, type QueueView, type RequestQueueQuery } from './request.schemas.js';
 
@@ -121,6 +122,7 @@ export class RequestService {
   public constructor(
     private readonly database: PrismaClient,
     private readonly requests = new RequestRepository(),
+    private readonly escalationSteps = new EscalationRepository(),
   ) {}
 
   // One page of a work list in the caller's area, with every list's count.
@@ -175,6 +177,81 @@ export class RequestService {
       pageSize,
       total,
       counts: await this.queueCounts(visible, context.tenant.timezone, now),
+    };
+  }
+
+  // What needs this person's attention now, newest first in each kind: new
+  // requests waiting for someone to be assigned (only people who assign see
+  // these), overdue work they can see, and escalations sent to them (a role
+  // they hold, or work assigned to them) that still apply. Each alert has a
+  // stable key, so the screen alerts once per new item. At most 20 per kind;
+  // the counts are complete.
+  public async alerts(context: StaffContext, now = new Date()) {
+    if (!context.permissions.has('request.read')) throw new ForbiddenError();
+    const visible = visibleRequestsWhere(context);
+    if (!visible) return { counts: { waiting: 0, overdue: 0, escalated: 0 }, alerts: [] };
+    const db = this.database;
+    const take = 20;
+    const waitingWhere: Prisma.ServiceRequestWhereInput = {
+      AND: [visible, { status: 'SUBMITTED' }],
+    };
+    const overdueVisible: Prisma.ServiceRequestWhereInput = { AND: [visible, overdueWhere(now)] };
+    const [waiting, waitingCount, overdue, overdueCount, [escalations, escalatedCount]] =
+      await Promise.all([
+        this.requests.pageWithBed(db, waitingWhere, queueOrder.history, 0, take),
+        this.requests.count(db, waitingWhere),
+        this.requests.pageWithBed(db, overdueVisible, oldestFirst, 0, take),
+        this.requests.count(db, overdueVisible),
+        this.escalationSteps.findCurrentFor(
+          db,
+          context.tenant.hospitalId,
+          visible,
+          { membershipId: context.membershipId, roleIds: context.roleIds },
+          take,
+        ),
+      ]);
+    const waitingOnAccept = (status: RequestStatus) =>
+      status === 'SUBMITTED' || status === 'ASSIGNED';
+    return {
+      counts: { waiting: waitingCount, overdue: overdueCount, escalated: escalatedCount },
+      alerts: [
+        ...escalations.map((step) => ({
+          key: `escalated:${step.id}`,
+          kind: 'escalated' as const,
+          requestId: step.request.id,
+          publicId: step.request.publicId,
+          serviceName: step.request.serviceName,
+          bed: step.request.bed.displayName,
+          at: step.createdAt,
+          deadline: step.stage === 'ACCEPT' ? ('accept' as const) : ('complete' as const),
+          level: step.level,
+        })),
+        ...overdue.map((request) => {
+          const deadline = waitingOnAccept(request.status) ? 'accept' : 'complete';
+          return {
+            key: `overdue:${request.id}:${deadline}`,
+            kind: 'overdue' as const,
+            requestId: request.id,
+            publicId: request.publicId,
+            serviceName: request.serviceName,
+            bed: request.bed.displayName,
+            at: deadline === 'accept' ? request.acceptDueAt : request.completeDueAt,
+            deadline,
+            level: null,
+          };
+        }),
+        ...waiting.map((request) => ({
+          key: `new:${request.id}`,
+          kind: 'new' as const,
+          requestId: request.id,
+          publicId: request.publicId,
+          serviceName: request.serviceName,
+          bed: request.bed.displayName,
+          at: request.submittedAt,
+          deadline: null,
+          level: null,
+        })),
+      ],
     };
   }
 
@@ -495,6 +572,12 @@ export class RequestService {
       if (action === 'accept') data.acceptedAt = current.acceptedAt ?? now;
       if (action === 'start') data.startedAt = current.startedAt ?? now;
       if (action === 'complete') data.completedAt = now;
+      // A new deadline applies (or none): earlier escalations no longer do.
+      // The SLA worker marks it again if this deadline is missed too.
+      if (action !== 'assign' && action !== 'start') {
+        data.isEscalated = false;
+        data.escalationLevel = 0;
+      }
       if (action === 'close') data.closedAt = now;
       if (action === 'cancel') data.cancelledAt = now;
       if (action === 'reject') data.rejectedAt = now;

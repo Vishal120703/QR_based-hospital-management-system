@@ -12,6 +12,7 @@ export function createRequestRoutes(controller: RequestController): Router {
   const router = Router();
   const canRead = requireScopedPermission('request.read');
   router.get('/requests', canRead, controller.list);
+  router.get('/requests/alerts', canRead, controller.alerts);
   router.get('/requests/:id', canRead, controller.get);
   router.get('/requests/:id/events', canRead, controller.events);
   for (const command of requestCommands) {
