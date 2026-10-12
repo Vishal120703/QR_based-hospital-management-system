@@ -1007,32 +1007,6 @@ a.shortcut:hover {
   border-color: var(--primary);
 }
 
-/* Patient request progress */
-
-.request-progress {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.25rem;
-  list-style: none;
-  padding: 0;
-  margin: 0.75rem 0 0.25rem;
-}
-.request-progress li {
-  font-size: 0.68rem;
-  color: var(--muted);
-  text-align: center;
-  padding-top: 0.45rem;
-  border-top: 4px solid var(--border);
-}
-.request-progress li.reached {
-  border-top-color: var(--primary);
-  color: var(--text);
-}
-.request-progress li.now {
-  font-weight: 700;
-  color: var(--primary-dark);
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;

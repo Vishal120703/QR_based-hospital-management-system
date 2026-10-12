@@ -35,6 +35,35 @@ export class ReportRepository {
     });
   }
 
+  // A request matching `where` that the person took part in: assigned to
+  // them, acted on by them, or handed over by or to them.
+  public findInvolvement(db: Db, where: Prisma.ServiceRequestWhereInput, membershipId: string) {
+    return db.serviceRequest.findFirst({
+      where: {
+        AND: [
+          where,
+          {
+            OR: [
+              { assigneeId: membershipId },
+              {
+                events: {
+                  some: {
+                    OR: [
+                      { actorId: membershipId },
+                      { metadata: { path: ['assigneeId'], equals: membershipId } },
+                      { metadata: { path: ['previousAssigneeId'], equals: membershipId } },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      select: { id: true },
+    });
+  }
+
   public findSubmittedAt(db: Db, where: Prisma.ServiceRequestWhereInput) {
     return db.serviceRequest.findFirst({ where, select: { submittedAt: true } });
   }

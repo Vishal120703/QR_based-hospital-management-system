@@ -1,0 +1,14 @@
+{
+  "assertions": 94,
+  "passed": 91,
+  "failed": [
+    { "label": "floor person identity outside scope", "expected": 404, "actual": 200, "pass": false },
+    { "label": "ward person identity outside scope", "expected": 404, "actual": 200, "pass": false },
+    { "label": "department person identity outside scope", "expected": 404, "actual": 200, "pass": false }
+  ],
+  "identityLeaks": [
+    { "role": "floor", "disclosedName": "Same staff", "activityRows": 0, "assigned": 0 },
+    { "role": "ward", "disclosedName": "Same staff", "activityRows": 0, "assigned": 0 },
+    { "role": "department", "disclosedName": "Same staff", "activityRows": 0, "assigned": 0 }
+  ]
+}

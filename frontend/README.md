@@ -17,7 +17,7 @@ src/
     ├── people/         Staff, departments, roles, and eligibility
     ├── services/       Catalog and SLA screens
     ├── requests/       Manager/staff workflow and request history
-    ├── reports/        Reports and audit log
+    ├── reports/        Hospital and per-person reports, downloads, and the audit log
     ├── hospital/       Hospital profile and logo
     └── platform/       Separate CARE QR platform administration
 ```

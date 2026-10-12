@@ -423,6 +423,39 @@ describe('Request reports and audit', () => {
     expect((await as(floorManager.token).get('/admin/audit-log')).status).toBe(403);
   });
 
+  it('lets a floor or department manager open only people who worked in their area', async () => {
+    const open = (token: string, id: string, query = '') =>
+      as(token)
+        .get(`/admin/reports/people/${id}${query}`)
+        .then((response) => response.status);
+    const floor = people.Farah!.token; // Floor A: Pavan's requests, not the nurses'.
+    const pantry = people.Dev!.token; // Pantry: Pavan's requests only.
+    const longAgo = '?from=2020-01-01&to=2020-01-02';
+
+    expect(await open(floor, people.Pavan!.id)).toBe(200);
+    expect(await open(pantry, people.Pavan!.id)).toBe(200);
+    // A period with no work still opens for someone who worked in the area.
+    expect(await open(floor, people.Pavan!.id, longAgo)).toBe(200);
+    expect(await open(pantry, people.Pavan!.id, longAgo)).toBe(200);
+    // Staff who never worked in the area look the same as an unknown ID.
+    const answers = new Set<string>();
+    for (const token of [floor, pantry]) {
+      for (const id of [people.Nisha!.id, people.Neel!.id, randomUUID()]) {
+        for (const query of ['', longAgo]) {
+          const response = await as(token).get(`/admin/reports/people/${id}${query}`);
+          expect(response.status).toBe(404);
+          const { code, message } = z
+            .object({ error: z.object({ code: z.string(), message: z.string() }) })
+            .parse(response.body).error;
+          answers.add(`${code}: ${message}`);
+        }
+      }
+    }
+    expect([...answers]).toEqual(['NOT_FOUND: There is no report for this person in your area.']);
+    // A hospital-wide manager can open anyone in the hospital, even with no work.
+    expect(await open(hospital.adminToken, people.Farah!.id, longAgo)).toBe(200);
+  });
+
   it('reads the audit log with names, filters, and pages', async () => {
     const page = await admin().get('/admin/audit-log?category=request&limit=2');
     expect(page.status, JSON.stringify(page.body)).toBe(200);

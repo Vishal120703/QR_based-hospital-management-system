@@ -7,7 +7,7 @@ CARE QR is a modular hospital service-request platform. V1 has one backend servi
 ```text
 frontend/   React web app: staff administration and the patient QR pages
 services/   Backend: Express API, domain modules, Prisma, and tests
-docs/       Architecture, data flow, ER diagrams, guides, and test plans
+docs/       Architecture, data flow, ER diagrams, guides, and deployment
 ```
 
 Start with the [documentation index](./docs/README.md). Architecture decisions and diagrams are in [docs/architecture](./docs/architecture/README.md); module boundaries are described in the [backend module guide](./services/src/modules/README.md).
@@ -15,8 +15,6 @@ Start with the [documentation index](./docs/README.md). Architecture decisions a
 ## Current progress
 
 The patient QR flow and manual request workflow are implemented: managers assign requests and staff accept, start, and complete them. Automatic routing, alerts, and production hardening remain. See the [phase-by-phase status and audit results](./docs/project-status.md).
-
-The [Phase 0–8 manual test plan](./docs/testing/manual-test-plan-phases-0-8.md) is a historical baseline, not the full acceptance plan for the newer manager, staff, platform, and QR-label features.
 
 For a plain-language walkthrough of the architecture, demo data, and local setup, read the [easy project guide](./docs/guides/easy-guide.md).
 

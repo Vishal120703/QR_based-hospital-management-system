@@ -373,13 +373,27 @@ export class ReportService {
     const performance = staffPerformance(facts);
     let work = performance.rows.find((row) => row.membershipId === membershipId);
     if (!work) {
-      // No work in this period: still a valid person of this hospital?
-      const [member] = await this.reports.findMemberNames(
-        this.database,
-        context.tenant.hospitalId,
-        [membershipId],
-      );
-      if (!member) throw new NotFoundError();
+      // No work in this period. Hospital-wide managers may open anyone in the
+      // hospital; a floor, ward, or department manager only someone who has
+      // worked on requests in their area, so an ID alone reveals nobody else.
+      const area = requestAreaWhere(context, 'analytics.read');
+      const [member] = area
+        ? await this.reports.findMemberNames(this.database, context.tenant.hospitalId, [
+            membershipId,
+          ])
+        : [];
+      const allowed =
+        member !== undefined &&
+        (Object.keys(area ?? {}).length === 0 ||
+          (await this.reports.findInvolvement(
+            this.database,
+            { hospitalId: context.tenant.hospitalId, AND: [area ?? {}] },
+            membershipId,
+          )) !== null);
+      // The same answer for an unknown ID and for someone outside the area.
+      if (!member || !allowed) {
+        throw new NotFoundError('There is no report for this person in your area.');
+      }
       work = emptyWork(membershipId, member.user.displayName);
     }
     return {

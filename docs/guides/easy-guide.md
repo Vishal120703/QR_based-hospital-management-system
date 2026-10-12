@@ -198,7 +198,9 @@ Set private environment variables `DEMO_ADMIN_PASSWORD` and `DEMO_STAFF_PASSWORD
 DEMO_SEED_CONFIRM=CAREQR-DEMO npm run seed:demo
 ```
 
-The script accepts only a local PostgreSQL URL, creates the demo hospital in one transaction, and refuses to overwrite an existing demo hospital or login email. It does not print passwords or the QR secret by default. If it says the hospital already exists, do **not** reset your database: use the existing demo credentials, or ask for help choosing a separate local test database. The detailed seed inventory and safety rules are in the [test plan](../testing/manual-test-plan-phases-0-8.md).
+The script accepts only a local PostgreSQL URL, creates the demo hospital in one transaction, and refuses to overwrite an existing demo hospital or login email. It does not print passwords or the QR secret by default. If it says the hospital already exists, do **not** reset your database: use the existing demo credentials, or ask for help choosing a separate local test database.
+
+It creates **CARE QR Demo Hospital** (code `CAREQR-DEMO`): Demo Wing → First floor → Ward A → Room 101 with two beds (Bed 01 with a patient admitted and a QR code, Bed 02 free); a Hospital Admin (`admin.demo@careqr.example`, `DEMO_ADMIN_PASSWORD`); a floor manager, ward manager, and Pantry supervisor; four care staff (nursing, pantry, housekeeping, transport); and, only if `DEMO_PLATFORM_PASSWORD` is set, a platform admin (`platform.demo@careqr.example`). Staff and managers sign in with `DEMO_STAFF_PASSWORD`. For several full hospitals with weeks of request history, use `npm run seed:test` and the [full testing guide](./full-testing-guide.md) instead.
 
 A **fresh** demo seed also creates `floor.manager.demo@careqr.example` with the `DEMO_STAFF_PASSWORD`. This account can assign requests only on the demo floor. An already-seeded hospital is not modified by this code change; its Hospital Admin can use **Requests** to test assignment without reseeding.
 
@@ -340,7 +342,7 @@ On an older demo database without the floor-manager account, the Hospital Admin 
 
 If all ✔ appeared, this **browser tour** passed; the API/security/concurrency tests in the full plan still need to run before Phase 9.
 
-For one-by-one tests of the current roles, platform, reports, and audit, use the [full testing guide](./full-testing-guide.md). The [Phase 0–8 manual test plan](../testing/manual-test-plan-phases-0-8.md) and [previous local report](../testing/test-report-phases-0-8.md) are historical baselines, not a live status check or a substitute for your own results.
+For one-by-one tests of every role, the platform, reports, and audit, use the [full testing guide](./full-testing-guide.md).
 
 **To work with another ChatGPT chat:** upload this guide and the full test plan. Ask it to explain one test ID at a time, wait for your `PASS`/`FAIL`/`BLOCKED` result, and keep a results table. The exact copyable prompt is at the top of the test plan. Never paste `.env`, passwords, database URLs, bearer tokens, QR links, or real patient information into that chat.
 

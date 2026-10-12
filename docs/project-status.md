@@ -1,8 +1,8 @@
 # CARE QR project status
 
-Last reviewed: 2026-10-07
+Last reviewed: 2026-10-09
 
-Phases **0–8 passed their earlier verification gates**. Since then, the codebase has added manual routing, an overview dashboard, a staff request workflow, platform administration, scoped roles, richer hospital locations, branding, printable QR-label batches, request reports, and a hospital audit screen. These newer features are implemented but have not all passed full browser/manual acceptance gates. Automatic routing is the next major workflow area.
+Phases **0–8 passed their earlier verification gates**. Since then, the codebase has added manual routing, an overview dashboard, a staff request workflow, platform administration, scoped roles, richer hospital locations, branding, printable QR-label batches, request reports (hospital-wide and per person, with spreadsheet and PDF downloads), a hospital audit screen, and deployment configuration for Render and Vercel. These newer features are implemented but have not all passed full browser/manual acceptance gates. Automatic routing is the next major workflow area.
 
 ## Implemented phases
 
@@ -22,7 +22,7 @@ The current frontend lets a manager assign a submitted request to eligible staff
 
 ## Implemented since the Phase 0–8 baseline
 
-Manual assignment, the manager overview, and the staff request screens cover the intended Phase 9–11 workflows. The platform area, scoped role administration, hospital branding, richer location setup, bulk PDF QR labels, request reports, and an audit-log screen are also present. Their complete integration and manual acceptance checks remain open; this is not a production-readiness claim.
+Manual assignment, the manager overview, and the staff request screens cover the intended Phase 9–11 workflows. The platform area, scoped role administration, hospital branding, richer location setup, bulk PDF QR labels, request reports with one report per staff member, and an audit-log screen are also present. Their complete integration and manual acceptance checks remain open; this is not a production-readiness claim.
 
 ## Pending phases
 
@@ -39,7 +39,7 @@ Manual assignment, the manager overview, and the staff request screens cover the
 | 20 | Complete integration testing |
 | 21 | Failure testing |
 | 22 | Load testing |
-| 23 | Deployment pipeline |
+| 23 | Deployment pipeline: Render (API) and Vercel (web) configuration and CI checks exist; staged release and rollback remain. |
 | 24 | Staging acceptance |
 | 25 | Pilot ward |
 
@@ -51,7 +51,7 @@ The repository has only two application folders:
 
 - `frontend/`: one React app, with page groups in `src/features/<area>`, shared API calls in `src/api`, shared UI in `src/components`, and helpers in `src/lib`.
 - `services/`: one backend service. Domain behavior lives in `src/modules/<domain>` with routes, controllers, schemas, services, repositories, and a public `index.ts`; composition is in `src/container.ts`, technical infrastructure in `src/common`, `src/config`, `src/database`, `src/http`, and `src/middleware`, and database history in `prisma/migrations`.
-- `docs/`: the [documentation index](./README.md), architecture and data-flow diagrams, generated ER model, guides, and test plans.
+- `docs/`: the [documentation index](./README.md), architecture and data-flow diagrams, generated ER model, guides (including the full testing guide), and the deployment guide.
 
 Routes declare permissions, controllers validate transport input, services own business rules and transactions, and repositories own Prisma queries. Cross-module work uses the owner's public `index.ts`. Add a folder only when real functionality needs it. No microservices or additional frontend apps are required for V1. See [how to add a feature](./adding-a-feature.md).
 
@@ -61,19 +61,13 @@ Before moving to the next phase, run the backend format check, lint, typecheck, 
 
 Integration tests must use `TEST_DATABASE_URL` pointing at a disposable PostgreSQL database with all migrations applied. Do not use a production database. Confirm tenant isolation, permission checks, audit coupling, and important concurrency rules for any changed behavior. A failed gate must be fixed or reported before the next phase starts.
 
-Architecture refactor verification on 2026-10-07: against an isolated temporary PostgreSQL 18 database (not the development database), all 12 migrations were current and 123 integration tests passed across 13 files. Backend formatting, lint, typecheck, 8 unit tests, build, Prisma validation, and generated-ER check passed. Frontend formatting, lint, typecheck, 72 interaction tests across 14 files, and build passed. All 23 Markdown files had valid local links. These automated checks do not replace the role-by-role browser and phone checks in the [full testing guide](./guides/full-testing-guide.md), nor do they establish production readiness.
-
-Phase 7 verification: backend format, lint, typecheck, unit tests (8), integration tests (74, serial), build, Prisma validation, migration application, and schema-drift check passed against a disposable PostgreSQL 18 database. Frontend format, lint, typecheck, tests (23), and build also passed. One parallel integration run hit a transient serializable conflict in the unchanged Phase 5 staff suite; its isolated rerun and the full serial run passed.
-
-Phase 8 verification: backend format, lint, typecheck, unit tests (8), integration tests (83, serial), build, Prisma validation, and migration status passed against a disposable PostgreSQL 18 database. Frontend format, lint, typecheck, interaction tests (29), and build passed. Guest request tests cover duplicate races, cross-bed and cross-hospital isolation, cancellation concurrency, expiry, closure, and QR rotation.
-
-Demo-seed/documentation verification on 2026-10-06: using Node 24.19.0 and a temporary, isolated PostgreSQL 18 cluster, all six migrations applied; `seed:demo` created one hospital, seven departments, four services, two beds, one active bed session, and five memberships (admin plus four staff). A second seed run correctly refused to overwrite it. Backend format/lint/typecheck, 8 unit tests, 83 integration tests, build, and Prisma validation passed; frontend format/lint/typecheck, 29 tests, and build passed. The temporary database was removed afterward. This did **not** verify normal live Redis startup or the current user's browser session; follow the [manual test plan](./testing/manual-test-plan-phases-0-8.md) for those checks.
+Latest verification on 2026-10-09: against an isolated test PostgreSQL database (not the development database), all 13 migrations applied and backend formatting, lint, typecheck, 23 unit tests, 132 integration tests across 14 files, and the build passed. Frontend formatting, lint, typecheck, 95 interaction tests across 17 files, and the build passed. An unused-code scan found no unused files, exports, or packages, and every local Markdown link resolved. These automated checks do not replace the role-by-role browser and phone checks in the [full testing guide](./guides/full-testing-guide.md), nor do they establish production readiness.
 
 ## Important limitations
 
 - Routing is still manual. A request can remain `SUBMITTED` until a manager assigns it in the Requests screen.
 - Escalation policies are configuration only; no SLA worker executes them yet.
 - A shift does not automatically switch a staff member on or off duty.
-- QR resolution rate limits are per backend process; shared limits and reverse-proxy configuration remain part of hardening.
-- Live Redis connectivity has not been verified by this audit. Current dependency tests use test doubles, and the server requires Redis at startup.
-- Passing development checks does not establish production readiness. Deployment, failure/load tests, staging acceptance, and the pilot are still pending.
+- Sign-in and QR-scan rate limits are counted inside each backend process, which is right for the single V1 backend; several instances would need a shared store. Behind a proxy, set `TRUST_PROXY` (3 on Render).
+- Redis is optional: nothing uses it yet, and the backend starts without it when `REDIS_URL` is empty.
+- Passing development checks does not establish production readiness. Failure and load tests, staging acceptance, and the pilot are still pending.

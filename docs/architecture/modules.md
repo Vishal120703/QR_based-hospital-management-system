@@ -16,7 +16,7 @@ Every module lives in `services/src/modules/<name>/` and follows the [five layer
 | [catalog](#catalog) | Service categories and services; the request snapshot | `ServiceCategory`, `ServiceItem` | `/admin/service-categories*`, `/admin/services*`, `/public/services` |
 | [sla](#sla) | Response-time targets (versioned) and escalation policies | `SlaPolicy`, `SlaPolicyVersion`, `EscalationPolicy`, `EscalationLevel` | `/admin/sla-policies*`, `/admin/escalation-policies*` |
 | [requests](#requests) | The patient request lifecycle and its event history | `ServiceRequest`, `RequestEvent` | `/admin/requests*`, `/public/requests*` |
-| [reports](#reports) | Request reports: totals, staff work, why not completed, history | — (read only) | `/admin/reports/requests*` |
+| [reports](#reports) | Request reports: totals, staff work, one person's work, why not completed, history | — (read only) | `/admin/reports/requests*`, `/admin/reports/people/:id` |
 | [audit](#audit) | Recording every change and reading the audit log | `AuditLog` | `/admin/audit-log` |
 
 Shared, non-domain code lives outside `modules/`: `common/` (errors, validation helpers, tokens), `http/` (generic CRUD controller, health routes), `middleware/` (auth guards, rate limit, errors), `database/` (Prisma client and the `Db` type), `seeds/` and `cli/` (scripts).
@@ -93,8 +93,8 @@ The simplest module and the best template to copy. Standard list / get / create 
 ## reports
 
 - **Public interface:** `ReportService`, `ReportController`, `createReportRoutes`.
-- **How it works:** loads the requests in the caller's report area for the period (at most 20,000) with their event history and rebuilds who assigned, accepted, completed, turned down, or handed over each one.
+- **How it works:** loads the requests in the caller's report area for the period (at most 20,000) with their event history and rebuilds who assigned, accepted, completed, turned down, or handed over each one. A person's report uses the same figures plus their own actions; a floor, ward, or department manager can open only people who have worked on requests in their area.
 
 ## audit
 
-- **Public interface:** `recordStaffAudit`, `recordPlatformAudit`, `recordSystemAudit` (always inside the transaction of the change), `AuditService` (the log in plain words), `AuditController`, `createAuditRoutes`.
+- **Public interface:** `recordStaffAudit`, `recordPlatformAudit`, `recordSystemAudit` (always inside the transaction of the change), `AuditService` (the log in plain words: names instead of IDs and before → after changes, built in `audit-details.ts`), `AuditController`, `createAuditRoutes`.
