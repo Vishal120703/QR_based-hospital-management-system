@@ -50,9 +50,16 @@ function as(key: string) {
       request(application).post(path).set('authorization', bearer).send(body),
   };
 }
-const last14Days = () => {
+// From the seed's oldest request to now. The test database may have been
+// seeded days ago, so a fixed "last 14 days" would slowly lose its history.
+const seededPeriod = async () => {
+  const oldest = await database.serviceRequest.findFirstOrThrow({
+    where: { hospital: { code: cityCare.code } },
+    orderBy: { submittedAt: 'asc' },
+    select: { submittedAt: true },
+  });
   const to = new Date(Date.now() + 60_000);
-  return `from=${new Date(to.getTime() - 14 * 86_400_000).toISOString()}&to=${to.toISOString()}`;
+  return `from=${oldest.submittedAt.toISOString()}&to=${to.toISOString()}`;
 };
 
 beforeAll(async () => {
@@ -143,7 +150,7 @@ describe('Manual-testing hospitals', () => {
   });
 
   it('fills Reports with work, reasons, and lateness', async () => {
-    const response = await as('meera').get(`/admin/reports/requests?${last14Days()}`);
+    const response = await as('meera').get(`/admin/reports/requests?${await seededPeriod()}`);
     expect(response.status).toBe(200);
     const report = reportSchema.parse(response.body);
     expect(report.summary.total).toBeGreaterThan(60);
