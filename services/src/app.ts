@@ -1,6 +1,6 @@
 import express, { type Express } from 'express';
 import { pinoHttp } from 'pino-http';
-import { type Logger } from 'pino';
+import { type Logger, type SerializedRequest } from 'pino';
 import { type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { NotFoundError } from './common/errors/app-error.js';
@@ -37,12 +37,33 @@ export function createApp(options: CreateAppOptions): Express {
   application.disable('x-powered-by');
   application.set('trust proxy', options.trustProxy ?? 0);
 
+  // Authenticated JSON and errors must not survive in browser/shared caches.
+  // Public logo handlers explicitly override caching for their versioned URLs.
+  application.use((_request, response, next) => {
+    response.setHeader('cache-control', 'no-store');
+    response.setHeader('x-content-type-options', 'nosniff');
+    response.setHeader('referrer-policy', 'no-referrer');
+    response.setHeader('x-frame-options', 'DENY');
+    next();
+  });
+
   application.use(cors(options.corsOrigins ?? []));
   application.use(requestIdMiddleware);
   application.use(
     pinoHttp({
       logger: options.logger,
       genReqId: (_request, response) => String(response.getHeader('x-request-id') ?? 'unknown'),
+      serializers: {
+        // Do not log headers, request bodies or query values: even a rejected
+        // request can contain a QR/session secret or personal information.
+        req: (request: SerializedRequest) => ({
+          id: request.id,
+          method: request.method,
+          url: request.url?.split('?')[0],
+          remoteAddress: request.remoteAddress,
+          remotePort: request.remotePort,
+        }),
+      },
     }),
   );
   application.use(express.json({ limit: '1mb' }));
@@ -57,6 +78,7 @@ export function createApp(options: CreateAppOptions): Express {
   application.use(createHealthRouter(options.readinessProbes ?? []));
   if (options.database) {
     const routes = createContainer(options.database, {
+      logger: options.logger,
       publicAppUrl: options.publicAppUrl ?? 'http://localhost:5173',
       guestSessionTtlMinutes: options.guestSessionTtlMinutes ?? 120,
       qrResolveRateLimit: options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 },

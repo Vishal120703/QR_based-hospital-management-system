@@ -2,6 +2,6 @@
 // may see which requests, and the SLA worker that escalates overdue ones.
 export { PatientRequestController, RequestController } from './request.controller.js';
 export { createPatientRequestRoutes, createRequestRoutes } from './request.routes.js';
-export { requestAreaWhere } from './request-scope.js';
+export { requestAreaWhere, visibleRequestsWhere } from './request-scope.js';
 export { RequestService } from './request.service.js';
 export { EscalationService, startEscalationWorker } from './escalation.service.js';

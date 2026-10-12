@@ -100,7 +100,7 @@ describe('Request alerts', () => {
       await vi.advanceTimersByTimeAsync(30_000);
     });
     expect(await screen.findByLabelText('2 need attention')).toBeTruthy();
-    expect(shown).toEqual(['New request: Drinking Water · Bed 01']);
+    expect(shown).toEqual(['Work needs your attention. Open your authorized request queue.']);
     expect(screen.getByText('New request: Drinking Water · Bed 01').getAttribute('aria-live')).toBe(
       'polite',
     );

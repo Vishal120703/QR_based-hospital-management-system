@@ -5,6 +5,7 @@ import { expect, type ConsoleMessage, type Page } from '@playwright/test';
 // What global setup made for this run: two hospitals in the test database.
 export interface Fixture {
   password: string;
+  operatorEmail: string;
   a: { code: string; adminEmail: string; nurseEmail: string; qrPath: string };
   b: { code: string; adminEmail: string; waitingPublicIds: string[] };
 }

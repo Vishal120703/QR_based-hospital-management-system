@@ -2,6 +2,13 @@ import { type Db } from '../../database/client.js';
 
 // Staff accounts, memberships, and sessions as the sign-in flow needs them.
 export class AuthRepository {
+  // Serialize credential changes with final sign-in checks. Hashing stays
+  // outside transactions; only the final trusted account check holds a lock.
+  public lockUser(db: Db, userId: string): Promise<{ id: string }[]> {
+    return db.$queryRaw<
+      { id: string }[]
+    >`SELECT "id" FROM "User" WHERE "id" = ${userId}::uuid FOR UPDATE`;
+  }
   public findHospitalByCode(db: Db, code: string) {
     return db.hospital.findUnique({
       where: { code },
@@ -72,6 +79,19 @@ export class AuthRepository {
     await db.user.update({ where: { id: userId }, data });
   }
 
+  public async replacePasswordIfUnchanged(
+    db: Db,
+    userId: string,
+    previousHash: string,
+    passwordHash: string,
+  ): Promise<boolean> {
+    const result = await db.user.updateMany({
+      where: { id: userId, passwordHash: previousHash, status: 'ACTIVE' },
+      data: { passwordHash, mustChangePassword: false },
+    });
+    return result.count === 1;
+  }
+
   // Whether the account also signs in somewhere else: another hospital, or
   // the platform. Its password then is not one hospital's to reset.
   public async usedOutside(db: Db, userId: string, hospitalId: string): Promise<boolean> {
@@ -83,17 +103,16 @@ export class AuthRepository {
   }
 
   // Ends the member's other open sessions, keeping the one in use.
-  public async revokeOtherSessions(
-    db: Db,
-    hospitalId: string,
-    membershipId: string,
-    keepSessionId: string,
-  ): Promise<number> {
+  public async revokeOtherSessions(db: Db, userId: string, keepSessionId: string): Promise<number> {
     const revoked = await db.staffSession.updateMany({
-      where: { hospitalId, membershipId, revokedAt: null, id: { not: keepSessionId } },
+      where: { membership: { userId }, revokedAt: null, id: { not: keepSessionId } },
       data: { revokedAt: new Date() },
     });
-    return revoked.count;
+    const platform = await db.platformSession.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return revoked.count + platform.count;
   }
 
   public async revokeMembershipSessions(

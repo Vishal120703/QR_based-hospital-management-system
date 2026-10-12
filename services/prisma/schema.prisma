@@ -298,10 +298,47 @@ model HospitalMembership {
   locationScopes   StaffLocationScope[]
   shifts           Shift[]
   assignedRequests ServiceRequest[]
+  notifications    StaffNotification[]
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, userId])
   @@index([userId])
+}
+
+// Personal inbox. Composite membership FK prevents cross-hospital recipients.
+model StaffNotification {
+  id                  String             @id @default(uuid()) @db.Uuid
+  hospitalId          String             @db.Uuid
+  membershipId        String             @db.Uuid
+  sourceKey           String
+  type                String
+  priority            RequestPriority
+  title               String
+  message             String
+  entityType          String             @default("ServiceRequest")
+  entityId            String             @db.Uuid
+  createdAt           DateTime           @default(now())
+  readAt              DateTime?
+  realtimeAttemptedAt DateTime?
+  deliveryAttempts    Int                @default(0)
+  nextDeliveryAt      DateTime           @default(now())
+  recipient           HospitalMembership @relation(fields: [hospitalId, membershipId], references: [hospitalId, id], onDelete: Restrict, map: "StaffNotification_recipient_fkey")
+
+  @@unique([hospitalId, membershipId, sourceKey])
+  @@index([hospitalId, membershipId, createdAt, id])
+  @@index([hospitalId, membershipId, readAt])
+  @@index([realtimeAttemptedAt, createdAt])
+}
+
+// Committed RequestEvent/RequestEscalation rows are the durable input queue.
+// This receipt and all recipient notifications commit in one transaction.
+model NotificationDispatch {
+  sourceKey     String    @id
+  processedAt   DateTime  @default(now())
+  recipients    Int
+  outcome       String
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
 }
 
 model Role {

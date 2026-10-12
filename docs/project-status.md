@@ -18,7 +18,7 @@ Phases **0–8 passed their earlier verification gates**. Since then, the codeba
 | 7 — Request core and state machine | Tenant-scoped ServiceRequest and append-only RequestEvent persistence, immutable catalog/SLA snapshots, duplicate-active-request protection, manual assignment commands, guarded transitions, and concurrency/rollback tests. |
 | 8 — Public patient request flow | Guest-authenticated submission, tracking, and early cancellation; active duplicate submissions return the existing request. The patient screen includes request history/status, a language choice, and retry/error handling. |
 
-The current frontend lets a manager assign a submitted request to eligible staff; staff accept, start, and complete it; and a manager closes it. Requests remain `SUBMITTED` until someone assigns them. The overview and request board refresh periodically, but push-based realtime updates and notifications are not implemented.
+The current frontend lets a manager assign a submitted request to eligible staff; staff accept, start, and complete it; and a manager closes it. Requests remain `SUBMITTED` until someone assigns them. The overview and request board refresh periodically. A persistent personal staff inbox now uses authenticated Socket.IO wake-ups and polling recovery; see the [notification implementation guide](./architecture/notifications.md).
 
 ## Implemented since the Phase 0–8 baseline
 
@@ -32,12 +32,12 @@ Pilot-readiness work (2026-10-12): the request queue is paged on the server (ove
 |---|---|
 | 12 | Pool routing |
 | 13 | SLA worker and escalation execution: implemented (in the API process, once per step); acceptance on hosted infrastructure remains. |
-| 14 | Realtime updates: screens and alerts poll every 15–30 seconds; push updates are not implemented. |
-| 15 | Notifications: in-app badge, sound, and browser notifications for signed-in staff exist; SMS, email, and push to closed browsers do not. |
+| 14 | Authenticated Socket.IO inbox wake-ups and reconnect recovery implemented; request screens retain polling. Hosted acceptance and multi-instance realtime fanout remain. |
+| 15 | Persistent scoped personal inbox, unread badge/read actions, sound and signed-in browser alerts implemented. SMS, email and push to closed browsers are deferred. |
 | 16 | Feedback and complaints |
 | 17 | Basic audit API/UI exists; complete acceptance, retention, and operational controls remain. |
 | 18 | Request reports exist; advanced analytics and full acceptance remain. |
-| 19 | Security hardening: password management, security headers, and CSP exist; a full security review remains. |
+| 19 | Security hardening: password management, security headers, CSP, and a current code/security review exist; formal penetration testing and hosted acceptance remain. |
 | 20 | Complete integration testing: API integration tests and browser end-to-end tests of the main workflow exist; full acceptance remains. |
 | 21 | Failure testing |
 | 22 | Load testing |
@@ -63,12 +63,12 @@ Before moving to the next phase, run the backend format check, lint, typecheck, 
 
 Integration tests must use `TEST_DATABASE_URL` pointing at a disposable PostgreSQL database with all migrations applied. Do not use a production database. Confirm tenant isolation, permission checks, audit coupling, and important concurrency rules for any changed behavior. A failed gate must be fixed or reported before the next phase starts.
 
-Latest verification on 2026-10-12: against an isolated test PostgreSQL database (not the development database), all 15 migrations applied and backend formatting, lint, typecheck, 36 unit tests, 151 integration tests across 18 files, the build, and the ER-diagram check passed. Frontend formatting, lint, typecheck, 116 interaction tests across 20 files, and the build passed. Eight browser end-to-end tests (Playwright, Chromium, production build with production headers) passed. The final audit's independent probe passed 94 of 94 checks. These automated checks do not replace the role-by-role browser and phone checks in the [full testing guide](./guides/full-testing-guide.md), nor do they establish production readiness.
+Latest verification on 2026-10-12: against an isolated test PostgreSQL database (not the development database), all 16 migrations applied with no schema drift, and backend formatting, lint, typecheck, 37 unit tests, 171 integration tests across 19 files, the build, and the ER-diagram check passed. Frontend formatting, lint, typecheck, 127 interaction tests across 21 files, and the build passed. Seventeen browser tests (Playwright, Chromium, production build with production headers) passed, including the care workflow, notification inbox/read persistence, and a 70-view responsive hospital navigation tour. Both dependency audits reported zero known vulnerabilities. The [current platform review](./final-audit/14-current-platform-review.md) records the security, race-condition, responsive-layout, startup, and schema fixes. The earlier final audit's independent probe passed 94 of 94 checks; it was not rerun in this review. These automated checks do not replace the role-by-role browser and actual-phone checks in the [full testing guide](./guides/full-testing-guide.md), nor do they establish production readiness.
 
 ## Important limitations
 
 - Routing is still manual. A request can remain `SUBMITTED` until a manager assigns it in the Requests screen.
-- The SLA worker runs inside the API: on a sleeping free Render instance it pauses with the API. Escalations reach staff only as in-app alerts (badge, sound, desktop notification while signed in); there is no SMS, email, or phone push.
+- The SLA and notification workers run inside the API: on a sleeping free Render instance they pause with the API. Escalations reach scoped staff through the persistent inbox and signed-in alerts; there is no SMS, email or closed-browser phone push.
 - Staff sign-in tokens are kept in the browser's localStorage. The Content Security Policy limits the main risk; moving to httpOnly cookies needs the web app and API on one site (a custom domain).
 - Forgotten passwords are reset by a staff manager in person; there is no self-service email reset (the app sends no email). A platform operator's own password cannot yet be changed in the app.
 - A shift does not automatically switch a staff member on or off duty.

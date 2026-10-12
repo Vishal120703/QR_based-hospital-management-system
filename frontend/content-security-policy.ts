@@ -8,13 +8,14 @@
 // treat a PDF tab as plugin content may need it, which was not tested.
 export function contentSecurityPolicy(apiUrl: string | undefined): string {
   const api = apiUrl && /^https?:\/\//.test(apiUrl) ? ` ${new URL(apiUrl).origin}` : '';
+  const socket = api ? api.replace(/^ http:/, ' ws:').replace(/^ https:/, ' wss:') : '';
   return [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self'",
     `img-src 'self' data: blob:${api}`,
     "font-src 'self'",
-    `connect-src 'self'${api}`,
+    `connect-src 'self'${api}${socket}`,
     "media-src 'self' blob:",
     'object-src blob:',
     "frame-src 'none'",

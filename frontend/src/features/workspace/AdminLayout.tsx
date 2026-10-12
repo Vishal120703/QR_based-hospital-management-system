@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
 import { ApiError, assetUrl, credentials, staffApi, type Me } from '../../api';
+import { NotificationBell } from '../notifications/NotificationBell';
 import { BrandMark, LoadState, NoticeStack, PoweredBy, RouteLoading } from '../../components';
 import { useRequestAlerts } from '../../lib/request-alerts';
 import { ChangePasswordForm } from '../auth/ChangePassword';
@@ -299,16 +300,31 @@ export function AdminLayout() {
             </>
           )}
           {me && !mustChangePassword && (
+            <NotificationBell
+              key={token}
+              token={token}
+              timezone={me.tenant.timezone}
+              onUnauthorized={reportError}
+            />
+          )}
+          {me && !mustChangePassword && (
             <NavLink
               className="button secondary signout-button"
               to="/admin/password"
               title="Change password"
+              aria-label="Change password"
             >
               <KeyRound size={16} aria-hidden="true" />
               <span>Password</span>
             </NavLink>
           )}
-          <button type="button" className="secondary signout-button" onClick={() => logout(token)}>
+          <button
+            type="button"
+            className="secondary signout-button"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={() => logout(token)}
+          >
             <LogOut size={16} aria-hidden="true" />
             <span>Sign out</span>
           </button>

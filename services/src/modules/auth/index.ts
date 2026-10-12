@@ -3,6 +3,7 @@
 export { AuthController } from './auth.controller.js';
 export { createAuthRoutes, type LoginRateLimits } from './auth.routes.js';
 export {
+  lockCredentialAccount,
   resetStaffPassword,
   revokeHospitalSessions,
   revokeStaffSessions,

@@ -27,6 +27,7 @@ export async function call<T>(
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 20_000);
   let response: Response;
+  let payload: unknown;
   try {
     response = await fetch(`${apiBase}${path}`, {
       method,
@@ -37,6 +38,10 @@ export async function call<T>(
       },
       ...(body ? { body: isFile ? body : JSON.stringify(body) } : {}),
     });
+    // Receiving headers is not the end of a request. A stalled/slow body
+    // must obey the same deadline, otherwise the form can stay busy forever.
+    payload = response.status === 204 ? null : await response.json().catch(() => null);
+    if (controller.signal.aborted) throw new Error('Response timed out');
   } catch {
     throw new ApiError(
       0,
@@ -48,7 +53,6 @@ export async function call<T>(
   } finally {
     window.clearTimeout(timeout);
   }
-  const payload: unknown = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
     const candidate =
       payload && typeof payload === 'object' && 'error' in payload ? payload.error : null;

@@ -12,5 +12,7 @@ CARE QR is one React frontend and one Express/Prisma backend. Start with the gui
 | Test every role and workflow | [Full testing guide](./guides/full-testing-guide.md) |
 | Check what is implemented versus still planned | [Project status](./project-status.md) |
 | Deploy the API on Render and the web app on Vercel | [Deployment guide](./deployment.md) |
+| Understand notifications, recipients, retries, and setup | [Notification architecture and verification](./architecture/notifications.md) |
+| See the latest UI, backend, schema, and security fixes and test results | [Current platform review](./final-audit/14-current-platform-review.md) |
 
 The ER diagram is generated from the Prisma model. After changing the schema, run `npm run prisma:generate` and `npm run docs:er` from `services/`; use `npm run docs:er:check` to verify it. Never run database integration tests against the development or production database; they require an isolated `TEST_DATABASE_URL`.

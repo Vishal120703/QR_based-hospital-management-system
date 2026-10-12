@@ -131,7 +131,10 @@ export function useRequestAlerts(options: {
           if (desktopAlertPermission() === 'granted') {
             for (const alert of fresh.slice(0, 3)) {
               try {
-                new Notification('CARE QR', { body: describeAlert(alert), tag: alert.key });
+                new Notification('CARE QR', {
+                  body: 'Work needs your attention. Open your authorized request queue.',
+                  tag: alert.key,
+                });
               } catch {
                 // Some browsers allow notifications only from a service worker.
               }

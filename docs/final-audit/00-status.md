@@ -20,3 +20,9 @@ Details: [baseline](./01-baseline.md), [API inventory](./03-backend-api.md), [is
 - AUD-001 is **resolved**: verified by regression tests for floor, ward, and department managers, unknown and other-hospital IDs, and empty periods, and by rerunning this audit's probe: 94 assertions, 94 passing, no identity leaks ([result](./evidence/stage3-results-2026-10-12.json)). Details in [04](./04-auth-authorization-tenancy.md#resolution-2026-10-12).
 - Also fixed since: request queue paging (no 500-request limit), hospital-time-zone report days, cleared report dates crashing, staff password change and reset, web security headers and Content Security Policy, an SLA escalation worker with staff alerts, graceful shutdown, and stale Render database configuration. Browser end-to-end tests now cover the main workflow.
 - Stages 4–13 of this audit were not rerun as a whole; the sections below say what changed and what is still unverified.
+
+## Current platform review — 2026-10-12
+
+A subsequent implementation review inspected the UI/workflow, backend, schema, and security and fixed verified defects. Its final gates passed: 37 backend unit tests, 171 integration tests, 127 frontend tests, and 17 browser tests, including a responsive navigation tour. All 16 migrations applied to a disposable database; schema drift is zero. Both dependency audits reported zero known vulnerabilities.
+
+See [current platform review and fixes](./14-current-platform-review.md) for findings, evidence, setup, and remaining acceptance. This does not retroactively mark every stage of the original audit complete, and it is not a production-readiness certification.

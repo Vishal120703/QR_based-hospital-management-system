@@ -4,6 +4,8 @@ const redactedPaths = [
   'err.body',
   'req.headers.authorization',
   'req.headers.cookie',
+  'req.headers.referer',
+  'req.query',
   'password',
   '*.password',
   '*.currentPassword',

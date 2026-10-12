@@ -1,22 +1,43 @@
 import {
+  Prisma,
   type EscalationStage,
   type EscalationTarget,
-  type Prisma,
   type RequestStatus,
 } from '@prisma/client';
 import { type Db } from '../../database/client.js';
 
 // Escalation steps taken after missed deadlines, and the requests due one.
 export class EscalationRepository {
+  public lockWaiting(
+    db: Db,
+    hospitalId: string,
+    id: string,
+    stage: EscalationStage,
+    statuses: readonly RequestStatus[],
+    dueAt: Date,
+  ) {
+    return db.$queryRaw<{ id: string; escalationLevel: number }[]>(Prisma.sql`
+      SELECT "id", "escalationLevel" FROM "ServiceRequest" WHERE "hospitalId" = ${hospitalId}::uuid
+        AND "id" = ${id}::uuid AND "status"::text IN (${Prisma.join(statuses)})
+        AND ${stage === 'ACCEPT' ? Prisma.sql`"acceptDueAt"` : Prisma.sql`"completeDueAt"`} = ${dueAt.toISOString()}::timestamp
+      FOR UPDATE
+    `);
+  }
   // Open requests with an escalation policy, past their current deadline, in
-  // hospitals that are open. The most overdue first.
-  public findOverdue(db: Db, overdue: Prisma.ServiceRequestWhereInput, take: number) {
+  // hospitals that are open. Stable ID batches avoid starving later requests.
+  public findOverdue(
+    db: Db,
+    overdue: Prisma.ServiceRequestWhereInput,
+    take: number,
+    after?: string,
+  ) {
     return db.serviceRequest.findMany({
       where: {
         AND: [overdue, { escalationPolicyId: { not: null } }],
         hospital: { status: 'ACTIVE', client: { status: 'ACTIVE' } },
+        ...(after ? { id: { gt: after } } : {}),
       },
-      orderBy: [{ acceptDueAt: 'asc' }, { id: 'asc' }],
+      orderBy: { id: 'asc' },
       take,
       select: {
         id: true,

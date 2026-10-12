@@ -36,6 +36,10 @@ async function hospital(label: string) {
   const admin = await database.hospitalMembership.findFirstOrThrow({
     where: { hospitalId, userId: adminUserId },
   });
+  await database.hospitalMembership.update({
+    where: { id: admin.id },
+    data: { dutyStatus: 'ON_DUTY' },
+  });
   const floor = await database.floor.create({
     data: { hospitalId, code: 'F1', name: 'First Floor', level: 1 },
   });
@@ -58,6 +62,15 @@ async function hospital(label: string) {
 async function main() {
   const a = await hospital('A');
   const b = await hospital('B');
+  const operatorEmail = `operator-${suffix}@example.test`.toLowerCase();
+  const operator = await database.user.create({
+    data: {
+      email: operatorEmail,
+      displayName: 'E2E Operator',
+      passwordHash: await hashPassword(fixturePassword),
+    },
+  });
+  await database.platformAdmin.create({ data: { userId: operator.id } });
 
   // A: admit a patient on bed A1 and print its QR.
   const bedA1 = a.beds[0]!;
@@ -161,6 +174,7 @@ async function main() {
   process.stdout.write(
     JSON.stringify({
       password: fixturePassword,
+      operatorEmail,
       a: { code: a.code, adminEmail: a.adminEmail, nurseEmail, qrPath: `/q/${qrToken}` },
       b: { code: b.code, adminEmail: b.adminEmail, waitingPublicIds },
     }),

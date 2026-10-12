@@ -28,6 +28,15 @@ test('a patient’s request is assigned, done, closed, and counted in today’s 
   const manager = await managerContext.newPage();
   const managerBlocked = watchSecurityPolicy(manager);
   await signIn(manager, fixture.a.code, fixture.a.adminEmail, fixture.password);
+  await expect(manager.getByRole('button', { name: /Notifications, [1-9]\d* unread/ })).toBeVisible(
+    { timeout: 15000 },
+  );
+  await manager.getByRole('button', { name: /Notifications,/ }).click();
+  await expect(manager.getByRole('dialog', { name: 'Your notifications' })).toBeVisible();
+  await expect(
+    manager.getByRole('dialog').getByText('New request needs assignment').first(),
+  ).toBeVisible();
+  await manager.getByRole('button', { name: 'Close dialog' }).click();
   await manager
     .getByRole('link', { name: /Requests/ })
     .first()
@@ -44,7 +53,25 @@ test('a patient’s request is assigned, done, closed, and counted in today’s 
   const staff = await staffContext.newPage();
   const staffBlocked = watchSecurityPolicy(staff);
   await signIn(staff, fixture.a.code, fixture.a.nurseEmail, fixture.password);
-  await staff.goto('/admin/requests');
+  // The persisted assignment arrives via Socket.IO. Marking it read changes
+  // only the inbox, then its authorized link opens that request in the board.
+  await expect(staff.getByRole('button', { name: 'Notifications, 1 unread' })).toBeVisible({
+    timeout: 15000,
+  });
+  await staff.getByRole('button', { name: 'Notifications, 1 unread' }).click();
+  await expect(staff.getByText('Request assigned to you').last()).toBeVisible();
+  await staff.getByRole('button', { name: 'Mark as read' }).click();
+  await expect(staff.getByRole('button', { name: 'Notifications, 0 unread' })).toBeVisible();
+  await staff.setViewportSize({ width: 390, height: 844 });
+  await expect(staff.getByRole('link', { name: 'Open request' })).toBeVisible();
+  expect(
+    await staff.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+  ).toBe(true);
+  await staff.keyboard.press('Escape');
+  await staff.reload();
+  await staff.getByRole('button', { name: 'Notifications, 0 unread' }).click();
+  await expect(staff.getByRole('dialog').getByText('Read', { exact: true })).toBeVisible();
+  await staff.getByRole('link', { name: 'Open request' }).click();
   const work = staff.locator('article.request-card', { hasText: 'Drinking Water' });
   await work.getByRole('button', { name: 'Accept' }).click();
   await work.getByRole('button', { name: 'Start work' }).click();

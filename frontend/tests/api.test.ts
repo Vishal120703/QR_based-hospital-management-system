@@ -2,6 +2,27 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError, credentials, guestApi, staffApi } from '../src/api';
 
 describe('API recovery', () => {
+  it('keeps the timeout active until the response body finishes', async () => {
+    vi.useFakeTimers();
+    try {
+      const response = new Response('{}');
+      let finish!: (value: unknown) => void;
+      const body = new Promise((resolve) => {
+        finish = resolve;
+      });
+      vi.spyOn(response, 'json').mockReturnValue(body);
+      const fetchMock = vi.fn().mockResolvedValue(response);
+      vi.stubGlobal('fetch', fetchMock);
+      const pending = staffApi.me('token');
+      await vi.advanceTimersByTimeAsync(20_001);
+      const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+      expect(options.signal?.aborted).toBe(true);
+      finish({});
+      await expect(pending).rejects.toMatchObject({ code: 'NETWORK_ERROR', status: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('provides an actionable network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     await expect(staffApi.me('token')).rejects.toMatchObject({

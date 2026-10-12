@@ -1,5 +1,9 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
-import { InvalidInputError, UnauthorizedError } from '../../common/errors/app-error.js';
+import {
+  ConflictError,
+  InvalidInputError,
+  UnauthorizedError,
+} from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
 import { recordStaffAudit } from '../audit/index.js';
 import { hospitalIsOpen, logoUrl } from '../hospitals/index.js';
@@ -39,11 +43,27 @@ export class StaffAuthService {
 
     const token = createOpaqueToken();
     const expiresAt = new Date(Date.now() + sessionDurationMs);
-    await this.auth.createSession(this.database, {
-      hospitalId: hospital.id,
-      membershipId: membership.id,
-      tokenHash: hashOpaqueToken(token),
-      expiresAt,
+    await this.database.$transaction(async (transaction) => {
+      await this.auth.lockUser(transaction, user.id);
+      const current = await this.auth.findUserByEmail(transaction, user.email);
+      const currentHospital = await this.auth.findHospitalByCode(transaction, hospital.code);
+      const currentMembership = await this.auth.findMembership(transaction, hospital.id, user.id);
+      if (
+        !current ||
+        current.passwordHash !== user.passwordHash ||
+        current.status !== 'ACTIVE' ||
+        !currentHospital ||
+        !hospitalIsOpen(currentHospital) ||
+        currentMembership?.status !== 'ACTIVE'
+      ) {
+        throw new UnauthorizedError();
+      }
+      await this.auth.createSession(transaction, {
+        hospitalId: hospital.id,
+        membershipId: membership.id,
+        tokenHash: hashOpaqueToken(token),
+        expiresAt,
+      });
     });
 
     return { token, expiresAt };
@@ -138,16 +158,23 @@ export class StaffAuthService {
       throw new InvalidInputError('Choose a new password that is different from the current one.');
     }
     const passwordHash = await hashPassword(input.newPassword);
-    const hospitalId = context.tenant.hospitalId;
     await this.database.$transaction(async (transaction) => {
-      await this.auth.replacePassword(transaction, context.user.id, {
-        passwordHash,
-        mustChangePassword: false,
-      });
+      if (
+        !stored ||
+        !(await this.auth.replacePasswordIfUnchanged(
+          transaction,
+          context.user.id,
+          stored.passwordHash,
+          passwordHash,
+        ))
+      ) {
+        throw new ConflictError(
+          'Your password changed meanwhile. Try again with your current password.',
+        );
+      }
       const signedOut = await this.auth.revokeOtherSessions(
         transaction,
-        hospitalId,
-        context.membershipId,
+        context.user.id,
         context.sessionId,
       );
       await recordStaffAudit(transaction, context, requestId, {
@@ -158,6 +185,11 @@ export class StaffAuthService {
       });
     });
   }
+}
+
+// Platform sign-in shares the credential account, not hospital permissions.
+export function lockCredentialAccount(transaction: Prisma.TransactionClient, userId: string) {
+  return repository.lockUser(transaction, userId);
 }
 
 // An administrator gives a staff member a temporary password, inside the

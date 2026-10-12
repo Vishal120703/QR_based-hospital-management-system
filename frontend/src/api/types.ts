@@ -267,6 +267,7 @@ export interface RequestQueue {
   };
 }
 export interface RequestQueueQuery {
+  id?: string;
   view?: 'open' | 'completed' | 'history';
   status?: PublicRequestStatus;
   overdue?: boolean;

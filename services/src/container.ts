@@ -55,6 +55,12 @@ import {
 } from './modules/qr/index.js';
 import { createReportRoutes, ReportController, ReportService } from './modules/reports/index.js';
 import {
+  createNotificationRoutes,
+  NotificationController,
+  NotificationService,
+} from './modules/notifications/index.js';
+import { type Logger } from 'pino';
+import {
   createPatientRequestRoutes,
   createRequestRoutes,
   PatientRequestController,
@@ -77,6 +83,7 @@ import {
 } from './modules/staff/index.js';
 
 export interface ContainerSettings {
+  readonly logger: Logger;
   readonly publicAppUrl: string;
   readonly guestSessionTtlMinutes: number;
   readonly qrResolveRateLimit: RateLimitOptions;
@@ -155,6 +162,11 @@ export function createContainer(
   admin.use(createRequestRoutes(new RequestController(requests)));
   admin.use(createReportRoutes(new ReportController(new ReportService(database))));
   admin.use(createAuditRoutes(new AuditController(new AuditService(database))));
+  admin.use(
+    createNotificationRoutes(
+      new NotificationController(new NotificationService(database, settings.logger)),
+    ),
+  );
 
   // Patient routes. Guest authentication is applied per route, so it can
   // never leak onto another route.

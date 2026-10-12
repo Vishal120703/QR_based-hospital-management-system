@@ -48,6 +48,7 @@ jobs:
       - run: npm run build
       - run: npm run prisma:validate
       - run: npm run prisma:status
+      - run: npm run prisma:check-drift
       - run: npm run docs:er:check
 
   frontend:

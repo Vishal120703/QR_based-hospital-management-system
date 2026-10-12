@@ -38,6 +38,7 @@ export type QueueView = keyof typeof queueStatuses;
 // overdue work.
 export const requestQueueQuerySchema = z
   .object({
+    id: z.string().uuid().optional(),
     view: z.enum(['open', 'completed', 'history']).default('open'),
     status: z
       .enum([

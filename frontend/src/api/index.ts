@@ -5,3 +5,4 @@ export * from './staff';
 export * from './patient';
 export * from './platform';
 export * from './reports';
+export * from './notifications';

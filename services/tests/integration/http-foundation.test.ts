@@ -11,6 +11,37 @@ import { errorHandler } from '../../src/middleware/error-handler.js';
 const logger = createLogger('silent');
 
 describe('HTTP foundation', () => {
+  it('does not cache session data or error responses and sends API security headers', async () => {
+    const application = createApp({ logger });
+    for (const path of ['/health', '/not-found']) {
+      const response = await request(application).get(path);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['referrer-policy']).toBe('no-referrer');
+      expect(response.headers['x-frame-options']).toBe('DENY');
+    }
+  });
+
+  it('omits credentials in query strings and referrers from HTTP logs', async () => {
+    const logs: string[] = [];
+    const application = createApp({
+      logger: createLogger('info', {
+        write: (line: string) => {
+          logs.push(line);
+        },
+      }),
+    });
+    await request(application)
+      .get('/health?token=private-query-secret')
+      .set('referer', 'http://localhost:5173/q/private-qr-secret')
+      .set('authorization', 'Bearer private-auth-secret');
+    const output = logs.join('');
+    expect(output).not.toContain('private-query-secret');
+    expect(output).not.toContain('private-qr-secret');
+    expect(output).not.toContain('private-auth-secret');
+    expect(output).toContain('/health');
+  });
+
   it('returns 200 from GET /health', async () => {
     const response = await request(createApp({ logger })).get('/health');
 

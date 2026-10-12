@@ -16,7 +16,11 @@ describe('Content Security Policy', () => {
     const policy = directives(contentSecurityPolicy('https://careqr-api.onrender.com/'));
     expect(policy['script-src']).toEqual(["'self'"]);
     expect(policy['style-src']).toEqual(["'self'"]);
-    expect(policy['connect-src']).toEqual(["'self'", 'https://careqr-api.onrender.com']);
+    expect(policy['connect-src']).toEqual([
+      "'self'",
+      'https://careqr-api.onrender.com',
+      'wss://careqr-api.onrender.com',
+    ]);
     expect(policy['img-src']).toContain('https://careqr-api.onrender.com');
     expect(policy['default-src']).toEqual(["'self'"]);
     expect(policy['base-uri']).toEqual(["'self'"]);

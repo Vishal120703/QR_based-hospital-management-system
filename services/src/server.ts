@@ -3,10 +3,18 @@ import { ZodError } from 'zod';
 import { createApp } from './app.js';
 import { loadConfig } from './config/env.js';
 import { createLogger } from './config/logger.js';
-import { checkDatabaseConnection, createPrismaClient } from './database/prisma.js';
+import {
+  checkDatabaseConnection,
+  checkWorkerSchema,
+  createPrismaClient,
+} from './database/prisma.js';
 import { checkRedisConnection, createRedisClient } from './database/redis.js';
 import { gracefulShutdown, listen, runCleanups, StartupError } from './http/server-lifecycle.js';
 import { EscalationService, startEscalationWorker } from './modules/requests/index.js';
+import {
+  createNotificationRealtime,
+  startNotificationWorker,
+} from './modules/notifications/index.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -19,6 +27,7 @@ async function main(): Promise<void> {
     const prisma = createPrismaClient(config.databaseUrl);
     await prisma.$connect();
     cleanups.unshift({ name: 'database', run: () => prisma.$disconnect() });
+    await checkWorkerSchema(prisma);
     // Redis is optional until a feature needs it; when configured it must work.
     const redis = config.redisUrl ? createRedisClient(config.redisUrl, logger) : null;
     if (redis) {
@@ -44,7 +53,13 @@ async function main(): Promise<void> {
       ],
     });
     const server = createServer(application);
+    const notifications = createNotificationRealtime(server, prisma, config.corsOrigins, logger);
+    cleanups.unshift({ name: 'notification realtime', run: () => notifications.stop() });
     await listen(server, config.port, config.host);
+    const notificationWorker = startNotificationWorker(prisma, logger, (notification) =>
+      notifications.deliver(notification),
+    );
+    cleanups.unshift({ name: 'notification worker', run: () => notificationWorker.stop() });
 
     // The SLA worker escalates overdue requests from this process.
     if (config.escalationIntervalSeconds > 0) {
@@ -64,6 +79,8 @@ async function main(): Promise<void> {
     });
     for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       process.on(signal, () => {
+        // WebSocket transports are long lived: close them before HTTP drain.
+        notifications.disconnect();
         void shutdown(signal);
       });
     }

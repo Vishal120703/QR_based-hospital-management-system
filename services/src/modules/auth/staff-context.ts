@@ -34,7 +34,7 @@ export interface StaffContext {
 
 // The scopes in which the staff member holds one permission.
 export function scopesFor(
-  context: StaffContext,
+  context: Pick<StaffContext, 'permissionScopes'>,
   permission: string,
 ): ReadonlyArray<AuthorizationScope> {
   return context.permissionScopes.get(permission) ?? [];
@@ -43,7 +43,9 @@ export function scopesFor(
 // Whether the permission covers a target: a bed in this ward and floor, and
 // for requests also the department that handles it.
 export function canAccessLocation(
-  context: StaffContext,
+  context: Pick<StaffContext, 'permissionScopes'> & {
+    tenant: Pick<StaffContext['tenant'], 'hospitalId'>;
+  },
   permission: string,
   target: {
     readonly wardId: string;

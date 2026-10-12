@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -101,6 +101,35 @@ function show(permissions: string[], membershipId = 'manager') {
 }
 
 describe('Request work screen', () => {
+  it('ignores a late background refresh after changing the request tab', async () => {
+    const user = userEvent.setup();
+    const load = serve([request]);
+    show(['request.read', 'request.assign']);
+    await screen.findByText(request.serviceName);
+    let finish!: (value: Awaited<ReturnType<typeof staffApi.requests>>) => void;
+    load.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    await user.click(screen.getByRole('button', { name: /^Refresh$/ }));
+    await user.click(screen.getByRole('button', { name: /Ready to close/ }));
+    await screen.findByText('No completed requests are waiting.');
+    await act(async () => {
+      finish({
+        serviceRequests: [request],
+        page: 1,
+        pageSize: 25,
+        total: 1,
+        counts: { open: 1, completed: 0, waiting: 1, overdue: 1, history: 0, completedToday: 0 },
+      });
+      await Promise.resolve();
+    });
+    expect(screen.getByText('No completed requests are waiting.')).toBeTruthy();
+    expect(screen.queryByText(request.serviceName)).toBeNull();
+  });
+
   it('lets a manager choose only eligible staff and assign a submitted request', async () => {
     const user = userEvent.setup();
     serve([request]);

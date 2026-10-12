@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   ApiError,
   staffApi,
@@ -63,6 +64,8 @@ const successMessages: Record<StaffRequestAction, string> = {
 };
 
 export function RequestsPage() {
+  const [params, setParams] = useSearchParams();
+  const selected = params.get('request');
   const { token, me, can, canAnywhere, reportError, reportSuccess } = useAdmin();
   const [queue, setQueue] = useState<RequestQueue | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +81,7 @@ export function RequestsPage() {
   const [transferTarget, setTransferTarget] = useState<StaffRequest | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const loading = useRef(false);
+  const loadSequence = useRef(0);
   const now = useNow();
 
   // The page being shown. The server orders it: overdue work first, then the
@@ -85,12 +89,15 @@ export function RequestsPage() {
   const query = useMemo<RequestQueueQuery>(
     () => ({
       view: tab,
-      page,
+      page: selected ? 1 : page,
       pageSize,
-      ...(tab === 'open' && filter === 'overdue' ? { overdue: true } : {}),
-      ...(tab === 'open' && filter === 'waiting' ? { status: 'SUBMITTED' as const } : {}),
+      ...(selected ? { id: selected } : {}),
+      ...(!selected && tab === 'open' && filter === 'overdue' ? { overdue: true } : {}),
+      ...(!selected && tab === 'open' && filter === 'waiting'
+        ? { status: 'SUBMITTED' as const }
+        : {}),
     }),
-    [tab, page, filter],
+    [tab, page, filter, selected],
   );
   const show = useCallback((loaded: RequestQueue) => {
     // The last item on a later page may have just moved on: step back.
@@ -106,9 +113,12 @@ export function RequestsPage() {
   const refresh = useCallback(async () => {
     if (loading.current) return;
     loading.current = true;
+    const current = ++loadSequence.current;
     try {
-      show(await staffApi.requests(token, query));
+      const loaded = await staffApi.requests(token, query);
+      if (current === loadSequence.current) show(loaded);
     } catch (cause) {
+      if (current !== loadSequence.current) return;
       setError(cause instanceof Error ? cause.message : 'Could not load requests.');
       if (cause instanceof ApiError && cause.status === 401) reportError(cause);
     } finally {
@@ -117,19 +127,20 @@ export function RequestsPage() {
   }, [token, query, show, reportError]);
 
   useEffect(() => {
-    let cancelled = false;
+    const current = ++loadSequence.current;
+    loading.current = false;
     staffApi.requests(token, query).then(
       (loaded) => {
-        if (!cancelled) show(loaded);
+        if (current === loadSequence.current) show(loaded);
       },
       (cause: unknown) => {
-        if (cancelled) return;
+        if (current !== loadSequence.current) return;
         setError(cause instanceof Error ? cause.message : 'Could not load requests.');
         if (cause instanceof ApiError && cause.status === 401) reportError(cause);
       },
     );
     return () => {
-      cancelled = true;
+      loadSequence.current += 1;
     };
   }, [token, query, show, reportError]);
   // New patient requests appear without a manual refresh.
@@ -210,11 +221,29 @@ export function RequestsPage() {
   ];
   const visible = queue?.serviceRequests ?? [];
   const total = queue?.total ?? 0;
-  const firstShown = (page - 1) * pageSize + 1;
+  const shownPage = selected ? 1 : page;
+  const firstShown = (shownPage - 1) * pageSize + 1;
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <>
+      {selected && (
+        <div className="notice notice-info">
+          Viewing the request linked from your inbox. If it is unavailable, it may have moved
+          outside your access area.
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              const next = new URLSearchParams(params);
+              next.delete('request');
+              setParams(next);
+            }}
+          >
+            Show all requests
+          </button>
+        </div>
+      )}
       <PageHeading
         title={manager ? 'Patient requests' : 'My requests'}
         description={
@@ -271,6 +300,11 @@ export function RequestsPage() {
                 className={tab === item.id ? 'tab active' : 'tab'}
                 aria-pressed={tab === item.id}
                 onClick={() => {
+                  if (selected) {
+                    const next = new URLSearchParams(params);
+                    next.delete('request');
+                    setParams(next);
+                  }
                   setTab(item.id);
                   setFilter('all');
                   setPage(1);
@@ -285,7 +319,7 @@ export function RequestsPage() {
               </span>
             )}
           </div>
-          {tab === 'open' && (counts?.open ?? 0) > 0 && (
+          {!selected && tab === 'open' && (counts?.open ?? 0) > 0 && (
             <div className="filter-chips" role="group" aria-label="Show">
               {filters.map((item) => (
                 <button
@@ -307,15 +341,17 @@ export function RequestsPage() {
           {visible.length === 0 ? (
             <div className="card empty-state">
               <p>
-                {tab === 'open' && filter !== 'all'
-                  ? 'No requests match this filter right now.'
-                  : tab === 'open'
-                    ? manager
-                      ? 'No patient requests need attention right now. New ones appear here automatically.'
-                      : 'Nothing is assigned to you right now. New work appears here automatically.'
-                    : tab === 'completed'
-                      ? 'No completed requests are waiting.'
-                      : 'No closed or cancelled requests yet.'}
+                {selected
+                  ? 'This request is no longer available in your access area. Choose Show all requests to return to your queue.'
+                  : tab === 'open' && filter !== 'all'
+                    ? 'No requests match this filter right now.'
+                    : tab === 'open'
+                      ? manager
+                        ? 'No patient requests need attention right now. New ones appear here automatically.'
+                        : 'Nothing is assigned to you right now. New work appears here automatically.'
+                      : tab === 'completed'
+                        ? 'No completed requests are waiting.'
+                        : 'No closed or cancelled requests yet.'}
               </p>
             </div>
           ) : (

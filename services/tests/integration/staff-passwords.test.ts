@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { z } from 'zod';
 import { createApp } from '../../src/app.js';
 import { createLogger } from '../../src/config/logger.js';
 import { createPrismaClient } from '../../src/database/prisma.js';
+import { AuthRepository } from '../../src/modules/auth/auth.repository.js';
+import { hashPassword } from '../../src/modules/auth/index.js';
 import {
   createHospitalFixture,
   createStaffToken,
   fixturePassword,
+  loginStaff,
   requireTestDatabaseUrl,
   type HospitalFixture,
 } from '../support/fixtures.js';
@@ -81,6 +84,94 @@ afterAll(async () => {
 });
 
 describe('Changing your own password', () => {
+  it('rejects old-credential staff and platform sign-ins racing a password change', async () => {
+    for (const domain of ['staff', 'platform']) {
+      const nurse = await careStaff(`LoginRace${domain}`);
+      const member = await database.hospitalMembership.findUniqueOrThrow({
+        where: { id: nurse.id },
+      });
+      if (domain === 'platform')
+        await database.platformAdmin.create({ data: { userId: member.userId } });
+      const passwordHash = await hashPassword('Replacement credential during login 2026');
+      const lock = AuthRepository.prototype.lockUser;
+      vi.spyOn(AuthRepository.prototype, 'lockUser').mockImplementationOnce(
+        async (transaction, userId) => {
+          // A concurrent password change commits after initial password
+          // verification, before the final session-creation account lock.
+          await database.user.update({ where: { id: userId }, data: { passwordHash } });
+          return lock.call(new AuthRepository(), transaction, userId);
+        },
+      );
+      const response =
+        domain === 'staff'
+          ? await signIn(nurse.email, fixturePassword)
+          : await request(application)
+              .post('/auth/platform/login')
+              .send({ email: nurse.email, password: fixturePassword });
+      expect(response.status).toBe(401);
+      expect(await database.staffSession.count({ where: { membershipId: member.id } })).toBe(0);
+      expect(await database.platformSession.count({ where: { userId: member.userId } })).toBe(0);
+      vi.restoreAllMocks();
+    }
+  });
+  it('ends other hospital and platform sessions for the same credential account', async () => {
+    const nurse = await careStaff('SharedAccount');
+    const here = tokenOf((await signIn(nurse.email, fixturePassword)).body);
+    const member = await database.hospitalMembership.findUniqueOrThrow({ where: { id: nurse.id } });
+    const other = await createHospitalFixture(database, application, 'PASSWORD-SHARED');
+    const linked = await database.hospitalMembership.create({
+      data: { hospitalId: other.hospitalId, userId: member.userId },
+    });
+    const role = await database.role.findFirstOrThrow({
+      where: { hospitalId: other.hospitalId, systemKey: 'CARE_STAFF' },
+    });
+    const userRole = await database.userRole.create({
+      data: { hospitalId: other.hospitalId, membershipId: linked.id, roleId: role.id },
+    });
+    await database.scopeAssignment.create({
+      data: {
+        hospitalId: other.hospitalId,
+        userRoleId: userRole.id,
+        scopeType: 'HOSPITAL',
+        scopeId: other.hospitalId,
+      },
+    });
+    const elsewhere = await loginStaff(application, other.code, nurse.email);
+    await database.platformAdmin.create({ data: { userId: member.userId } });
+    const operator = tokenOf(
+      (
+        await request(application).post('/auth/platform/login').send({
+          email: nurse.email,
+          password: fixturePassword,
+        })
+      ).body,
+    );
+    expect(
+      (
+        await as(here).post('/auth/staff/password', {
+          currentPassword: fixturePassword,
+          newPassword: 'Shared account new passphrase 44',
+        })
+      ).status,
+    ).toBe(204);
+    expect((await as(here).get('/auth/staff/me')).status).toBe(200);
+    expect((await as(elsewhere).get('/auth/staff/me')).status).toBe(401);
+    expect((await as(operator).get('/auth/platform/me')).status).toBe(401);
+  });
+
+  it('allows only one concurrent change with the same current password', async () => {
+    const nurse = await careStaff('ConcurrentChange');
+    const token = tokenOf((await signIn(nurse.email, fixturePassword)).body);
+    const results = await Promise.all(
+      ['Concurrent password choice A', 'Concurrent password choice B'].map((newPassword) =>
+        as(token).post('/auth/staff/password', { currentPassword: fixturePassword, newPassword }),
+      ),
+    );
+    expect(results.filter((result) => result.status === 204)).toHaveLength(1);
+    expect([400, 409]).toContain(results.find((result) => result.status !== 204)?.status);
+    expect(await auditFor('staff.password.change', nurse.id)).toHaveLength(1);
+  });
+
   it('needs the current password, keeps this session, and ends the others', async () => {
     const nurse = await careStaff('Nisha');
     const here = tokenOf((await signIn(nurse.email, fixturePassword)).body);

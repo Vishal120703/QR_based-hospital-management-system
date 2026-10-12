@@ -64,6 +64,22 @@ export function PlatformLayout() {
     };
   }, [token, version, reportError]);
 
+  // A sign-out or different account in another tab must replace this tab's
+  // token and cached identity too, just as in the hospital workspace.
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key !== 'careqr.platformToken' && event.key !== null) return;
+      const nextToken = credentials.platform();
+      if (nextToken === token) return;
+      setUser(null);
+      setError(null);
+      setSuccess(null);
+      setToken(nextToken);
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [token]);
+
   if (!token) return <Navigate to="/platform/login" replace />;
 
   return (

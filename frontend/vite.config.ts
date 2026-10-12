@@ -7,6 +7,7 @@ import { contentSecurityPolicy } from './content-security-policy.ts';
 // The browser only talks to this app's origin; /api is forwarded to the
 // backend, as the production reverse proxy will do.
 const apiProxy: Record<string, ProxyOptions> = {
+  '/socket.io': { target: 'http://localhost:3001', ws: true },
   '/api': {
     target: 'http://localhost:3001',
     rewrite: (path) => path.replace(/^\/api/, ''),

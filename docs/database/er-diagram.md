@@ -19,6 +19,7 @@ erDiagram
   PlatformAdmin ||--o{ PlatformSession : "admin"
   Hospital ||--o{ HospitalMembership : "hospital"
   User ||--o{ HospitalMembership : "user"
+  HospitalMembership ||--o{ StaffNotification : "recipient"
   Hospital ||--o{ Role : "hospital"
   Role ||--o{ RolePermission : "role"
   Permission ||--o{ RolePermission : "permission"

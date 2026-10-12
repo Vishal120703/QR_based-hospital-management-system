@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
@@ -58,6 +58,32 @@ function show(page: ReactNode, path = '/') {
 const showHospitals = () => show(<PlatformHospitalsPage />);
 
 describe('Platform administration', () => {
+  it('clears the platform workspace when another tab signs out', async () => {
+    credentials.setPlatform('platform-token');
+    vi.spyOn(platformApi, 'me').mockResolvedValue({
+      user: { id: 'u', email: 'ops@example.test', displayName: 'Ops' },
+    });
+    render(
+      <MemoryRouter initialEntries={['/platform']}>
+        <Routes>
+          <Route path="/platform" element={<PlatformLayout />}>
+            <Route index element={<p>Private platform workspace</p>} />
+          </Route>
+          <Route path="/platform/login" element={<p>Platform sign in</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByText('Private platform workspace');
+    act(() => {
+      credentials.setPlatform(null);
+      window.dispatchEvent(
+        new StorageEvent('storage', { key: 'careqr.platformToken', newValue: null }),
+      );
+    });
+    expect(await screen.findByText('Platform sign in')).toBeTruthy();
+    expect(screen.queryByText('Private platform workspace')).toBeNull();
+  });
+
   it('sends someone without a platform session to the platform sign-in page', async () => {
     credentials.setPlatform(null);
     render(

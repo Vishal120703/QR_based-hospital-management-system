@@ -27,4 +27,6 @@ Larger modules have multiple entities (for example `staff.*` and `shift.*`) or s
 - `src/container.ts` creates services/controllers and wires the route groups. `src/app.ts` owns shared HTTP middleware.
 - Service ESLint rules enforce import and repository boundaries; run lint, types, unit tests, integration tests with a disposable database, and build after changing a module.
 
-See [how to add a feature](../../../docs/adding-a-feature.md) for a concrete checklist. Planned future concerns (automatic routing, notifications, feedback) do not get modules until implemented.
+The `notifications` module owns the persistent staff inbox, recipient resolution, durable event processing, and authenticated Socket.IO delivery; see [notification architecture](../../../docs/architecture/notifications.md).
+
+See [how to add a feature](../../../docs/adding-a-feature.md) for a concrete checklist. Planned future concerns (automatic routing, feedback) do not get modules until implemented.

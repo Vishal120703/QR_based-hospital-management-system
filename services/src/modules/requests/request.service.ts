@@ -138,7 +138,9 @@ export class RequestService {
     const inView: Prisma.ServiceRequestWhereInput = {
       AND: [
         visible,
-        { status: { in: status ? [status] : [...queueStatuses[view]] } },
+        ...(query.id
+          ? [{ id: query.id }]
+          : [{ status: { in: status ? [status] : [...queueStatuses[view]] } }]),
         ...(overdue ? [overdueWhere(now)] : []),
       ],
     };

@@ -49,10 +49,26 @@ export class EscalationService {
     private readonly escalations = new EscalationRepository(),
   ) {}
 
-  // One pass over the most overdue requests (at most `batch`); returns how
+  // One pass, in bounded keyset batches, over overdue requests; returns how
   // many new escalation steps were taken.
   public async run(now = new Date(), batch = 500): Promise<number> {
-    const due = await this.escalations.findOverdue(this.database, overdueWhere(now), batch);
+    if (!Number.isInteger(batch) || batch < 1) throw new Error('Escalation batch must be positive');
+    let after: string | undefined;
+    let total = 0;
+    while (true) {
+      const due = await this.escalations.findOverdue(
+        this.database,
+        overdueWhere(now),
+        batch,
+        after,
+      );
+      total += await this.runBatch(due, now);
+      if (due.length < batch) return total;
+      after = due.at(-1)!.id;
+    }
+  }
+
+  private async runBatch(due: Awaited<ReturnType<EscalationRepository['findOverdue']>>, now: Date) {
     const policies = [
       ...new Map(
         due.map((request) => [
@@ -91,6 +107,18 @@ export class EscalationService {
   ): Promise<number> {
     try {
       return await this.database.$transaction(async (transaction) => {
+        // Serialize with request commands and competing workers. Checking the
+        // actual deadline under lock prevents a stale candidate escalating a
+        // request whose status/deadline changed after the scan.
+        const locked = await this.escalations.lockWaiting(
+          transaction,
+          request.hospitalId,
+          request.id,
+          stage,
+          stageStatuses[stage],
+          dueAt,
+        );
+        if (locked.length === 0) throw new MovedOn();
         const created = await this.escalations.create(
           transaction,
           reached.map((level) => ({
@@ -108,7 +136,7 @@ export class EscalationService {
           request.hospitalId,
           request.id,
           stageStatuses[stage],
-          highest,
+          Math.max(highest, locked[0]!.escalationLevel),
         );
         if (marked === 0) throw new MovedOn();
         if (created > 0) {
