@@ -70,11 +70,6 @@ export function clockTime(value: number | string): string {
     : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-export function isToday(value: string | null, now: number): boolean {
-  if (!value) return false;
-  return new Date(value).toDateString() === new Date(now).toDateString();
-}
-
 // Re-renders every interval so relative times ("3 min ago") stay current.
 export function useNow(intervalMs = 30_000): number {
   const [now, setNow] = useState(() => Date.now());

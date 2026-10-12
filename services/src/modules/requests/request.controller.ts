@@ -7,6 +7,7 @@ import {
   guestCancelSchema,
   publicIdParamsSchema,
   requestCommands,
+  requestQueueQuerySchema,
   submitRequestSchema,
   type RequestCommand,
 } from './request.schemas.js';
@@ -16,11 +17,10 @@ import { type RequestService } from './request.service.js';
 export class RequestController {
   public constructor(private readonly requests: RequestService) {}
 
+  // One page of open, completed, or finished work (see RequestService.list).
   public readonly list: RequestHandler = async (request, response) => {
-    emptySchema.parse(request.query);
-    response
-      .status(200)
-      .json({ serviceRequests: await this.requests.list(getStaffContext(request)) });
+    const query = requestQueueQuerySchema.parse(request.query);
+    response.status(200).json(await this.requests.list(getStaffContext(request), query));
   };
 
   public readonly get: RequestHandler = async (request, response) => {

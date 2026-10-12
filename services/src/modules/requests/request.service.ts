@@ -13,6 +13,7 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from '../../common/errors/app-error.js';
+import { dayIn, startOfDay } from '../../common/time-zone.js';
 import { recordStaffAudit } from '../audit/index.js';
 import { canAccessLocation, type StaffContext } from '../auth/index.js';
 import { type GuestContext } from '../bed-sessions/index.js';
@@ -21,6 +22,7 @@ import { hospitalIsOpen } from '../hospitals/index.js';
 import { findEligibleStaff } from '../staff/index.js';
 import { visibleRequestsWhere } from './request-scope.js';
 import { RequestRepository } from './request.repository.js';
+import { queueStatuses, type QueueView, type RequestQueueQuery } from './request.schemas.js';
 
 type Command =
   'assign' | 'accept' | 'start' | 'complete' | 'close' | 'cancel' | 'reject' | 'transfer';
@@ -61,6 +63,27 @@ function isUniqueConflict(error: unknown): boolean {
 
 const activeRequestStatuses: RequestStatus[] = ['SUBMITTED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'];
 
+// Open requests past the target that applies now: accept, then complete.
+export function overdueWhere(now: Date): Prisma.ServiceRequestWhereInput {
+  return {
+    OR: [
+      { status: { in: ['SUBMITTED', 'ASSIGNED'] }, acceptDueAt: { lt: now } },
+      { status: { in: ['ACCEPTED', 'IN_PROGRESS'] }, completeDueAt: { lt: now } },
+    ],
+  };
+}
+
+const oldestFirst: Prisma.ServiceRequestOrderByWithRelationInput[] = [
+  { submittedAt: 'asc' },
+  { id: 'asc' },
+];
+const queueOrder: Record<QueueView, Prisma.ServiceRequestOrderByWithRelationInput[]> = {
+  open: oldestFirst,
+  // Waiting longest to be closed first.
+  completed: [{ completedAt: 'asc' }, { id: 'asc' }],
+  history: [{ submittedAt: 'desc' }, { id: 'desc' }],
+};
+
 // Public responses never expose internal tenant, bed, session, assignee,
 // department, routing, or policy identifiers.
 function toPublicRequest(request: ServiceRequest) {
@@ -82,6 +105,15 @@ function toPublicRequest(request: ServiceRequest) {
   };
 }
 
+const emptyCounts = {
+  open: 0,
+  waiting: 0,
+  overdue: 0,
+  completed: 0,
+  history: 0,
+  completedToday: 0,
+};
+
 // The patient request lifecycle: patients submit and cancel; staff assign,
 // accept, start, complete, close, cancel, turn down, and hand over. Every
 // change is version-checked and adds one append-only event.
@@ -91,21 +123,82 @@ export class RequestService {
     private readonly requests = new RequestRepository(),
   ) {}
 
-  // Every open request in the caller's area, plus the 100 most recent finished
-  // ones, so a long history never hides work that still needs attention.
-  public async list(context: StaffContext) {
+  // One page of a work list in the caller's area, with every list's count.
+  // Open work comes overdue first, then the rest, oldest first within each,
+  // so no outstanding request hides behind newer ones however many there are.
+  public async list(context: StaffContext, query: RequestQueueQuery, now = new Date()) {
     if (!context.permissions.has('request.read')) throw new ForbiddenError();
-    const where = visibleRequestsWhere(context);
-    if (!where) return [];
-    const [open, finished] = await Promise.all([
-      this.requests.listWithBed(this.database, where, [...activeRequestStatuses, 'COMPLETED'], 500),
-      this.requests.listWithBed(this.database, where, ['CLOSED', 'CANCELLED', 'REJECTED'], 100),
+    const { view, status, overdue, page, pageSize } = query;
+    const visible = visibleRequestsWhere(context);
+    if (!visible) {
+      return { serviceRequests: [], page, pageSize, total: 0, counts: emptyCounts };
+    }
+    const inView: Prisma.ServiceRequestWhereInput = {
+      AND: [
+        visible,
+        { status: { in: status ? [status] : [...queueStatuses[view]] } },
+        ...(overdue ? [overdueWhere(now)] : []),
+      ],
+    };
+    const skip = (page - 1) * pageSize;
+    const db = this.database;
+    const pageOf = (where: Prisma.ServiceRequestWhereInput, from: number, take: number) =>
+      this.requests.pageWithBed(db, where, queueOrder[view], from, take);
+
+    let total: number;
+    let rows: Awaited<ReturnType<typeof pageOf>>;
+    if (view === 'open' && !overdue) {
+      const late = { AND: [inView, overdueWhere(now)] };
+      const onTime = { AND: [inView, { NOT: overdueWhere(now) }] };
+      const [lateCount, onTimeCount] = await Promise.all([
+        this.requests.count(db, late),
+        this.requests.count(db, onTime),
+      ]);
+      total = lateCount + onTimeCount;
+      const first = skip < lateCount ? await pageOf(late, skip, pageSize) : [];
+      const left = pageSize - first.length;
+      const rest = left > 0 ? await pageOf(onTime, Math.max(0, skip - lateCount), left) : [];
+      rows = [...first, ...rest];
+    } else {
+      [total, rows] = await Promise.all([
+        this.requests.count(db, inView),
+        pageOf(inView, skip, pageSize),
+      ]);
+    }
+    return {
+      serviceRequests: rows.map(({ bed, assignee, ...request }) => ({
+        ...request,
+        bed: { code: bed.code, displayName: bed.displayName },
+        assigneeName: assignee?.user.displayName ?? null,
+      })),
+      page,
+      pageSize,
+      total,
+      counts: await this.queueCounts(visible, context.tenant.timezone, now),
+    };
+  }
+
+  // How many requests each list holds, how many are overdue or waiting for
+  // someone to be assigned, and how many were completed today (hospital day).
+  private async queueCounts(visible: Prisma.ServiceRequestWhereInput, timeZone: string, now: Date) {
+    const db = this.database;
+    const [byStatus, overdue, completedToday] = await Promise.all([
+      this.requests.countByStatus(db, visible),
+      this.requests.count(db, { AND: [visible, overdueWhere(now)] }),
+      this.requests.count(db, {
+        AND: [visible, { completedAt: { gte: startOfDay(dayIn(now, timeZone), timeZone) } }],
+      }),
     ]);
-    return [...open, ...finished].map(({ bed, assignee, ...request }) => ({
-      ...request,
-      bed: { code: bed.code, displayName: bed.displayName },
-      assigneeName: assignee?.user.displayName ?? null,
-    }));
+    const sum = (statuses: readonly RequestStatus[]) =>
+      statuses.reduce((total, status) => total + (byStatus.get(status) ?? 0), 0);
+    return {
+      open: sum(queueStatuses.open),
+      waiting: sum(['SUBMITTED']),
+      overdue,
+      completed: sum(queueStatuses.completed),
+      history: sum(queueStatuses.history),
+      completedToday,
+    };
   }
 
   // Core creation use case; the public adapter below adds retry behavior while

@@ -2,9 +2,10 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import { staffApi, type Me, type StaffRequest } from '../src/api';
+import { staffApi, type Me, type RequestQueueQuery, type StaffRequest } from '../src/api';
 import { type AdminContext } from '../src/features/workspace/AdminLayout';
 import { RequestsPage } from '../src/features/requests/RequestsPage';
+import { isOverdue } from '../src/lib/request-status';
 
 const request: StaffRequest = {
   id: 'request-1',
@@ -23,6 +24,45 @@ const request: StaffRequest = {
   completedAt: null,
   version: 1,
 };
+
+const lists = {
+  open: ['SUBMITTED', 'ASSIGNED', 'ACCEPTED', 'IN_PROGRESS'],
+  completed: ['COMPLETED'],
+  history: ['CLOSED', 'CANCELLED', 'REJECTED'],
+};
+
+// Answers like the server: one list and page at a time, with every count.
+function serve(rows: StaffRequest[]) {
+  return vi
+    .spyOn(staffApi, 'requests')
+    .mockImplementation((_token: string, query: RequestQueueQuery = {}) => {
+      const now = Date.now();
+      const statuses = lists[query.view ?? 'open'];
+      const matching = rows.filter(
+        (row) =>
+          statuses.includes(row.status) &&
+          (!query.status || row.status === query.status) &&
+          (!query.overdue || isOverdue(row, now)),
+      );
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 25;
+      const count = (list: string[]) => rows.filter((row) => list.includes(row.status)).length;
+      return Promise.resolve({
+        serviceRequests: matching.slice((page - 1) * pageSize, page * pageSize),
+        page,
+        pageSize,
+        total: matching.length,
+        counts: {
+          open: count(lists.open),
+          waiting: count(['SUBMITTED']),
+          overdue: rows.filter((row) => isOverdue(row, now)).length,
+          completed: count(lists.completed),
+          history: count(lists.history),
+          completedToday: 0,
+        },
+      });
+    });
+}
 
 function show(permissions: string[], membershipId = 'manager') {
   const me: Me = {
@@ -60,7 +100,7 @@ function show(permissions: string[], membershipId = 'manager') {
 describe('Request work screen', () => {
   it('lets a manager choose only eligible staff and assign a submitted request', async () => {
     const user = userEvent.setup();
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([request]);
+    serve([request]);
     vi.spyOn(staffApi, 'eligible').mockResolvedValue([
       { membershipId: 'staff-1', displayName: 'Demo Nurse', dutyChangedAt: null },
     ]);
@@ -84,7 +124,7 @@ describe('Request work screen', () => {
 
   it('shows assigned staff only their action and lets them mark in-progress work complete', async () => {
     const user = userEvent.setup();
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([
+    serve([
       { ...request, status: 'IN_PROGRESS', assigneeId: 'staff-1', version: 4 },
       { ...request, id: 'other', publicId: 'CR-AAAAAAAAAAAAAAAA', assigneeId: 'staff-2' },
     ]);
@@ -103,7 +143,7 @@ describe('Request work screen', () => {
 
   it('lets a manager close completed work from the Ready to close tab', async () => {
     const user = userEvent.setup();
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([
+    serve([
       {
         ...request,
         status: 'COMPLETED',
@@ -123,7 +163,7 @@ describe('Request work screen', () => {
 
   it('asks for a reason before a manager cancels a request', async () => {
     const user = userEvent.setup();
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([request]);
+    serve([request]);
     const action = vi
       .spyOn(staffApi, 'requestAction')
       .mockResolvedValue({ ...request, status: 'CANCELLED', version: 2 });
@@ -142,9 +182,7 @@ describe('Request work screen', () => {
 
   it('lets assigned staff turn down work with a reason', async () => {
     const user = userEvent.setup();
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([
-      { ...request, status: 'ASSIGNED', assigneeId: 'staff-1', version: 2 },
-    ]);
+    serve([{ ...request, status: 'ASSIGNED', assigneeId: 'staff-1', version: 2 }]);
     const action = vi
       .spyOn(staffApi, 'requestAction')
       .mockResolvedValue({ ...request, status: 'REJECTED', version: 3 });
@@ -163,7 +201,7 @@ describe('Request work screen', () => {
 
   it('lets a manager hand accepted work to someone else who is eligible', async () => {
     const user = userEvent.setup();
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([
+    serve([
       {
         ...request,
         status: 'ACCEPTED',
@@ -194,11 +232,61 @@ describe('Request work screen', () => {
   });
 
   it('flags open requests that are past their response-time target', async () => {
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([
-      { ...request, acceptDueAt: new Date(Date.now() - 4 * 60_000).toISOString() },
-    ]);
+    serve([{ ...request, acceptDueAt: new Date(Date.now() - 4 * 60_000).toISOString() }]);
     show(['request.read', 'request.assign']);
     expect(await screen.findByText(/Accept overdue by 4 min/)).toBeTruthy();
     expect(screen.getByRole('status').textContent).toBe('1 overdue');
+  });
+
+  it('pages through a long queue and keeps the counts for every list', async () => {
+    const user = userEvent.setup();
+    const rows = Array.from({ length: 30 }, (_, index) => ({
+      ...request,
+      id: `request-${index}`,
+      publicId: `CR-${String(index).padStart(16, '0')}`,
+      serviceName: `Service ${index}`,
+      acceptDueAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+      completeDueAt: new Date(Date.now() + 2 * 60 * 60_000).toISOString(),
+    }));
+    const load = serve(rows);
+    show(['request.read', 'request.assign']);
+    expect(await screen.findByText('Service 0')).toBeTruthy();
+    expect(screen.getByText(/Showing 1–25 of 30/)).toBeTruthy();
+    expect(screen.queryByText('Service 25')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Service 29')).toBeTruthy();
+    expect(screen.getByText('Page 2 of 2')).toBeTruthy();
+    expect(load).toHaveBeenLastCalledWith('token', expect.objectContaining({ page: 2 }));
+    expect(screen.getByRole('button', { name: /Open 30/ })).toBeTruthy();
+  });
+
+  it('shows only overdue or only unassigned work when asked', async () => {
+    const user = userEvent.setup();
+    const late = { ...request, id: 'late', serviceName: 'Late water' };
+    const onTime = {
+      ...request,
+      id: 'on-time',
+      serviceName: 'Fresh linen',
+      status: 'ASSIGNED' as const,
+      assigneeId: 'someone',
+      assigneeName: 'Someone',
+      acceptDueAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+      completeDueAt: new Date(Date.now() + 2 * 60 * 60_000).toISOString(),
+    };
+    const load = serve([late, onTime]);
+    show(['request.read', 'request.assign']);
+    expect(await screen.findByText('Fresh linen')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /^Overdue 1/ }));
+    expect(load).toHaveBeenLastCalledWith('token', expect.objectContaining({ overdue: true }));
+    expect(await screen.findByText('Late water')).toBeTruthy();
+    expect(screen.queryByText('Fresh linen')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /^Waiting for assignment 1/ }));
+    expect(load).toHaveBeenLastCalledWith(
+      'token',
+      expect.objectContaining({ status: 'SUBMITTED' }),
+    );
   });
 });

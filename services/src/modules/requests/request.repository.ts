@@ -9,19 +9,27 @@ const withBedAndAssignee = {
 
 // Service requests and their append-only event history.
 export class RequestRepository {
-  // Newest first, with the bed and the assignee's name for the work screens.
-  public listWithBed(
+  // One page of a work list, with the bed and the assignee's name.
+  public pageWithBed(
     db: Db,
     where: Prisma.ServiceRequestWhereInput,
-    statuses: readonly RequestStatus[],
+    orderBy: Prisma.ServiceRequestOrderByWithRelationInput[],
+    skip: number,
     take: number,
   ) {
-    return db.serviceRequest.findMany({
-      where: { ...where, status: { in: [...statuses] } },
-      include: withBedAndAssignee,
-      orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
-      take,
-    });
+    return db.serviceRequest.findMany({ where, include: withBedAndAssignee, orderBy, skip, take });
+  }
+
+  public count(db: Db, where: Prisma.ServiceRequestWhereInput): Promise<number> {
+    return db.serviceRequest.count({ where });
+  }
+
+  public async countByStatus(
+    db: Db,
+    where: Prisma.ServiceRequestWhereInput,
+  ): Promise<Map<RequestStatus, number>> {
+    const groups = await db.serviceRequest.groupBy({ by: ['status'], where, _count: true });
+    return new Map(groups.map((group) => [group.status, group._count]));
   }
 
   public findFirst(db: Db, where: Prisma.ServiceRequestWhereInput) {

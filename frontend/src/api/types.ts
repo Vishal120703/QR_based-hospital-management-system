@@ -224,6 +224,32 @@ export interface StaffRequest {
   completedAt: string | null;
   version: number;
 }
+// One page of a work list, with how many requests every list holds.
+export interface RequestQueue {
+  serviceRequests: StaffRequest[];
+  page: number;
+  pageSize: number;
+  total: number;
+  counts: {
+    open: number;
+    // Waiting for someone to be assigned.
+    waiting: number;
+    overdue: number;
+    // Completed and waiting to be closed.
+    completed: number;
+    // Closed, cancelled, or turned down.
+    history: number;
+    // Completed today (hospital day), whatever happened after.
+    completedToday: number;
+  };
+}
+export interface RequestQueueQuery {
+  view?: 'open' | 'completed' | 'history';
+  status?: PublicRequestStatus;
+  overdue?: boolean;
+  page?: number;
+  pageSize?: number;
+}
 export type StaffRequestAction =
   'assign' | 'accept' | 'start' | 'complete' | 'close' | 'cancel' | 'reject' | 'transfer';
 

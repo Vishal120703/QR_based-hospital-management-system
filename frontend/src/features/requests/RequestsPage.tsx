@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ApiError,
   staffApi,
   type EligibleStaff,
+  type RequestQueue,
+  type RequestQueueQuery,
   type StaffRequest,
   type StaffRequestAction,
 } from '../../api';
@@ -10,10 +12,8 @@ import { LoadState, Modal, PageHeading } from '../../components';
 import {
   clockTime,
   currentDeadline,
-  finishedStatuses,
   formatDuration,
   isOverdue,
-  openStatuses,
   statusBadgeClass,
   statusLabels,
   timeAgo,
@@ -24,6 +24,9 @@ import { useAdmin } from '../workspace/AdminLayout';
 import { RequestTimelineDialog } from './RequestTimelineDialog';
 
 type Tab = 'open' | 'completed' | 'history';
+// Narrows the open list: everything, only overdue, or only unassigned.
+type OpenFilter = 'all' | 'overdue' | 'waiting';
+const pageSize = 25;
 
 const cancelReasons = [
   'Patient no longer needs it',
@@ -60,11 +63,13 @@ const successMessages: Record<StaffRequestAction, string> = {
 
 export function RequestsPage() {
   const { token, me, can, canAnywhere, reportError, reportSuccess } = useAdmin();
-  const [requests, setRequests] = useState<StaffRequest[] | null>(null);
+  const [queue, setQueue] = useState<RequestQueue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('open');
+  const [filter, setFilter] = useState<OpenFilter>('all');
+  const [page, setPage] = useState(1);
   const [candidates, setCandidates] = useState<Record<string, EligibleStaff[]>>({});
   const [assignees, setAssignees] = useState<Record<string, string>>({});
   const [cancelTarget, setCancelTarget] = useState<StaffRequest | null>(null);
@@ -74,28 +79,47 @@ export function RequestsPage() {
   const loading = useRef(false);
   const now = useNow();
 
+  // The page being shown. The server orders it: overdue work first, then the
+  // oldest, so nothing outstanding hides behind newer requests.
+  const query = useMemo<RequestQueueQuery>(
+    () => ({
+      view: tab,
+      page,
+      pageSize,
+      ...(tab === 'open' && filter === 'overdue' ? { overdue: true } : {}),
+      ...(tab === 'open' && filter === 'waiting' ? { status: 'SUBMITTED' as const } : {}),
+    }),
+    [tab, page, filter],
+  );
+  const show = useCallback((loaded: RequestQueue) => {
+    // The last item on a later page may have just moved on: step back.
+    if (loaded.serviceRequests.length === 0 && loaded.page > 1 && loaded.total > 0) {
+      setPage(Math.ceil(loaded.total / loaded.pageSize));
+      return;
+    }
+    setQueue(loaded);
+    setUpdatedAt(Date.now());
+    setError(null);
+  }, []);
+
   const refresh = useCallback(async () => {
     if (loading.current) return;
     loading.current = true;
     try {
-      setRequests(await staffApi.requests(token));
-      setUpdatedAt(Date.now());
-      setError(null);
+      show(await staffApi.requests(token, query));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load requests.');
       if (cause instanceof ApiError && cause.status === 401) reportError(cause);
     } finally {
       loading.current = false;
     }
-  }, [token, reportError]);
+  }, [token, query, show, reportError]);
 
   useEffect(() => {
     let cancelled = false;
-    staffApi.requests(token).then(
+    staffApi.requests(token, query).then(
       (loaded) => {
-        if (cancelled) return;
-        setRequests(loaded);
-        setUpdatedAt(Date.now());
+        if (!cancelled) show(loaded);
       },
       (cause: unknown) => {
         if (cancelled) return;
@@ -106,7 +130,7 @@ export function RequestsPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, reportError]);
+  }, [token, query, show, reportError]);
   // New patient requests appear without a manual refresh.
   useAutoRefresh(
     useCallback(() => {
@@ -163,31 +187,30 @@ export function RequestsPage() {
     }
   }
 
+  // Managers see every request in their area; other staff only their own work
+  // (the server sends only what each person may see).
   const manager = canAnywhere('request.assign');
-  // Managers see every request in their area; other staff see their own work.
-  const mine = (request: StaffRequest) => manager || request.assigneeId === me.membershipId;
-  const groups: Record<Tab, StaffRequest[]> = {
-    open: (requests ?? [])
-      .filter((request) => mine(request) && openStatuses.includes(request.status))
-      .sort((left, right) => {
-        const leftDue = currentDeadline(left)?.dueAt ?? 0;
-        const rightDue = currentDeadline(right)?.dueAt ?? 0;
-        return leftDue - rightDue;
-      }),
-    completed: (requests ?? []).filter(
-      (request) => mine(request) && request.status === 'COMPLETED',
-    ),
-    history: (requests ?? []).filter(
-      (request) => mine(request) && finishedStatuses.includes(request.status),
-    ),
-  };
-  const overdue = groups.open.filter((request) => isOverdue(request, now)).length;
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'open', label: manager ? 'Open' : 'My open work' },
-    { id: 'completed', label: manager ? 'Ready to close' : 'Completed' },
-    { id: 'history', label: 'History' },
+  const counts = queue?.counts;
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: 'open', label: manager ? 'Open' : 'My open work', count: counts?.open ?? 0 },
+    {
+      id: 'completed',
+      label: manager ? 'Ready to close' : 'Completed',
+      count: counts?.completed ?? 0,
+    },
+    { id: 'history', label: 'History', count: counts?.history ?? 0 },
   ];
-  const visible = groups[tab];
+  const filters: { id: OpenFilter; label: string; count: number }[] = [
+    { id: 'all', label: 'All open', count: counts?.open ?? 0 },
+    { id: 'overdue', label: 'Overdue', count: counts?.overdue ?? 0 },
+    ...(manager
+      ? [{ id: 'waiting' as const, label: 'Waiting for assignment', count: counts?.waiting ?? 0 }]
+      : []),
+  ];
+  const visible = queue?.serviceRequests ?? [];
+  const total = queue?.total ?? 0;
+  const firstShown = (page - 1) * pageSize + 1;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <>
@@ -228,7 +251,7 @@ export function RequestsPage() {
         </li>
       </ol>
 
-      {!requests ? (
+      {!queue ? (
         <LoadState
           loading={!error}
           error={error}
@@ -245,28 +268,52 @@ export function RequestsPage() {
                 type="button"
                 className={tab === item.id ? 'tab active' : 'tab'}
                 aria-pressed={tab === item.id}
-                onClick={() => setTab(item.id)}
+                onClick={() => {
+                  setTab(item.id);
+                  setFilter('all');
+                  setPage(1);
+                }}
               >
-                {item.label} <span className="count">{groups[item.id].length}</span>
+                {item.label} <span className="count">{item.count}</span>
               </button>
             ))}
-            {overdue > 0 && (
+            {(counts?.overdue ?? 0) > 0 && (
               <span className="badge badge-danger" role="status">
-                {overdue} overdue
+                {counts?.overdue} overdue
               </span>
             )}
           </div>
+          {tab === 'open' && (counts?.open ?? 0) > 0 && (
+            <div className="filter-chips" role="group" aria-label="Show">
+              {filters.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={filter === item.id ? 'tab active' : 'tab'}
+                  aria-pressed={filter === item.id}
+                  onClick={() => {
+                    setFilter(item.id);
+                    setPage(1);
+                  }}
+                >
+                  {item.label} <span className="count">{item.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {visible.length === 0 ? (
             <div className="card empty-state">
               <p>
-                {tab === 'open'
-                  ? manager
-                    ? 'No patient requests need attention right now. New ones appear here automatically.'
-                    : 'Nothing is assigned to you right now. New work appears here automatically.'
-                  : tab === 'completed'
-                    ? 'No completed requests are waiting.'
-                    : 'No closed or cancelled requests yet.'}
+                {tab === 'open' && filter !== 'all'
+                  ? 'No requests match this filter right now.'
+                  : tab === 'open'
+                    ? manager
+                      ? 'No patient requests need attention right now. New ones appear here automatically.'
+                      : 'Nothing is assigned to you right now. New work appears here automatically.'
+                    : tab === 'completed'
+                      ? 'No completed requests are waiting.'
+                      : 'No closed or cancelled requests yet.'}
               </p>
             </div>
           ) : (
@@ -446,6 +493,33 @@ export function RequestsPage() {
                 );
               })}
             </div>
+          )}
+          {total > pageSize && (
+            <nav className="pager" aria-label="Pages">
+              <span className="muted small">
+                Showing {firstShown}–{Math.min(firstShown + visible.length - 1, total)} of {total}
+                {tab === 'open' && ' · overdue first, then oldest first'}
+              </span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </button>
+              <span className="small">
+                Page {page} of {pages}
+              </span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={page >= pages}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </button>
+            </nav>
           )}
         </>
       )}

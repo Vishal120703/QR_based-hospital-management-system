@@ -1,4 +1,4 @@
-import { call } from './client';
+import { call, query } from './client';
 import {
   type Bed,
   type BedSession,
@@ -24,6 +24,8 @@ import {
   type Shift,
   type SlaPolicy,
   type StaffMember,
+  type RequestQueue,
+  type RequestQueueQuery,
   type StaffRequest,
   type StaffRequestAction,
 } from './types';
@@ -162,9 +164,9 @@ export const staffApi = {
         token,
       )
     ).staff,
-  requests: async (token: string) =>
-    (await call<{ serviceRequests: StaffRequest[] }>('GET', '/admin/requests', token))
-      .serviceRequests,
+  // One page of open, completed, or finished work: overdue first, then oldest.
+  requests: (token: string, options: RequestQueueQuery = {}) =>
+    call<RequestQueue>('GET', `/admin/requests${query({ ...options })}`, token),
   requestAction: async (
     token: string,
     id: string,

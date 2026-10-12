@@ -125,14 +125,26 @@ describe('Manual-testing hospitals', () => {
   });
 
   it('shows each person only the requests in their area', async () => {
-    const list = async (key: string) =>
-      z
-        .object({
-          serviceRequests: z.array(
-            z.object({ hospitalId: z.string(), assigneeId: z.string().nullable() }).passthrough(),
-          ),
-        })
-        .parse((await as(key).get('/admin/requests')).body).serviceRequests;
+    // Every page of every list (open, completed, finished).
+    const pageSchema = z.object({
+      serviceRequests: z.array(
+        z.object({ hospitalId: z.string(), assigneeId: z.string().nullable() }).passthrough(),
+      ),
+    });
+    const list = async (key: string) => {
+      const rows: z.infer<typeof pageSchema>['serviceRequests'] = [];
+      for (const view of ['open', 'completed', 'history']) {
+        for (let page = 1; ; page += 1) {
+          const response = await as(key).get(
+            `/admin/requests?view=${view}&page=${page}&pageSize=100`,
+          );
+          const found = pageSchema.parse(response.body).serviceRequests;
+          rows.push(...found);
+          if (found.length < 100) break;
+        }
+      }
+      return rows;
+    };
     const city = await database.hospital.findUniqueOrThrow({ where: { code: cityCare.code } });
     const everything = await list('meera');
     expect(everything.length).toBeGreaterThan(50);

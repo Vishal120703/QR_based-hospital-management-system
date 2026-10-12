@@ -7,15 +7,16 @@ import {
   type BedSession,
   type QrCode,
   type ServiceItem,
+  type RequestQueue,
   type StaffMember,
-  type StaffRequest,
 } from '../../api';
 import { LoadState, PageHeading } from '../../components';
-import { isOverdue, isToday, openStatuses, useAutoRefresh, useNow } from '../../lib/request-status';
+import { useAutoRefresh, useNow } from '../../lib/request-status';
 import { adminPages, useAdmin } from './AdminLayout';
 
 interface Snapshot {
-  requests: StaffRequest[] | null;
+  // Only the counts are used: one small page carries them.
+  requests: RequestQueue | null;
   beds: Bed[] | null;
   sessions: BedSession[] | null;
   qrCodes: QrCode[] | null;
@@ -57,7 +58,7 @@ export function OverviewPage() {
     const optional = <T,>(allowed: boolean, fetch: () => Promise<T>) =>
       allowed ? fetch() : Promise.resolve(null);
     const [requests, beds, sessions, qrCodes, staff, services] = await Promise.all([
-      optional(canRequests, () => staffApi.requests(token)),
+      optional(canRequests, () => staffApi.requests(token, { pageSize: 1 })),
       optional(canBeds, () => staffApi.list<Bed>(token, 'beds')),
       optional(canBeds, () => staffApi.list<BedSession>(token, 'bed-sessions', '?status=ACTIVE')),
       optional(canBeds, () => staffApi.list<QrCode>(token, 'qr-codes')),
@@ -122,12 +123,7 @@ export function OverviewPage() {
         <LoadState loading={!error} error={error} label="Loading your overview…" onRetry={load} />
       ) : (
         <>
-          <Stats
-            data={data}
-            now={now}
-            manager={canAnywhere('request.assign')}
-            me={me.membershipId}
-          />
+          <Stats data={data} manager={canAnywhere('request.assign')} />
           {can('hospital.manage') && (
             <SetupChecklist data={data} hasLogo={Boolean(me.tenant.logoUrl)} can={can} />
           )}
@@ -154,25 +150,16 @@ export function OverviewPage() {
   );
 }
 
-function Stats({
-  data,
-  now,
-  manager,
-  me,
-}: {
-  data: Snapshot;
-  now: number;
-  manager: boolean;
-  me: string;
-}) {
-  const requests = (data.requests ?? []).filter((request) => manager || request.assigneeId === me);
-  const open = requests.filter((request) => openStatuses.includes(request.status));
+function Stats({ data, manager }: { data: Snapshot; manager: boolean }) {
+  // Counted by the server: managers' counts cover their area, other staff
+  // their own work, and "today" is the hospital's day.
+  const counts = data.requests?.counts;
   const tiles: { label: string; value: number; hint: string; to: string; tone?: string }[] = [];
-  if (data.requests) {
+  if (counts) {
     if (manager) {
       tiles.push({
         label: 'Waiting for assignment',
-        value: open.filter((request) => request.status === 'SUBMITTED').length,
+        value: counts.waiting,
         hint: 'New patient requests',
         to: '/admin/requests',
         tone: 'warning',
@@ -181,20 +168,20 @@ function Stats({
     tiles.push(
       {
         label: manager ? 'Being handled' : 'Your open work',
-        value: open.filter((request) => (manager ? request.status !== 'SUBMITTED' : true)).length,
+        value: manager ? counts.open - counts.waiting : counts.open,
         hint: 'Assigned, accepted, or in progress',
         to: '/admin/requests',
       },
       {
         label: 'Overdue',
-        value: open.filter((request) => isOverdue(request, now)).length,
+        value: counts.overdue,
         hint: 'Past the response-time target',
         to: '/admin/requests',
         tone: 'danger',
       },
       {
         label: 'Completed today',
-        value: requests.filter((request) => isToday(request.completedAt, now)).length,
+        value: counts.completedToday,
         hint: 'Finished by staff',
         to: '/admin/requests',
         tone: 'success',
@@ -286,7 +273,14 @@ function SetupChecklist({
       to: '/admin/beds',
     },
     {
-      done: (data.requests ?? []).some((request) => request.status !== 'SUBMITTED'),
+      // Any request that got past "waiting for assignment".
+      done: data.requests
+        ? data.requests.counts.open -
+            data.requests.counts.waiting +
+            data.requests.counts.completed +
+            data.requests.counts.history >
+          0
+        : false,
       available: can('request.assign'),
       title: 'Handle the first request',
       help: 'Assign a patient request to staff.',

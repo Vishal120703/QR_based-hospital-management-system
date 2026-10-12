@@ -1,27 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import { staffApi, type StaffRequest } from '../src/api';
+import { staffApi, type RequestQueue } from '../src/api';
 import { type AdminContext } from '../src/features/workspace/AdminLayout';
 import { OverviewPage } from '../src/features/workspace/OverviewPage';
-
-const submitted: StaffRequest = {
-  id: 'request-1',
-  publicId: 'CR-1234567890ABCDEF',
-  bedId: 'bed-1',
-  bed: { code: 'BED-01', displayName: 'Bed 01' },
-  departmentId: 'department-1',
-  serviceName: 'Drinking Water',
-  priority: 'NORMAL',
-  status: 'SUBMITTED',
-  assigneeId: null,
-  assigneeName: null,
-  submittedAt: new Date().toISOString(),
-  acceptDueAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-  completeDueAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-  completedAt: null,
-  version: 1,
-};
 
 function show(hospitalWide: string[], anywhere: string[] = hospitalWide) {
   const context: AdminContext = {
@@ -55,9 +37,28 @@ function show(hospitalWide: string[], anywhere: string[] = hospitalWide) {
   );
 }
 
+// The counts the server sends with a page of requests.
+const queue = (counts: Partial<RequestQueue['counts']>): RequestQueue => ({
+  serviceRequests: [],
+  page: 1,
+  pageSize: 1,
+  total: counts.open ?? 0,
+  counts: {
+    open: 0,
+    waiting: 0,
+    overdue: 0,
+    completed: 0,
+    history: 0,
+    completedToday: 0,
+    ...counts,
+  },
+});
+
 describe('Overview', () => {
   it('shows a floor manager their request counts and only the screens they can open', async () => {
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([submitted]);
+    const requests = vi
+      .spyOn(staffApi, 'requests')
+      .mockResolvedValue(queue({ open: 1, waiting: 1 }));
     const list = vi.spyOn(staffApi, 'list').mockResolvedValue([]);
     show([], ['request.read', 'request.assign', 'staff.read']);
 
@@ -65,13 +66,15 @@ describe('Overview', () => {
     expect(waiting.textContent).toContain('1');
     expect(screen.getByRole('link', { name: /Requests/ })).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Staff & coverage/ })).toBeNull();
+    // Only the counts are needed, so only one small page is asked for.
+    expect(requests).toHaveBeenCalledWith('token', { pageSize: 1 });
     // A floor-scoped staff.read does not load the hospital-wide staff list.
     expect(list).not.toHaveBeenCalled();
     expect(screen.queryByText(/Finish setting up/)).toBeNull();
   });
 
   it('guides an administrator through the remaining setup steps', async () => {
-    vi.spyOn(staffApi, 'requests').mockResolvedValue([]);
+    vi.spyOn(staffApi, 'requests').mockResolvedValue(queue({}));
     vi.spyOn(staffApi, 'list').mockImplementation((_token, kind) =>
       Promise.resolve(
         kind === 'beds'

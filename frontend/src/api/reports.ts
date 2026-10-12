@@ -1,4 +1,4 @@
-import { call } from './client';
+import { call, query } from './client';
 import { type Priority, type PublicRequestStatus } from './types';
 
 // Reports and audit (who did what, on time or not, and why not).
@@ -166,13 +166,6 @@ export interface AuditPage {
   nextBefore: string | null;
   // Everyone who has made changes (first page only), for the "Who" filter.
   people?: { id: string; name: string }[];
-}
-
-function query(params: Record<string, string | undefined>): string {
-  const entries = Object.entries(params).filter((entry): entry is [string, string] =>
-    Boolean(entry[1]),
-  );
-  return entries.length ? `?${new URLSearchParams(entries).toString()}` : '';
 }
 
 export const reportApi = {

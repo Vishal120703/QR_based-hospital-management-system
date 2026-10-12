@@ -115,6 +115,14 @@ export const credentials = {
 };
 
 // Server paths such as a logo URL, as the browser must request them.
+// A query string from the values that are set: ?view=open&page=2.
+export function query(params: Record<string, string | number | boolean | undefined>): string {
+  const entries = Object.entries(params)
+    .filter((entry) => entry[1] !== undefined && entry[1] !== '' && entry[1] !== false)
+    .map(([key, value]) => [key, String(value)]);
+  return entries.length ? `?${new URLSearchParams(entries).toString()}` : '';
+}
+
 export function assetUrl(path: string): string {
   return `${apiBase}${path}`;
 }
