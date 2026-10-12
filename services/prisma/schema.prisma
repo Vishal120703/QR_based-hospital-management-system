@@ -239,15 +239,18 @@ model HospitalSetting {
 }
 
 model User {
-  id            String               @id @default(uuid()) @db.Uuid
-  email         String               @unique
-  displayName   String
-  passwordHash  String
-  status        UserStatus           @default(ACTIVE)
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  memberships   HospitalMembership[]
-  platformAdmin PlatformAdmin?
+  id                 String               @id @default(uuid()) @db.Uuid
+  email              String               @unique
+  displayName        String
+  passwordHash       String
+  // Set by an administrator's password reset; cleared when the person
+  // chooses a new password. Until then only sign-out and the change work.
+  mustChangePassword Boolean              @default(false)
+  status             UserStatus           @default(ACTIVE)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  memberships        HospitalMembership[]
+  platformAdmin      PlatformAdmin?
 }
 
 // SaaS platform operators: they onboard and manage client hospitals, outside

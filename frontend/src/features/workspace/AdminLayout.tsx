@@ -7,6 +7,7 @@ import {
   ClipboardList,
   History,
   Hospital,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   MapPinned,
@@ -21,6 +22,7 @@ import {
 import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
 import { ApiError, assetUrl, credentials, staffApi, type Me } from '../../api';
 import { BrandMark, LoadState, NoticeStack, PoweredBy, RouteLoading } from '../../components';
+import { ChangePasswordForm } from '../auth/ChangePassword';
 
 // `anyScope` pages filter their data by floor or ward on the server, so a
 // permission held for only part of the hospital is enough to open them.
@@ -169,6 +171,11 @@ export function AdminLayout() {
         signOut();
         return;
       }
+      // A password reset happened meanwhile: show the change-password screen.
+      if (cause instanceof ApiError && cause.code === 'PASSWORD_CHANGE_REQUIRED') {
+        setVersion((value) => value + 1);
+        return;
+      }
       setError(cause instanceof Error ? cause.message : 'Something went wrong.');
       setSuccess(null);
     },
@@ -231,7 +238,11 @@ export function AdminLayout() {
     canAnywhere,
     refreshMe: () => setVersion((value) => value + 1),
   };
-  const available = adminPages.filter((page) => pageAllowed(page, { can, canAnywhere }));
+  // After an administrator's reset, nothing opens until a new password is chosen.
+  const mustChangePassword = me?.mustChangePassword ?? false;
+  const available = mustChangePassword
+    ? []
+    : adminPages.filter((page) => pageAllowed(page, { can, canAnywhere }));
   // A page's own sub-pages (such as one person's report) count as that page,
   // for the title and for the permission check.
   const current = adminPages.find(
@@ -240,6 +251,7 @@ export function AdminLayout() {
       location.pathname.startsWith(`/admin/${page.path}/`),
   );
   const allowed = !current || pageAllowed(current, { can, canAnywhere });
+  const ownAccount = location.pathname === '/admin/password';
 
   return (
     <div className="admin">
@@ -251,8 +263,8 @@ export function AdminLayout() {
           <BrandMark /> CARE QR
         </NavLink>
         <div className="topbar-current">
-          <span>{current?.group ?? 'Work'}</span>
-          <strong>{current?.label ?? 'Overview'}</strong>
+          <span>{current?.group ?? (ownAccount ? 'Your account' : 'Work')}</span>
+          <strong>{current?.label ?? (ownAccount ? 'Change password' : 'Overview')}</strong>
         </div>
         <div className="topbar-user">
           {me && (
@@ -269,6 +281,16 @@ export function AdminLayout() {
                 <small>{me.user.displayName}</small>
               </span>
             </>
+          )}
+          {me && !mustChangePassword && (
+            <NavLink
+              className="button secondary signout-button"
+              to="/admin/password"
+              title="Change password"
+            >
+              <KeyRound size={16} aria-hidden="true" />
+              <span>Password</span>
+            </NavLink>
           )}
           <button type="button" className="secondary signout-button" onClick={() => logout(token)}>
             <LogOut size={16} aria-hidden="true" />
@@ -350,6 +372,22 @@ export function AdminLayout() {
                 setVersion((value) => value + 1);
               }}
             />
+          ) : mustChangePassword ? (
+            <section className="forced-password" aria-labelledby="forced-password-title">
+              <h1 id="forced-password-title">Choose a new password</h1>
+              <p className="muted">
+                Your password was reset by a hospital administrator. Enter the temporary password
+                you were given, then choose your own. Nothing else opens until you do.
+              </p>
+              <ChangePasswordForm
+                token={token}
+                forced
+                onChanged={() => {
+                  reportSuccess('Password changed. Welcome back.');
+                  setVersion((value) => value + 1);
+                }}
+              />
+            </section>
           ) : allowed ? (
             <Suspense fallback={<RouteLoading />}>
               <Outlet key={token} context={context} />

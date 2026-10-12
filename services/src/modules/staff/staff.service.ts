@@ -10,6 +10,7 @@ import { recordStaffAudit } from '../audit/index.js';
 import {
   canAccessLocation,
   hashPassword,
+  resetStaffPassword,
   revokeStaffSessions,
   type StaffContext,
 } from '../auth/index.js';
@@ -297,6 +298,65 @@ export class StaffService {
     });
   }
 
+  // A staff manager gives someone who forgot their password a temporary one,
+  // to tell them in person. Every session of theirs ends and they must choose
+  // their own at the next sign-in. Only for someone whose permissions the
+  // manager holds (or they could sign in with more power), never oneself
+  // (use Change password), and never an account also used outside this
+  // hospital. The audit entry records the reset, never the password.
+  public async resetPassword(
+    context: StaffContext,
+    id: string,
+    temporaryPassword: string,
+    requestId: string,
+  ) {
+    if (id === context.membershipId) {
+      throw new ConflictError('Use Change password to change your own password.');
+    }
+    const hospitalId = context.tenant.hospitalId;
+    const passwordHash = await hashPassword(temporaryPassword);
+    return this.database.$transaction(async (transaction) => {
+      const member = await this.requireMember(transaction, context, id);
+      await this.requireNoGreaterPowers(transaction, context, id);
+      const reset = await resetStaffPassword(
+        transaction,
+        { hospitalId, membershipId: id, userId: member.user.id },
+        passwordHash,
+      );
+      if (!reset.allowed) {
+        throw new ConflictError(
+          'This account also signs in outside this hospital, so its password cannot be reset here.',
+        );
+      }
+      await recordStaffAudit(transaction, context, requestId, {
+        action: 'staff.password.reset',
+        targetType: 'HospitalMembership',
+        targetId: id,
+        metadata: { sessionsEnded: reset.sessionsEnded },
+      });
+      return toView(member);
+    });
+  }
+
+  // A staff manager may act on someone only if they hold every permission
+  // that person has.
+  private async requireNoGreaterPowers(
+    transaction: Transaction,
+    context: StaffContext,
+    membershipId: string,
+  ) {
+    const roles = await this.staff.findActiveRoles(
+      transaction,
+      context.tenant.hospitalId,
+      membershipId,
+    );
+    const held = roles.flatMap(({ role }) =>
+      role.rolePermissions.map((item) => item.permissionKey),
+    );
+    if (held.some((key) => !context.hospitalPermissions.has(key))) throw new ForbiddenError();
+    return roles;
+  }
+
   // A staff manager may only change the status of someone whose permissions they
   // hold themselves, and a hospital must keep at least one active Hospital Manager.
   private async requireSafeStatusChange(
@@ -306,11 +366,7 @@ export class StaffService {
     deactivating: boolean,
   ): Promise<void> {
     const hospitalId = context.tenant.hospitalId;
-    const roles = await this.staff.findActiveRoles(transaction, hospitalId, membershipId);
-    const held = roles.flatMap(({ role }) =>
-      role.rolePermissions.map((item) => item.permissionKey),
-    );
-    if (held.some((key) => !context.hospitalPermissions.has(key))) throw new ForbiddenError();
+    const roles = await this.requireNoGreaterPowers(transaction, context, membershipId);
     if (!deactivating || !roles.some(({ role }) => role.systemKey === lockedRoleKey)) return;
     const others = await this.staff.countOtherActiveHolders(
       transaction,

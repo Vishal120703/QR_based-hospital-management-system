@@ -1,11 +1,20 @@
 import { type Request, type RequestHandler } from 'express';
 import { z } from 'zod';
-import { ForbiddenError, UnauthorizedError } from '../common/errors/app-error.js';
+import {
+  ForbiddenError,
+  PasswordChangeRequiredError,
+  UnauthorizedError,
+} from '../common/errors/app-error.js';
 import { type StaffAuthService, type StaffContext } from '../modules/auth/index.js';
 
 const bearerSchema = z.string().regex(/^Bearer [A-Za-z0-9_-]{43}$/);
 
-export function requireStaffAuth(auth: StaffAuthService): RequestHandler {
+// After an administrator's password reset, only routes created with
+// allowPendingPasswordChange (who am I, change password, sign out) work.
+export function requireStaffAuth(
+  auth: StaffAuthService,
+  options: { allowPendingPasswordChange?: boolean } = {},
+): RequestHandler {
   return async (request, _response, next) => {
     try {
       const parsed = bearerSchema.safeParse(request.header('authorization'));
@@ -15,6 +24,9 @@ export function requireStaffAuth(auth: StaffAuthService): RequestHandler {
 
       const token = parsed.data.slice('Bearer '.length);
       const context = await auth.authenticate(token);
+      if (context.mustChangePassword && !options.allowPendingPasswordChange) {
+        throw new PasswordChangeRequiredError();
+      }
       request.staff = context;
       request.user = context.user;
       request.tenant = context.tenant;

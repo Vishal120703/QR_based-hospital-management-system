@@ -114,6 +114,7 @@ erDiagram
     string email UK
     string displayName
     string passwordHash
+    boolean mustChangePassword
     UserStatus status
     datetime createdAt
     datetime updatedAt

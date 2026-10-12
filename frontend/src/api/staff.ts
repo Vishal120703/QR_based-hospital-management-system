@@ -65,6 +65,13 @@ export const staffApi = {
     call<{ logoUrl: string }>('PUT', '/admin/hospital/logo', token, image),
   removeLogo: (token: string) => call<null>('DELETE', '/admin/hospital/logo', token),
   logout: (token: string) => call<null>('POST', '/auth/staff/logout', token),
+  changePassword: (token: string, input: { currentPassword: string; newPassword: string }) =>
+    call<null>('POST', '/auth/staff/password', token, input),
+  // A temporary password for someone who forgot theirs; they must replace it.
+  resetStaffPassword: (token: string, id: string, temporaryPassword: string) =>
+    call<{ staff: StaffMember }>('POST', `/admin/staff/${id}/password`, token, {
+      temporaryPassword,
+    }),
 
   async list<T>(token: string, kind: ListKind, query = '') {
     const body = await call<Record<string, T[]>>('GET', `/admin/${kind}${query}`, token);

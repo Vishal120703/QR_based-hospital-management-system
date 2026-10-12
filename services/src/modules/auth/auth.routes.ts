@@ -9,11 +9,14 @@ export interface LoginRateLimits {
   readonly perAccount: RateLimitOptions;
   // All sign-ins from one address; generous, since a ward shares one network.
   readonly perAddress: RateLimitOptions;
+  // Current-password guesses from one signed-in staff member.
+  readonly passwordChange?: RateLimitOptions;
 }
 
 const defaultLoginRateLimits: LoginRateLimits = {
   perAccount: { windowMs: 15 * 60_000, max: 10 },
   perAddress: { windowMs: 60_000, max: 120 },
+  passwordChange: { windowMs: 15 * 60_000, max: 10 },
 };
 
 function accountKey(request: Request): string {
@@ -34,7 +37,8 @@ export function createAuthRoutes(
   limits: LoginRateLimits = defaultLoginRateLimits,
 ): Router {
   const router = Router();
-  const signedIn = requireStaffAuth(auth);
+  // These also work while a reset password is waiting to be replaced.
+  const signedIn = requireStaffAuth(auth, { allowPendingPasswordChange: true });
   router.post(
     '/auth/staff/login',
     rateLimit(limits.perAddress),
@@ -43,5 +47,14 @@ export function createAuthRoutes(
   );
   router.get('/auth/staff/me', signedIn, controller.me);
   router.post('/auth/staff/logout', signedIn, controller.logout);
+  router.post(
+    '/auth/staff/password',
+    signedIn,
+    rateLimit({
+      ...(limits.passwordChange ?? defaultLoginRateLimits.passwordChange!),
+      key: (request) => `password|${request.staff?.membershipId ?? request.ip ?? 'unknown'}`,
+    }),
+    controller.changePassword,
+  );
   return router;
 }

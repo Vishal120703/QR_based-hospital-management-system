@@ -27,6 +27,7 @@ const me: Me = {
     logoUrl: null,
     timezone: 'Asia/Kolkata',
   },
+  mustChangePassword: false,
   permissions: [],
   scopedPermissions: [],
 };

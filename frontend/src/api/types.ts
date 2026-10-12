@@ -11,6 +11,8 @@ export interface Me {
     // IANA time zone; report days follow it.
     timezone: string;
   };
+  // An administrator reset the password: the person must choose a new one.
+  mustChangePassword: boolean;
   // Held hospital-wide.
   permissions: string[];
   // Also includes permissions held only for some floors or wards.

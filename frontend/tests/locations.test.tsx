@@ -57,6 +57,7 @@ function show(path: string, permissions: string[]) {
         logoUrl: null,
         timezone: 'Asia/Kolkata',
       },
+      mustChangePassword: false,
       permissions,
       scopedPermissions: permissions,
     },

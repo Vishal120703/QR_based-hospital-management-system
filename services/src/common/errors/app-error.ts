@@ -33,6 +33,14 @@ export class ForbiddenError extends AppError {
   }
 }
 
+// After an administrator's password reset, everything except choosing a new
+// password and signing out is refused until the person changes it.
+export class PasswordChangeRequiredError extends AppError {
+  public constructor() {
+    super(403, 'PASSWORD_CHANGE_REQUIRED', 'Choose a new password before continuing.');
+  }
+}
+
 export class ConflictError extends AppError {
   public constructor(message = 'The requested change conflicts with the current state.') {
     super(409, 'CONFLICT', message);

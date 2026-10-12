@@ -60,6 +60,42 @@ export class AuthRepository {
     });
   }
 
+  public findPasswordHash(db: Db, userId: string) {
+    return db.user.findUnique({ where: { id: userId }, select: { passwordHash: true } });
+  }
+
+  public async replacePassword(
+    db: Db,
+    userId: string,
+    data: { passwordHash: string; mustChangePassword: boolean },
+  ): Promise<void> {
+    await db.user.update({ where: { id: userId }, data });
+  }
+
+  // Whether the account also signs in somewhere else: another hospital, or
+  // the platform. Its password then is not one hospital's to reset.
+  public async usedOutside(db: Db, userId: string, hospitalId: string): Promise<boolean> {
+    const [memberships, operator] = await Promise.all([
+      db.hospitalMembership.count({ where: { userId, hospitalId: { not: hospitalId } } }),
+      db.platformAdmin.count({ where: { userId } }),
+    ]);
+    return memberships + operator > 0;
+  }
+
+  // Ends the member's other open sessions, keeping the one in use.
+  public async revokeOtherSessions(
+    db: Db,
+    hospitalId: string,
+    membershipId: string,
+    keepSessionId: string,
+  ): Promise<number> {
+    const revoked = await db.staffSession.updateMany({
+      where: { hospitalId, membershipId, revokedAt: null, id: { not: keepSessionId } },
+      data: { revokedAt: new Date() },
+    });
+    return revoked.count;
+  }
+
   public async revokeMembershipSessions(
     db: Db,
     hospitalId: string,

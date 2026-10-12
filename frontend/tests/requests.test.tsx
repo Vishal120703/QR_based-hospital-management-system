@@ -75,6 +75,7 @@ function show(permissions: string[], membershipId = 'manager') {
       logoUrl: null,
       timezone: 'Asia/Kolkata',
     },
+    mustChangePassword: false,
     permissions: [],
     scopedPermissions: permissions,
   };

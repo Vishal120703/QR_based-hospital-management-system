@@ -16,6 +16,7 @@ export function createStaffRoutes(staff: StaffController, shifts: ShiftControlle
   router.get('/staff/:id', canRead, staff.get);
   router.post('/staff', canManage, staff.create);
   router.post('/staff/:id/status', canManage, staff.setStatus);
+  router.post('/staff/:id/password', canManage, staff.resetPassword);
   router.post('/staff/:id/duty', canManage, staff.setDuty);
   router.post('/staff/:id/departments', canManage, staff.addDepartment);
   router.delete('/staff/:id/departments/:departmentId', canManage, staff.removeDepartment);

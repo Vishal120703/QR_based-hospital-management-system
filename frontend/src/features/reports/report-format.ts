@@ -62,6 +62,8 @@ const actionLabels: Record<string, string> = {
   'hospital.bootstrap': 'Hospital created',
   'demo.seed': 'Demo data loaded',
   'hospital.update': 'Changed hospital details',
+  'staff.password.change': 'Changed their own password',
+  'staff.password.reset': 'Reset a staff password',
   'hospital.logo.update': 'Changed the hospital logo',
   'hospital.logo.remove': 'Removed the hospital logo',
   'platform.hospital.create': 'Platform created this hospital',

@@ -18,6 +18,8 @@ export interface StaffContext {
   };
   readonly membershipId: string;
   readonly sessionId: string;
+  // An administrator reset the password: only changing it is allowed.
+  readonly mustChangePassword: boolean;
   // Every permission held in at least one scope. Only location-aware code
   // (requests, eligibility) may rely on this, together with scopesFor().
   readonly permissions: ReadonlySet<string>;

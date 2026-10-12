@@ -30,6 +30,7 @@ function show() {
         logoUrl: null,
         timezone: 'Asia/Kolkata',
       },
+      mustChangePassword: false,
       permissions: ['hospital.manage'],
       scopedPermissions: ['hospital.manage'],
     },

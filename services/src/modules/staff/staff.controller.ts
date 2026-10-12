@@ -8,6 +8,7 @@ import {
   createStaffSchema,
   dutySchema,
   eligibleQuerySchema,
+  passwordResetSchema,
   staffDepartmentParamsSchema,
   staffDepartmentSchema,
   staffListQuerySchema,
@@ -53,6 +54,18 @@ export class StaffController {
       getStaffContext(request),
       id,
       status,
+      getRequestId(response),
+    );
+    response.status(200).json({ staff: updated });
+  };
+
+  public readonly resetPassword: RequestHandler = async (request, response) => {
+    const { id } = idParamsSchema.parse(request.params);
+    const { temporaryPassword } = passwordResetSchema.parse(request.body);
+    const updated = await this.staff.resetPassword(
+      getStaffContext(request),
+      id,
+      temporaryPassword,
       getRequestId(response),
     );
     response.status(200).json({ staff: updated });

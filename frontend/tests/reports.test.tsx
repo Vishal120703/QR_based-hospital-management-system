@@ -44,6 +44,7 @@ function show(page: ReactNode, { path = '/', url = '/' }: { path?: string; url?:
         logoUrl: null,
         timezone: 'Asia/Kolkata',
       },
+      mustChangePassword: false,
       permissions: ['analytics.read', 'audit.read'],
       scopedPermissions: ['analytics.read', 'audit.read'],
     },

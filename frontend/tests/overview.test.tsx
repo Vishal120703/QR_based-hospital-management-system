@@ -18,6 +18,7 @@ function show(hospitalWide: string[], anywhere: string[] = hospitalWide) {
         logoUrl: null,
         timezone: 'Asia/Kolkata',
       },
+      mustChangePassword: false,
       permissions: hospitalWide,
       scopedPermissions: anywhere,
     },

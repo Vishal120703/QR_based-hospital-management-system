@@ -34,6 +34,7 @@ export function StaffDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<MembershipStatus>(member.status);
+  const [temporaryPassword, setTemporaryPassword] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [coverageType, setCoverageType] = useState<CoverageType>(
     can('location.read') ? 'WARD' : 'HOSPITAL',
@@ -77,7 +78,7 @@ export function StaffDialog({
   }, [token, member.id, shiftVersion, reportError]);
 
   // Runs one change, then refreshes the staff list. Errors stay in the dialog.
-  async function run(action: () => Promise<unknown>, after?: () => void) {
+  async function run(action: () => Promise<unknown>, after?: () => void, message?: string) {
     if (pending.current) return;
     pending.current = true;
     setBusy(true);
@@ -86,7 +87,7 @@ export function StaffDialog({
       await action();
       after?.();
       onChanged();
-      reportSuccess(`${member.displayName}’s details were updated.`);
+      reportSuccess(message ?? `${member.displayName}’s details were updated.`);
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) reportError(cause);
       else setError(cause instanceof Error ? cause.message : 'Something went wrong.');
@@ -108,6 +109,26 @@ export function StaffDialog({
     )
       return;
     await run(() => staffApi.setStaffStatus(token, member.id, status));
+  }
+
+  // For someone who forgot their password: a temporary one to tell them in
+  // person. They are signed out and must choose their own at next sign-in.
+  async function resetPassword() {
+    if (
+      !(await confirm({
+        title: `Reset ${member.displayName}’s password?`,
+        message:
+          'They are signed out everywhere and must choose a new password when they next sign in with the temporary one.',
+        confirmLabel: 'Reset password',
+        danger: true,
+      }))
+    )
+      return;
+    await run(
+      () => staffApi.resetStaffPassword(token, member.id, temporaryPassword),
+      () => setTemporaryPassword(''),
+      `${member.displayName}’s password was reset. Tell them the temporary password in person; they will choose their own when they sign in.`,
+    );
   }
 
   const availableDepartments = directory.departments.filter(
@@ -192,6 +213,36 @@ export function StaffDialog({
           </div>
         )}
       </Panel>
+
+      {can('staff.manage') && !isSelf && (
+        <Panel title="Password">
+          <form
+            className="inline-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void resetPassword();
+            }}
+          >
+            <input
+              type="text"
+              aria-label="Temporary password"
+              placeholder="Temporary password (12+ characters)"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={busy}
+              value={temporaryPassword}
+              onChange={(event) => setTemporaryPassword(event.target.value)}
+            />
+            <button type="submit" disabled={busy || temporaryPassword.length < 12}>
+              Reset password
+            </button>
+            <span className="muted small">
+              For someone who forgot theirs. Tell them in person; they must choose their own when
+              they next sign in.
+            </span>
+          </form>
+        </Panel>
+      )}
 
       <Panel title="Departments">
         <Chips

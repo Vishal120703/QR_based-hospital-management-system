@@ -25,6 +25,9 @@ export const staffStatusSchema = z
   .object({ status: z.enum(['ACTIVE', 'SUSPENDED', 'INACTIVE']) })
   .strict();
 
+// The temporary password an administrator gives someone who forgot theirs.
+export const passwordResetSchema = z.object({ temporaryPassword: newPasswordSchema }).strict();
+
 export const dutySchema = z.object({ dutyStatus: z.enum(['ON_DUTY', 'OFF_DUTY']) }).strict();
 
 export const staffDepartmentSchema = z.object({ departmentId: uuidSchema }).strict();

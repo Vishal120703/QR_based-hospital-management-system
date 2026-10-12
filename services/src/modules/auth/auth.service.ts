@@ -1,9 +1,10 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
-import { UnauthorizedError } from '../../common/errors/app-error.js';
+import { InvalidInputError, UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
+import { recordStaffAudit } from '../audit/index.js';
 import { hospitalIsOpen, logoUrl } from '../hospitals/index.js';
 import { AuthRepository } from './auth.repository.js';
-import { verifyPasswordOrDummy } from './password.js';
+import { hashPassword, verifyPasswordOrDummy } from './password.js';
 import { type AuthorizationScope, type StaffContext } from './staff-context.js';
 
 const sessionDurationMs = 8 * 60 * 60 * 1000;
@@ -105,6 +106,7 @@ export class StaffAuthService {
       },
       membershipId: session.membershipId,
       sessionId: session.id,
+      mustChangePassword: session.membership.user.mustChangePassword,
       permissions: new Set(permissionScopes.keys()),
       hospitalPermissions: new Set(hospitalPermissions),
       permissionScopes,
@@ -117,6 +119,68 @@ export class StaffAuthService {
   public async logout(context: StaffContext): Promise<void> {
     await this.auth.revokeSession(this.database, context.tenant.hospitalId, context.sessionId);
   }
+
+  // A signed-in person chooses a new password. Their other sessions end (for
+  // example a phone left signed in); this one stays. Clears a pending reset.
+  public async changePassword(
+    context: StaffContext,
+    input: { currentPassword: string; newPassword: string },
+    requestId: string,
+  ): Promise<void> {
+    const stored = await this.auth.findPasswordHash(this.database, context.user.id);
+    // A wrong current password is a mistake in the form, not an expired
+    // session, so it is not answered with 401 (that would sign them out).
+    if (!(await verifyPasswordOrDummy(input.currentPassword, stored?.passwordHash))) {
+      throw new InvalidInputError('Your current password is not right.');
+    }
+    if (input.newPassword === input.currentPassword) {
+      throw new InvalidInputError('Choose a new password that is different from the current one.');
+    }
+    const passwordHash = await hashPassword(input.newPassword);
+    const hospitalId = context.tenant.hospitalId;
+    await this.database.$transaction(async (transaction) => {
+      await this.auth.replacePassword(transaction, context.user.id, {
+        passwordHash,
+        mustChangePassword: false,
+      });
+      const signedOut = await this.auth.revokeOtherSessions(
+        transaction,
+        hospitalId,
+        context.membershipId,
+        context.sessionId,
+      );
+      await recordStaffAudit(transaction, context, requestId, {
+        action: 'staff.password.change',
+        targetType: 'HospitalMembership',
+        targetId: context.membershipId,
+        metadata: { otherSessionsEnded: signedOut, afterReset: context.mustChangePassword },
+      });
+    });
+  }
+}
+
+// An administrator gives a staff member a temporary password, inside the
+// caller's transaction: every session of theirs ends, and they must choose
+// their own password when they next sign in. Refused for an account that also
+// signs in outside this hospital, whose password is not this hospital's.
+export async function resetStaffPassword(
+  transaction: Prisma.TransactionClient,
+  target: { hospitalId: string; membershipId: string; userId: string },
+  passwordHash: string,
+): Promise<{ allowed: false } | { allowed: true; sessionsEnded: number }> {
+  if (await repository.usedOutside(transaction, target.userId, target.hospitalId)) {
+    return { allowed: false };
+  }
+  await repository.replacePassword(transaction, target.userId, {
+    passwordHash,
+    mustChangePassword: true,
+  });
+  const sessionsEnded = await repository.revokeMembershipSessions(
+    transaction,
+    target.hospitalId,
+    target.membershipId,
+  );
+  return { allowed: true, sessionsEnded };
 }
 
 // Ends every open session of a staff member, inside the caller's transaction.

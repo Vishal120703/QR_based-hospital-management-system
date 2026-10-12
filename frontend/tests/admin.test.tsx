@@ -19,6 +19,7 @@ const me: Me = {
     logoUrl: null,
     timezone: 'Asia/Kolkata',
   },
+  mustChangePassword: false,
   permissions: ['service.read'],
   scopedPermissions: ['service.read'],
 };
