@@ -48,6 +48,7 @@ jobs:
       - run: npm run build
       - run: npm run prisma:validate
       - run: npm run prisma:status
+      - run: npm run docs:er:check
 
   frontend:
     runs-on: ubuntu-latest
@@ -69,3 +70,58 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # The whole app in a real browser (frontend/e2e): its own API and web-app
+  # servers on ports 3101/4173 against this job's empty database.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: careqr
+          POSTGRES_PASSWORD: careqr
+          POSTGRES_DB: careqr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U careqr -d careqr"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://careqr:careqr@127.0.0.1:5432/careqr
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+          cache-dependency-path: |
+            services/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+        working-directory: services
+      - run: npm run prisma:generate
+        working-directory: services
+      - run: npm run prisma:migrate
+        working-directory: services
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+

@@ -90,7 +90,7 @@ const copy = {
     services: 'Hospital services',
     servicesHelp: 'Choose a service to send a request to hospital staff.',
     processingNotice:
-      'Requests go to a floor manager for manual assignment. Automatic routing and alerts are not active yet. For urgent help, tell hospital staff directly.',
+      'Hospital staff are alerted to your request and a staff member is assigned to it, which can take a few minutes. For urgent help, tell hospital staff directly.',
     noServices: 'No services available yet',
     noServicesHelp:
       'The hospital has not published its service catalog. Please contact staff for assistance.',
@@ -161,7 +161,7 @@ const copy = {
     services: 'अस्पताल की सेवाएँ',
     servicesHelp: 'अस्पताल के कर्मचारियों को अनुरोध भेजने के लिए सेवा चुनें।',
     processingNotice:
-      'अनुरोध फ़्लोर मैनेजर को भेजा जाता है, जो इसे कर्मचारी को सौंपता है। अपने-आप सौंपने और सूचना भेजने की सुविधा अभी चालू नहीं है। तुरंत मदद के लिए सीधे अस्पताल के कर्मचारी को बताएँ।',
+      'आपके अनुरोध की सूचना अस्पताल के कर्मचारियों को मिलती है और इसे एक कर्मचारी को सौंपा जाता है, जिसमें कुछ मिनट लग सकते हैं। तुरंत मदद के लिए सीधे अस्पताल के कर्मचारी को बताएँ।',
     noServices: 'अभी कोई सेवा उपलब्ध नहीं है',
     noServicesHelp:
       'अस्पताल ने अभी सेवाएँ प्रकाशित नहीं की हैं। मदद के लिए कर्मचारी से संपर्क करें।',

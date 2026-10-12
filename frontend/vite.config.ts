@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
 import { type Plugin, type ProxyOptions } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { contentSecurityPolicy } from './content-security-policy';
+import { contentSecurityPolicy } from './content-security-policy.ts';
 
 // The browser only talks to this app's origin; /api is forwarded to the
 // backend, as the production reverse proxy will do.
