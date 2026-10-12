@@ -9,26 +9,28 @@ export class ReportController {
 
   public readonly summary: RequestHandler = async (request, response) => {
     const query = reportQuerySchema.parse(request.query);
+    const context = getStaffContext(request);
     response
       .status(200)
-      .json(await this.reports.requestReport(getStaffContext(request), reportRange(query)));
+      .json(await this.reports.requestReport(context, reportRange(query, context.tenant.timezone)));
   };
 
   public readonly log: RequestHandler = async (request, response) => {
     const { from, to, ...filter } = requestLogQuerySchema.parse(request.query);
-    response
-      .status(200)
-      .json(
-        await this.reports.requestLog(getStaffContext(request), reportRange({ from, to }), filter),
-      );
+    const context = getStaffContext(request);
+    const range = reportRange({ from, to }, context.tenant.timezone);
+    response.status(200).json(await this.reports.requestLog(context, range, filter));
   };
 
   public readonly person: RequestHandler = async (request, response) => {
     const { id } = idParamsSchema.parse(request.params);
     const query = reportQuerySchema.parse(request.query);
+    const context = getStaffContext(request);
     response
       .status(200)
-      .json(await this.reports.personReport(getStaffContext(request), id, reportRange(query)));
+      .json(
+        await this.reports.personReport(context, id, reportRange(query, context.tenant.timezone)),
+      );
   };
 
   public readonly timeline: RequestHandler = async (request, response) => {

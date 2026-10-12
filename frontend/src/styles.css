@@ -3219,6 +3219,10 @@ button.pp-toggle[aria-expanded='true'] svg {
 .report-dates label {
   font-size: 0.8rem;
 }
+.report-dates [role='alert'] {
+  flex-basis: 100%;
+  margin: 0;
+}
 div.stat {
   display: grid;
   gap: 0.2rem;

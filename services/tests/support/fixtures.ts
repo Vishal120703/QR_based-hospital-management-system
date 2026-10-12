@@ -104,6 +104,45 @@ export async function createBedFixture(
   return { bedId: bed.id, wardId: ward.id };
 }
 
+// Sends a patient request from that bed through the real QR and guest flow:
+// prints (or reprints) the bed's QR, admits a patient if the bed is free,
+// scans the code, and asks for the named service.
+export async function createPatientRequest(
+  database: PrismaClient,
+  application: Express,
+  hospital: HospitalFixture,
+  bedId: string,
+  serviceName: string,
+): Promise<{ id: string; publicId: string; guestToken: string }> {
+  const admin = (path: string, body: object = {}) =>
+    request(application)
+      .post(path)
+      .set('authorization', `Bearer ${hospital.adminToken}`)
+      .send(body);
+  const printed = await database.bedQrCode.findFirst({ where: { bedId } });
+  const qr = await admin(printed ? `/admin/beds/${bedId}/qr/rotate` : `/admin/beds/${bedId}/qr`);
+  const token = z.object({ token: z.string() }).parse(qr.body).token;
+  if (!(await database.bedSession.findFirst({ where: { bedId, status: 'ACTIVE' } }))) {
+    await admin('/admin/bed-sessions', { bedId });
+  }
+  const scanned = await request(application).post('/public/qr/resolve').send({ token });
+  const guestToken = z.object({ guestToken: z.string() }).parse(scanned.body).guestToken;
+  const service = await database.serviceItem.findFirstOrThrow({
+    where: { hospitalId: hospital.hospitalId, name: serviceName },
+  });
+  const sent = await request(application)
+    .post('/public/requests')
+    .set('authorization', `Bearer ${guestToken}`)
+    .send({ serviceId: service.id });
+  if (sent.status !== 201) {
+    throw new Error(`Fixture request failed with status ${sent.status}.`);
+  }
+  const publicId = z.object({ serviceRequest: z.object({ publicId: z.string() }) }).parse(sent.body)
+    .serviceRequest.publicId;
+  const stored = await database.serviceRequest.findUniqueOrThrow({ where: { publicId } });
+  return { id: stored.id, publicId, guestToken };
+}
+
 // Creates a platform operator (super admin) and signs them in.
 export async function createPlatformToken(
   database: PrismaClient,

@@ -12,7 +12,13 @@ import { StaffPage } from '../src/features/people/StaffPage';
 const me: Me = {
   user: { id: 'user', email: 'admin@example.test', displayName: 'Test Admin' },
   membershipId: 'membership',
-  tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital', logoUrl: null },
+  tenant: {
+    hospitalId: 'hospital',
+    code: 'TEST',
+    name: 'Test Hospital',
+    logoUrl: null,
+    timezone: 'Asia/Kolkata',
+  },
   permissions: ['service.read'],
   scopedPermissions: ['service.read'],
 };

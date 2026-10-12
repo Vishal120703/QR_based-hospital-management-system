@@ -50,7 +50,13 @@ function show(path: string, permissions: string[]) {
     me: {
       user: { id: 'user', email: 'admin@example.test', displayName: 'Admin' },
       membershipId: 'admin',
-      tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital', logoUrl: null },
+      tenant: {
+        hospitalId: 'hospital',
+        code: 'TEST',
+        name: 'Test Hospital',
+        logoUrl: null,
+        timezone: 'Asia/Kolkata',
+      },
       permissions,
       scopedPermissions: permissions,
     },

@@ -6,7 +6,7 @@ import { useAdmin } from '../workspace/AdminLayout';
 
 // Everything that happened to one request: who did each step, when, and why.
 export function RequestTimelineDialog({ id, onClose }: { id: string; onClose: () => void }) {
-  const { token } = useAdmin();
+  const { token, me } = useAdmin();
   const [timeline, setTimeline] = useState<RequestTimeline | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -85,7 +85,7 @@ export function RequestTimelineDialog({ id, onClose }: { id: string; onClose: ()
               <li key={index} className={`timeline-${event.type.toLowerCase()}`}>
                 <div className="timeline-head">
                   <strong>{eventLabels[event.type] ?? event.type}</strong>
-                  <time dateTime={event.at}>{formatWhen(event.at)}</time>
+                  <time dateTime={event.at}>{formatWhen(event.at, me.tenant.timezone)}</time>
                 </div>
                 <p>
                   by <strong>{event.actor.name}</strong>

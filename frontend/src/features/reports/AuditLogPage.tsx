@@ -5,7 +5,8 @@ import { LoadState, PageHeading } from '../../components';
 import { useLoad } from '../../lib/use-load';
 import { RequestTimelineDialog } from '../requests/RequestTimelineDialog';
 import { useAdmin } from '../workspace/AdminLayout';
-import { actionLabel, auditCategories, auditCsv, downloadText, fileDate } from './report-format';
+import { addDays, dayIn, dayLabel as calendarDay } from '../../lib/hospital-time';
+import { actionLabel, auditCategories, auditCsv, downloadText } from './report-format';
 
 const pageSize = '50';
 
@@ -21,29 +22,23 @@ const noFilters: Filters = { category: '', membershipId: '', target: null, from:
 
 const categoryNames = new Map(auditCategories.map((item) => [item.value, item.label]));
 
-function dayLabel(value: string): string {
-  const date = new Date(value);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === today.toDateString()) return 'Today';
-  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return date.toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+// The hospital day an entry happened on, in words.
+function dayLabel(value: string, timeZone: string): string {
+  const day = dayIn(value, timeZone);
+  const today = dayIn(Date.now(), timeZone);
+  if (day === today) return 'Today';
+  if (day === addDays(today, -1)) return 'Yesterday';
+  return calendarDay(day, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-const timeOf = (value: string) =>
-  new Date(value).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+const timeOf = (value: string, timeZone: string) =>
+  new Date(value).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone });
 
-// Entries in order, grouped under the day they happened.
-function byDay(entries: readonly AuditEntry[]) {
+// Entries in order, grouped under the hospital day they happened on.
+function byDay(entries: readonly AuditEntry[], timeZone: string) {
   const days: { label: string; entries: AuditEntry[] }[] = [];
   for (const entry of entries) {
-    const label = dayLabel(entry.createdAt);
+    const label = dayLabel(entry.createdAt, timeZone);
     const day = days.at(-1);
     if (day?.label === label) day.entries.push(entry);
     else days.push({ label, entries: [entry] });
@@ -52,7 +47,8 @@ function byDay(entries: readonly AuditEntry[]) {
 }
 
 export function AuditLogPage() {
-  const { token, reportError } = useAdmin();
+  const { token, me, reportError } = useAdmin();
+  const timeZone = me.tenant.timezone;
   const [filters, setFilters] = useState<Filters>(noFilters);
   const [older, setOlder] = useState<{
     key: Filters;
@@ -62,19 +58,19 @@ export function AuditLogPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [requestId, setRequestId] = useState<string | null>(null);
 
+  const reversed = Boolean(filters.from && filters.to && filters.from > filters.to);
   const params = useCallback(
     (before?: string) => ({
       category: filters.category || undefined,
       membershipId: filters.membershipId || undefined,
       targetId: filters.target?.id,
-      from: filters.from ? new Date(`${filters.from}T00:00:00`).toISOString() : undefined,
-      to: filters.to
-        ? new Date(new Date(`${filters.to}T00:00:00`).getTime() + 86_400_000).toISOString()
-        : undefined,
+      // Hospital days, both included; the server reads them in its time zone.
+      from: (!reversed && filters.from) || undefined,
+      to: (!reversed && filters.to) || undefined,
       before,
       limit: pageSize,
     }),
-    [filters],
+    [filters, reversed],
   );
   const firstPage = useLoad(
     useCallback(() => reportApi.audit(token, params()), [token, params]),
@@ -123,7 +119,11 @@ export function AuditLogPage() {
           disabled={!entries || entries.length === 0}
           title="Download the changes shown below"
           onClick={() =>
-            entries && downloadText(`care-qr-audit-${fileDate(new Date())}.csv`, auditCsv(entries))
+            entries &&
+            downloadText(
+              `care-qr-audit-${dayIn(Date.now(), timeZone)}.csv`,
+              auditCsv(entries, timeZone),
+            )
           }
         >
           <Download size={16} aria-hidden="true" />
@@ -182,6 +182,11 @@ export function AuditLogPage() {
             Clear filters
           </button>
         )}
+        {reversed && (
+          <p className="late-text small" role="alert">
+            The start date must be on or before the end date.
+          </p>
+        )}
       </div>
 
       {(filters.target || person) && (
@@ -227,7 +232,7 @@ export function AuditLogPage() {
       ) : (
         <>
           <LoadState loading={false} error={firstPage.error} onRetry={firstPage.reload} />
-          {byDay(entries).map((day) => (
+          {byDay(entries, timeZone).map((day) => (
             <section key={day.label} className="audit-day" aria-label={day.label}>
               <h2>
                 {day.label}
@@ -240,6 +245,7 @@ export function AuditLogPage() {
                   <AuditRow
                     key={entry.id}
                     entry={entry}
+                    timeZone={timeZone}
                     onPerson={(membershipId) => change({ membershipId })}
                     onTarget={(target) => change({ target })}
                     onRequest={setRequestId}
@@ -267,11 +273,13 @@ export function AuditLogPage() {
 
 function AuditRow({
   entry,
+  timeZone,
   onPerson,
   onTarget,
   onRequest,
 }: {
   entry: AuditEntry;
+  timeZone: string;
   onPerson: (membershipId: string) => void;
   onTarget: (target: { id: string; name: string }) => void;
   onRequest: (id: string) => void;
@@ -282,7 +290,7 @@ function AuditRow({
   return (
     <li className="audit-entry">
       <time className="audit-time" dateTime={entry.createdAt}>
-        {timeOf(entry.createdAt)}
+        {timeOf(entry.createdAt, timeZone)}
       </time>
       <div className="audit-body">
         <p className="audit-line">

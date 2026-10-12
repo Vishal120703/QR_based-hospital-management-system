@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { dateRangeShape, rangeInOrder, rangeInOrderMessage } from '../../common/validation.js';
+import { periodShape } from '../../common/validation.js';
 
 export const auditQuerySchema = z
   .object({
-    ...dateRangeShape,
+    ...periodShape,
     category: z
       .string()
       .regex(/^[a-zA-Z]+$/)
@@ -13,5 +13,4 @@ export const auditQuerySchema = z
     before: z.string().uuid().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   })
-  .strict()
-  .refine(rangeInOrder, rangeInOrderMessage);
+  .strict();

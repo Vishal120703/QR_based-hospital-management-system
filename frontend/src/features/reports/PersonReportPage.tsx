@@ -28,7 +28,8 @@ export function PersonReportPage() {
   const { membershipId = '' } = useParams();
   const { token, me, reportError } = useAdmin();
   const navigate = useNavigate();
-  const period = useReportPeriod();
+  const timeZone = me.tenant.timezone;
+  const period = useReportPeriod(timeZone);
   const printing = usePrinting();
   const [kind, setKind] = useState<ActivityKind | ''>('');
   const [showAll, setShowAll] = useState(false);
@@ -46,7 +47,7 @@ export function PersonReportPage() {
   );
 
   const name = report?.person.name ?? 'Staff work';
-  const hospital = { name: me.tenant.name, logoUrl: me.tenant.logoUrl };
+  const hospital = { name: me.tenant.name, logoUrl: me.tenant.logoUrl, timezone: timeZone };
   return (
     <>
       <div className="no-print">
@@ -67,9 +68,9 @@ export function PersonReportPage() {
                 downloadText(
                   reportFileName(
                     `work-${report.person.name.toLowerCase().replace(/\W+/g, '-')}`,
-                    report.range,
+                    period.range,
                   ),
-                  personCsv(report, me.tenant.name),
+                  personCsv(report, hospital),
                 )
               }
             >
@@ -125,7 +126,7 @@ export function PersonReportPage() {
             )}
             <PersonTiles report={report} />
             <Comparison report={report} />
-            <Breakdown report={report} />
+            <Breakdown report={report} timeZone={timeZone} />
             <section className="card" aria-labelledby="activity-title">
               <div className="section-heading">
                 <h2 id="activity-title">Every action ({report.activity.length})</h2>
@@ -148,6 +149,7 @@ export function PersonReportPage() {
               </div>
               <ActivityTable
                 report={report}
+                timeZone={timeZone}
                 kind={kind}
                 showAll={showAll}
                 onShowAll={() => setShowAll(true)}
@@ -270,8 +272,8 @@ function Comparison({ report }: { report: PersonReport }) {
   );
 }
 
-function Breakdown({ report }: { report: PersonReport }) {
-  const { byService, byDay } = personBreakdown(report.activity);
+function Breakdown({ report, timeZone }: { report: PersonReport; timeZone: string }) {
+  const { byService, byDay } = personBreakdown(report.activity, timeZone);
   const busiest = Math.max(1, ...byDay.map((day) => day.completed));
   if (byService.length === 0) {
     return (
@@ -354,12 +356,14 @@ function Breakdown({ report }: { report: PersonReport }) {
 
 function ActivityTable({
   report,
+  timeZone,
   kind,
   showAll,
   onShowAll,
   onOpen,
 }: {
   report: PersonReport;
+  timeZone: string;
   kind: ActivityKind | '';
   showAll: boolean;
   onShowAll: () => void;
@@ -384,7 +388,7 @@ function ActivityTable({
           <tbody>
             {shown.map((item, index) => (
               <tr key={`${item.requestId}-${item.kind}-${index}`}>
-                <td className="small">{formatWhen(item.at)}</td>
+                <td className="small">{formatWhen(item.at, timeZone)}</td>
                 <td>
                   <span className={`badge activity-${item.kind}`}>{activityLabels[item.kind]}</span>
                 </td>
@@ -418,10 +422,10 @@ function PrintablePersonReport({
   hospital,
 }: {
   report: PersonReport;
-  hospital: { name: string; logoUrl: string | null };
+  hospital: { name: string; logoUrl: string | null; timezone: string };
 }) {
   const { work } = report;
-  const { byService, byDay } = personBreakdown(report.activity);
+  const { byService, byDay } = personBreakdown(report.activity, hospital.timezone);
   const rows: [string, string | number, string | number][] = [
     ['Assigned to them', work.assigned, ''],
     ['Accepted', work.accepted, ''],
@@ -545,7 +549,7 @@ function PrintablePersonReport({
           <tbody>
             {report.activity.map((item, index) => (
               <tr key={`${item.requestId}-${item.kind}-${index}`}>
-                <td>{formatWhen(item.at)}</td>
+                <td>{formatWhen(item.at, hospital.timezone)}</td>
                 <td>{activityLabels[item.kind]}</td>
                 <td>
                   {item.serviceName} ({item.publicId})

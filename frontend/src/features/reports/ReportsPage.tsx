@@ -29,7 +29,8 @@ interface LogFilter {
 
 export function ReportsPage() {
   const { token, me, reportError } = useAdmin();
-  const period = useReportPeriod();
+  const timeZone = me.tenant.timezone;
+  const period = useReportPeriod(timeZone);
   const range = period.range;
   // The full report is laid out only while printing (Print / PDF or Ctrl+P),
   // so the screen keeps one copy of every figure.
@@ -89,7 +90,10 @@ export function ReportsPage() {
               title="Every section of this report in one spreadsheet (opens in Excel)"
               onClick={() =>
                 report &&
-                downloadText(reportFileName('report', range), reportCsv(report, me.tenant.name))
+                downloadText(
+                  reportFileName('report', range),
+                  reportCsv(report, { name: me.tenant.name, timezone: timeZone }),
+                )
               }
             >
               <Download size={16} aria-hidden="true" />
@@ -165,7 +169,9 @@ export function ReportsPage() {
                 personLink={(id) => `/admin/reports/people/${id}${period.query}`}
               />
             )}
-            {tab === 'why' && <NotCompleted report={report} onOpen={setTimelineId} />}
+            {tab === 'why' && (
+              <NotCompleted report={report} timeZone={timeZone} onOpen={setTimelineId} />
+            )}
             {tab === 'groups' && (
               <div className="profile-grid">
                 <GroupTable title="By department" rows={report.byDepartment} />
@@ -187,7 +193,7 @@ export function ReportsPage() {
       {printing && report && (
         <PrintableReport
           report={report}
-          hospital={{ name: me.tenant.name, logoUrl: me.tenant.logoUrl }}
+          hospital={{ name: me.tenant.name, logoUrl: me.tenant.logoUrl, timezone: timeZone }}
         />
       )}
       {timelineId && <RequestTimelineDialog id={timelineId} onClose={() => setTimelineId(null)} />}
@@ -277,7 +283,7 @@ function PrintableReport({
   hospital,
 }: {
   report: RequestReport;
-  hospital: { name: string; logoUrl: string | null };
+  hospital: { name: string; logoUrl: string | null; timezone: string };
 }) {
   const { summary } = report;
   const totals: [string, string | number][] = [
@@ -428,7 +434,15 @@ function PrintableReport({
   );
 }
 
-function NotCompleted({ report, onOpen }: { report: RequestReport; onOpen: (id: string) => void }) {
+function NotCompleted({
+  report,
+  timeZone,
+  onOpen,
+}: {
+  report: RequestReport;
+  timeZone: string;
+  onOpen: (id: string) => void;
+}) {
   if (report.notCompleted.length === 0) {
     return (
       <div className="card empty-state">
@@ -449,7 +463,7 @@ function NotCompleted({ report, onOpen }: { report: RequestReport; onOpen: (id: 
             </span>
           </div>
           <p className="muted small">
-            {item.location} · {item.publicId} · sent {formatWhen(item.submittedAt)}
+            {item.location} · {item.publicId} · sent {formatWhen(item.submittedAt, timeZone)}
           </p>
           <p className="why-reason">
             {item.outcome === 'overdue' ? (
@@ -460,7 +474,7 @@ function NotCompleted({ report, onOpen }: { report: RequestReport; onOpen: (id: 
             ) : (
               <>
                 {item.outcome === 'cancelled' ? 'Cancelled' : 'Turned down'} by{' '}
-                <strong>{item.endedBy ?? 'unknown'}</strong> {formatWhen(item.endedAt)}
+                <strong>{item.endedBy ?? 'unknown'}</strong> {formatWhen(item.endedAt, timeZone)}
                 {' · '}
                 Reason: <strong>{item.reason ?? 'not given'}</strong>
               </>
@@ -533,7 +547,7 @@ function RequestLog({
   onFilter: (next: LogFilter) => void;
   onOpen: (id: string) => void;
 }) {
-  const { token, reportError } = useAdmin();
+  const { token, me, reportError } = useAdmin();
   const [search, setSearch] = useState(filter.search ?? '');
   const log = useLoad(
     useCallback(() => reportApi.log(token, { ...range, ...filter }), [token, range, filter]),
@@ -674,7 +688,7 @@ function RequestLog({
                     )}
                     {row.endReason && <div className="muted small">{row.endReason}</div>}
                   </td>
-                  <td className="small">{formatWhen(row.submittedAt)}</td>
+                  <td className="small">{formatWhen(row.submittedAt, me.tenant.timezone)}</td>
                   <td>{row.assigneeName ?? '—'}</td>
                   <td>
                     {row.acceptedBy ?? '—'}

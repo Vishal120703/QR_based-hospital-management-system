@@ -13,6 +13,8 @@ export interface StaffContext {
     readonly code: string;
     readonly name: string;
     readonly logoUrl: string | null;
+    // IANA time zone; report days and "today" follow it.
+    readonly timezone: string;
   };
   readonly membershipId: string;
   readonly sessionId: string;

@@ -29,7 +29,13 @@ function show(hospitalWide: string[], anywhere: string[] = hospitalWide) {
     me: {
       user: { id: 'user', email: 'user@example.test', displayName: 'Asha' },
       membershipId: 'manager',
-      tenant: { hospitalId: 'hospital', code: 'TEST', name: 'Test Hospital', logoUrl: null },
+      tenant: {
+        hospitalId: 'hospital',
+        code: 'TEST',
+        name: 'Test Hospital',
+        logoUrl: null,
+        timezone: 'Asia/Kolkata',
+      },
       permissions: hospitalWide,
       scopedPermissions: anywhere,
     },

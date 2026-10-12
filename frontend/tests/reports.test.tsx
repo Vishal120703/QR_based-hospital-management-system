@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router';
@@ -20,8 +20,10 @@ import {
   personCsv,
   reportCsv,
   requestLogCsv,
+  periodLabel,
   toCsv,
 } from '../src/features/reports/report-format';
+import { datesProblem, rangeFor } from '../src/features/reports/report-period';
 
 // Where the app is now, so a test can see where a link or a choice went.
 function Address() {
@@ -35,7 +37,13 @@ function show(page: ReactNode, { path = '/', url = '/' }: { path?: string; url?:
     me: {
       user: { id: 'u', email: 'm@example.test', displayName: 'Manager' },
       membershipId: 'manager',
-      tenant: { hospitalId: 'h', code: 'TEST', name: 'Test Hospital', logoUrl: null },
+      tenant: {
+        hospitalId: 'h',
+        code: 'TEST',
+        name: 'Test Hospital',
+        logoUrl: null,
+        timezone: 'Asia/Kolkata',
+      },
       permissions: ['analytics.read', 'audit.read'],
       scopedPermissions: ['analytics.read', 'audit.read'],
     },
@@ -56,6 +64,8 @@ function show(page: ReactNode, { path = '/', url = '/' }: { path?: string; url?:
     </MemoryRouter>,
   );
 }
+
+const hospitalInfo = { name: 'Test Hospital', timezone: 'Asia/Kolkata' };
 
 const report: RequestReport = {
   range: { from: '2026-10-01T00:00:00Z', to: '2026-10-08T00:00:00Z' },
@@ -331,14 +341,43 @@ describe('Audit log', () => {
     );
   });
 
+  it('filters by hospital days and explains a reversed period', async () => {
+    const audit = vi
+      .spyOn(reportApi, 'audit')
+      .mockResolvedValue({ entries: [entry('a1', 'staff.status')], nextBefore: null, people: [] });
+    show(<AuditLogPage />);
+    await screen.findByText('Ravi Kumar');
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-10-03' } });
+    await vi.waitFor(() =>
+      expect(audit).toHaveBeenLastCalledWith(
+        'token',
+        expect.objectContaining({ from: '2026-10-01', to: '2026-10-03' }),
+      ),
+    );
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-05' } });
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The start date must be on or before the end date.',
+    );
+    await vi.waitFor(() =>
+      expect(audit).toHaveBeenLastCalledWith(
+        'token',
+        expect.objectContaining({ from: undefined, to: undefined }),
+      ),
+    );
+  });
+
   it('downloads the changes shown as a spreadsheet', () => {
-    const csv = auditCsv([
-      entry('a1', 'request.transfer', {
-        targetName: 'Drinking Water (CR-1)',
-        changes: [{ field: 'Assigned to', before: 'Pavan', after: 'Neha' }],
-        details: [{ label: 'Reason', value: 'Busy' }],
-      }),
-    ]).split('\r\n');
+    const csv = auditCsv(
+      [
+        entry('a1', 'request.transfer', {
+          targetName: 'Drinking Water (CR-1)',
+          changes: [{ field: 'Assigned to', before: 'Pavan', after: 'Neha' }],
+          details: [{ label: 'Reason', value: 'Busy' }],
+        }),
+      ],
+      'Asia/Kolkata',
+    ).split('\r\n');
     // The byte-order mark makes Excel read non-English names correctly.
     expect(csv[0]).toBe('\uFEFFWhen,Who,What happened,Item,What changed,Details');
     expect(csv[1]).toContain(
@@ -462,15 +501,16 @@ describe('One person’s report', () => {
 
     await screen.findByRole('heading', { name: 'Pavan', level: 1 });
     expect(load).toHaveBeenCalledWith('token', 'pavan', {
-      from: new Date('2026-10-01T00:00:00').toISOString(),
-      to: new Date('2026-10-04T00:00:00').toISOString(),
+      // Hospital days, both included; the server reads them in its time zone.
+      from: '2026-10-01',
+      to: '2026-10-03',
     });
     expect(screen.getByLabelText('From')).toHaveProperty('value', '2026-10-01');
     expect(screen.getByLabelText('To')).toHaveProperty('value', '2026-10-03');
   });
 
   it('adds up their work per service and per day, and downloads it', () => {
-    const { byService, byDay } = personBreakdown(personReport.activity);
+    const { byService, byDay } = personBreakdown(personReport.activity, 'Asia/Kolkata');
     expect(byService).toEqual([
       {
         name: 'Drinking Water',
@@ -484,7 +524,7 @@ describe('One person’s report', () => {
     expect(byDay).toHaveLength(1);
     expect(byDay[0]).toMatchObject({ accepted: 1, completed: 1, rejected: 1 });
 
-    const csv = personCsv(personReport, 'Test Hospital');
+    const csv = personCsv(personReport, hospitalInfo);
     expect(csv).toContain('CARE QR staff work report');
     expect(csv).toContain('Person,Pavan');
     expect(csv).toContain('Completed on time (%),100,80');
@@ -498,7 +538,7 @@ describe('One person’s report', () => {
 
 describe('Report downloads', () => {
   it('puts every section in one spreadsheet', () => {
-    const csv = reportCsv(report, 'Test Hospital');
+    const csv = reportCsv(report, hospitalInfo);
     expect(csv).toContain('CARE QR request report');
     expect(csv).toContain('Hospital,Test Hospital');
     for (const section of [
@@ -539,6 +579,88 @@ describe('Report downloads', () => {
       window.dispatchEvent(new Event('afterprint'));
     });
     expect(screen.queryByRole('heading', { name: 'Request report' })).toBeNull();
+  });
+});
+
+describe('Report periods', () => {
+  it('explains cleared, reversed, and over-long dates instead of breaking', async () => {
+    const load = vi.spyOn(reportApi, 'requests').mockResolvedValue(report);
+    show(<ReportsPage />, { url: '/?period=custom&from=2026-10-01&to=2026-10-03' });
+    await screen.findByText('Overdue now');
+    expect(load).toHaveBeenLastCalledWith('token', { from: '2026-10-01', to: '2026-10-03' });
+    const calls = load.mock.calls.length;
+    const show_ = () => screen.getByRole('button', { name: 'Show' });
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '' } });
+    expect(screen.getByRole('alert').textContent).toBe('Choose both a start and an end date.');
+    expect(show_()).toHaveProperty('disabled', true);
+    fireEvent.submit(show_().closest('form')!);
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-05' } });
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The start date must be on or before the end date.',
+    );
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2024-01-01' } });
+    expect(screen.getByRole('alert').textContent).toBe('Choose a period of at most one year.');
+    // Nothing was sent while the dates were wrong; the last report stays.
+    expect(load.mock.calls.length).toBe(calls);
+    expect(screen.getByText('Overdue now')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-01' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(show_());
+    expect(load).toHaveBeenLastCalledWith('token', { from: '2026-09-01', to: '2026-10-03' });
+    expect(screen.getByTestId('address').textContent).toBe(
+      '/?period=custom&from=2026-09-01&to=2026-10-03',
+    );
+  });
+
+  it('ignores impossible dates in the address', async () => {
+    vi.spyOn(reportApi, 'requests').mockResolvedValue(report);
+    show(<ReportsPage />, { url: '/?period=custom&from=2026-02-30&to=2026-03-01' });
+    await screen.findByText('Overdue now');
+    expect(screen.getByRole('button', { name: 'Last 7 days' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('uses the hospital’s today, not the viewer’s', async () => {
+    const viewerZone = process.env.TZ;
+    // 20:00 UTC: still 12 October in Los Angeles, already 13 October in India.
+    process.env.TZ = 'America/Los_Angeles';
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-12T20:00:00Z'));
+    try {
+      const load = vi.spyOn(reportApi, 'requests').mockResolvedValue(report);
+      show(<ReportsPage />, { url: '/?period=today' });
+      await screen.findByText('Overdue now');
+      expect(load).toHaveBeenCalledWith('token', { from: '2026-10-13', to: '2026-10-13' });
+    } finally {
+      vi.useRealTimers();
+      process.env.TZ = viewerZone;
+    }
+  });
+
+  it('counts periods and labels days in the hospital’s time zone', () => {
+    expect(rangeFor('7d', '2026-10-13')).toEqual({ from: '2026-10-07', to: '2026-10-13' });
+    expect(rangeFor('month', '2026-10-13')).toEqual({ from: '2026-10-01', to: '2026-10-13' });
+    expect(rangeFor('30d', '2026-03-01')).toEqual({ from: '2026-01-31', to: '2026-03-01' });
+    expect(datesProblem({ from: '2026-10-01', to: '2026-10-01' })).toBeNull();
+    expect(datesProblem({ from: '2026-02-30', to: '2026-03-01' })).toBe('Enter real dates.');
+    // The server's end is the next hospital midnight: the label shows the last day.
+    const label = periodLabel(
+      { from: '2026-10-11T18:30:00.000Z', to: '2026-10-13T18:30:00.000Z' },
+      'Asia/Kolkata',
+    );
+    expect(label).toContain('12');
+    expect(label).toContain('13');
+    expect(label).not.toContain('14');
+    // 01:30 on 7 October in India is still 6 October in UTC.
+    const { byDay } = personBreakdown(
+      [{ ...personReport.activity[1]!, at: '2026-10-06T20:00:00Z' }],
+      'Asia/Kolkata',
+    );
+    expect(byDay[0]?.date).toBe('2026-10-07');
   });
 });
 

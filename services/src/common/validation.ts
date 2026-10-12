@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isCalendarDay } from './time-zone.js';
 
 export const uuidSchema = z.string().uuid();
 export const idParamsSchema = z.object({ id: uuidSchema }).strict();
@@ -40,6 +41,22 @@ export const atLeastOneField = { message: 'At least one field is required.' };
 export const dateRangeShape = {
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
+};
+// One end of a reporting period (?from=…&to=…): a calendar day such as
+// 2026-10-12, read in the hospital's time zone, or an exact ISO 8601 time.
+// Resolve with periodStart()/periodEnd() from time-zone.ts.
+export const periodPointSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) =>
+      isCalendarDay(value) ||
+      (/^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value))),
+    { message: 'Use a date such as 2026-10-12, or a full date and time.' },
+  );
+export const periodShape = {
+  from: periodPointSchema.optional(),
+  to: periodPointSchema.optional(),
 };
 // Use with .refine() on a schema built from dateRangeShape.
 export const rangeInOrder = (value: { from?: Date | undefined; to?: Date | undefined }) =>

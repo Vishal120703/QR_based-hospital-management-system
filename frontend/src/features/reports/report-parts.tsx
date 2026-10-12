@@ -47,7 +47,7 @@ export function PrintHeader({
 }: {
   title: string;
   subject?: string;
-  hospital: { name: string; logoUrl: string | null };
+  hospital: { name: string; logoUrl: string | null; timezone: string };
   range: { from: string; to: string };
 }) {
   return (
@@ -56,7 +56,8 @@ export function PrintHeader({
       <div>
         <h1>{subject ? `${title}: ${subject}` : title}</h1>
         <p>
-          {hospital.name} · {periodLabel(range)} · printed {formatWhen(new Date().toISOString())}
+          {hospital.name} · {periodLabel(range, hospital.timezone)} · printed{' '}
+          {formatWhen(new Date().toISOString(), hospital.timezone)}
         </p>
       </div>
     </header>

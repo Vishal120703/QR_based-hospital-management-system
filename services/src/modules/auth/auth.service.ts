@@ -101,6 +101,7 @@ export class StaffAuthService {
         code: session.hospital.code,
         name: session.hospital.name,
         logoUrl: logoUrl(session.hospital.logo?.publicId),
+        timezone: session.hospital.timezone,
       },
       membershipId: session.membershipId,
       sessionId: session.id,

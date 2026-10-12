@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
+import { addDays, dayIn, daysBetween, isCalendarDay } from '../../lib/hospital-time';
 
 export type Period = 'today' | '7d' | '30d' | 'month' | 'custom';
+// A report period as whole hospital days (2026-10-12), both ends included.
+// The server reads them in the hospital's time zone.
 export interface Range {
-  from: string;
-  to: string;
-}
-// Chosen dates as the date inputs hold them (YYYY-MM-DD).
-interface Dates {
   from: string;
   to: string;
 }
@@ -20,54 +18,52 @@ export const periods: { id: Period; label: string }[] = [
   { id: 'custom', label: 'Choose dates' },
 ];
 
-const day = (offset = 0, base = new Date()) => {
-  const date = new Date(base);
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + offset);
-  return date;
-};
-const dateInput = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-const isDate = (value: string | null): value is string =>
-  value !== null && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
-
-export function rangeFor(period: Period, custom: Dates): Range {
-  const now = new Date();
-  if (period === 'custom') {
-    const from = new Date(`${custom.from}T00:00:00`);
-    const to = day(1, new Date(`${custom.to}T00:00:00`));
-    return { from: from.toISOString(), to: to.toISOString() };
+// The days of a ready-made period, counted back from the hospital's today.
+export function rangeFor(period: Exclude<Period, 'custom'>, today: string): Range {
+  switch (period) {
+    case 'today':
+      return { from: today, to: today };
+    case '7d':
+      return { from: addDays(today, -6), to: today };
+    case '30d':
+      return { from: addDays(today, -29), to: today };
+    case 'month':
+      return { from: `${today.slice(0, 8)}01`, to: today };
   }
-  const from =
-    period === 'today'
-      ? day()
-      : period === '7d'
-        ? day(-6)
-        : period === '30d'
-          ? day(-29)
-          : new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from: from.toISOString(), to: now.toISOString() };
+}
+
+// Why chosen dates cannot be shown, or null when they can. Checked before
+// anything is sent, so a cleared or half-typed date never breaks the page.
+export function datesProblem(dates: Range): string | null {
+  if (!dates.from || !dates.to) return 'Choose both a start and an end date.';
+  if (!isCalendarDay(dates.from) || !isCalendarDay(dates.to)) return 'Enter real dates.';
+  if (dates.from > dates.to) return 'The start date must be on or before the end date.';
+  if (daysBetween(dates.from, dates.to) > 365) return 'Choose a period of at most one year.';
+  return null;
 }
 
 // The report period, kept in the address (?period=30d, or ?period=custom&
 // from=…&to=…), so it stays the same when moving between the hospital report
-// and one person's report, and a copied link shows the same period.
-export function useReportPeriod() {
+// and one person's report, and a copied link shows the same period. "Today"
+// is the hospital's today, in its own time zone.
+export function useReportPeriod(timeZone: string) {
   const [params, setParams] = useSearchParams();
   const [initial] = useState(() => {
+    const today = dayIn(Date.now(), timeZone);
     const asked = periods.find((item) => item.id === params.get('period'))?.id ?? '7d';
-    const from = params.get('from');
-    const to = params.get('to');
-    const dates = isDate(from) && isDate(to) && from <= to ? { from, to } : null;
+    const fromUrl = { from: params.get('from') ?? '', to: params.get('to') ?? '' };
+    const usable = datesProblem(fromUrl) === null;
     // Chosen dates need a valid start and end; otherwise show the last 7 days.
-    const period: Period = asked === 'custom' && !dates ? '7d' : asked;
-    return { period, custom: dates ?? { from: dateInput(day(-6)), to: dateInput(day()) } };
+    const period: Period = asked === 'custom' && !usable ? '7d' : asked;
+    const custom = usable ? fromUrl : rangeFor('7d', today);
+    return { period, custom, range: period === 'custom' ? custom : rangeFor(period, today) };
   });
   const [period, setPeriod] = useState<Period>(initial.period);
-  const [custom, setCustom] = useState<Dates>(initial.custom);
-  const [range, setRange] = useState<Range>(() => rangeFor(initial.period, initial.custom));
+  const [custom, setCustom] = useState<Range>(initial.custom);
+  const [range, setRange] = useState<Range>(initial.range);
+  const problem = datesProblem(custom);
 
-  const remember = (next: Period, dates: Dates) =>
+  const remember = (next: Period, dates: Range) =>
     setParams(
       (current) => {
         const updated = new URLSearchParams(current);
@@ -88,20 +84,28 @@ export function useReportPeriod() {
     period,
     custom,
     range,
+    // Why the chosen dates cannot be shown yet (null when they can).
+    problem,
     setCustom,
     choose(next: Period) {
       setPeriod(next);
-      setRange(rangeFor(next, custom));
-      remember(next, custom);
+      if (next !== 'custom') {
+        setRange(rangeFor(next, dayIn(Date.now(), timeZone)));
+        remember(next, custom);
+      } else if (!problem) {
+        setRange(custom);
+        remember('custom', custom);
+      }
     },
     applyCustom() {
-      setRange(rangeFor('custom', custom));
+      if (problem) return;
+      setRange(custom);
       remember('custom', custom);
     },
     // The same period, for a link to another report page.
     query:
       period === 'custom'
-        ? `?period=custom&from=${custom.from}&to=${custom.to}`
+        ? `?period=custom&from=${range.from}&to=${range.to}`
         : `?period=${period}`,
   };
 }
@@ -125,6 +129,7 @@ export function PeriodPicker({ state }: { state: ReportPeriod }) {
       {state.period === 'custom' && (
         <form
           className="report-dates"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             state.applyCustom();
@@ -135,7 +140,8 @@ export function PeriodPicker({ state }: { state: ReportPeriod }) {
             <input
               type="date"
               value={state.custom.from}
-              max={state.custom.to}
+              max={state.custom.to || undefined}
+              aria-invalid={state.problem !== null}
               onChange={(event) =>
                 state.setCustom((value) => ({ ...value, from: event.target.value }))
               }
@@ -146,15 +152,21 @@ export function PeriodPicker({ state }: { state: ReportPeriod }) {
             <input
               type="date"
               value={state.custom.to}
-              min={state.custom.from}
+              min={state.custom.from || undefined}
+              aria-invalid={state.problem !== null}
               onChange={(event) =>
                 state.setCustom((value) => ({ ...value, to: event.target.value }))
               }
             />
           </label>
-          <button type="submit" className="secondary">
+          <button type="submit" className="secondary" disabled={state.problem !== null}>
             Show
           </button>
+          {state.problem && (
+            <p className="late-text small" role="alert">
+              {state.problem}
+            </p>
+          )}
         </form>
       )}
     </div>

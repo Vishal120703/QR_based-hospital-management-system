@@ -23,7 +23,13 @@ function show() {
     me: {
       user: { id: 'user', email: 'admin@example.test', displayName: 'Admin' },
       membershipId: 'admin',
-      tenant: { hospitalId: 'hospital', code: 'SUNRISE', name: 'Sunrise Hospital', logoUrl: null },
+      tenant: {
+        hospitalId: 'hospital',
+        code: 'SUNRISE',
+        name: 'Sunrise Hospital',
+        logoUrl: null,
+        timezone: 'Asia/Kolkata',
+      },
       permissions: ['hospital.manage'],
       scopedPermissions: ['hospital.manage'],
     },

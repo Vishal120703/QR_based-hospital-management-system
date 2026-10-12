@@ -3,7 +3,14 @@
 export interface Me {
   user: { id: string; email: string; displayName: string };
   membershipId: string;
-  tenant: { hospitalId: string; code: string; name: string; logoUrl: string | null };
+  tenant: {
+    hospitalId: string;
+    code: string;
+    name: string;
+    logoUrl: string | null;
+    // IANA time zone; report days follow it.
+    timezone: string;
+  };
   // Held hospital-wide.
   permissions: string[];
   // Also includes permissions held only for some floors or wards.

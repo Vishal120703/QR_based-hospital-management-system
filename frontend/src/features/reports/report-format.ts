@@ -7,6 +7,13 @@ import type {
   RequestLogRow,
   RequestReport,
 } from '../../api';
+import { dayIn, dayLabel } from '../../lib/hospital-time';
+
+// The signed-in hospital, for report headings and its time zone.
+export interface HospitalInfo {
+  name: string;
+  timezone: string;
+}
 
 export function formatMinutes(value: number | null): string {
   if (value === null) return '—';
@@ -21,12 +28,13 @@ export function formatPercent(value: number | null): string {
   return value === null ? '—' : `${value}%`;
 }
 
-export function formatWhen(value: string | null): string {
+// A moment in words; on reports, in the hospital's time zone.
+export function formatWhen(value: string | null, timeZone?: string): string {
   if (!value) return '—';
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? '—'
-    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone });
 }
 
 export const outcomeLabels: Record<ReportOutcome, string> = {
@@ -180,11 +188,11 @@ export function requestLogCsv(rows: readonly RequestLogRow[]): string {
 }
 
 // The audit entries shown, one row per change, for a spreadsheet.
-export function auditCsv(entries: readonly AuditEntry[]): string {
+export function auditCsv(entries: readonly AuditEntry[], timeZone: string): string {
   return toCsv([
     ['When', 'Who', 'What happened', 'Item', 'What changed', 'Details'],
     ...entries.map((entry) => [
-      formatWhen(entry.createdAt),
+      formatWhen(entry.createdAt, timeZone),
       entry.actorName,
       actionLabel(entry.action),
       entry.targetName,
@@ -194,27 +202,16 @@ export function auditCsv(entries: readonly AuditEntry[]): string {
   ]);
 }
 
-// "to" is exclusive (the next midnight, or now): the last day it covers.
-const lastDay = (range: { to: string }) => new Date(new Date(range.to).getTime() - 1).toISOString();
-
-// File name for a report download, using the period's local dates.
-export function reportFileName(kind: string, range: { from: string; to: string }): string {
-  return `care-qr-${kind}-${fileDate(range.from)}-to-${fileDate(lastDay(range))}.csv`;
+// File name for a report download: the chosen hospital days, both included.
+export function reportFileName(kind: string, days: { from: string; to: string }): string {
+  return `care-qr-${kind}-${days.from}-to-${days.to}.csv`;
 }
 
-const dayOf = (value: string) =>
-  new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
-
-// A local calendar date for file names: 2026-10-09 (not the UTC date).
-export function fileDate(value: string | Date): string {
-  const date = new Date(value);
-  const pad = (number: number) => String(number).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-// The report's period in words. "to" is exclusive (the next midnight, or now).
-export function periodLabel(range: { from: string; to: string }): string {
-  return `${dayOf(range.from)} – ${dayOf(lastDay(range))}`;
+// The period a report covers, in words, as hospital days. The server's "to"
+// is exclusive (the next midnight, or now), so the last day ends just before.
+export function periodLabel(range: { from: string; to: string }, timeZone: string): string {
+  const last = new Date(new Date(range.to).getTime() - 1);
+  return `${dayLabel(dayIn(range.from, timeZone))} – ${dayLabel(dayIn(last, timeZone))}`;
 }
 
 // Spreadsheet cells: minutes and percentages as plain numbers, so Excel can
@@ -224,7 +221,7 @@ const percentCell = (value: number | null) => value;
 
 // The whole report in one spreadsheet: totals, staff work, departments,
 // services, and the requests that were not completed.
-export function reportCsv(report: RequestReport, hospitalName: string): string {
+export function reportCsv(report: RequestReport, hospital: HospitalInfo): string {
   const { summary } = report;
   const group = (rows: RequestReport['byService']) => [
     [
@@ -252,9 +249,9 @@ export function reportCsv(report: RequestReport, hospitalName: string): string {
   ];
   return toCsv([
     ['CARE QR request report'],
-    ['Hospital', hospitalName],
-    ['Period', periodLabel(report.range)],
-    ['Downloaded', formatWhen(new Date().toISOString())],
+    ['Hospital', hospital.name],
+    ['Period', periodLabel(report.range, hospital.timezone)],
+    ['Downloaded', formatWhen(new Date().toISOString(), hospital.timezone)],
     [],
     ['Summary'],
     ['Requests', summary.total],
@@ -323,7 +320,7 @@ export function reportCsv(report: RequestReport, hospitalName: string): string {
       item.serviceName,
       item.location,
       outcomeLabels[item.outcome],
-      formatWhen(item.submittedAt),
+      formatWhen(item.submittedAt, hospital.timezone),
       item.endedBy ?? item.assigneeName,
       item.reason,
       minutesCell(item.overdueMinutes),
@@ -380,7 +377,10 @@ export interface DayWork {
 }
 
 // A person's work per service and per day, from their actions.
-export function personBreakdown(activity: readonly PersonActivity[]): {
+export function personBreakdown(
+  activity: readonly PersonActivity[],
+  timeZone: string,
+): {
   byService: ServiceWork[];
   byDay: DayWork[];
 } {
@@ -397,14 +397,11 @@ export function personBreakdown(activity: readonly PersonActivity[]): {
       averageWorkMinutes: null,
       minutes: [],
     };
-    const date = fileDate(item.at);
+    // The hospital's day, whatever the viewer's own time zone.
+    const date = dayIn(item.at, timeZone);
     const day = days.get(date) ?? {
       date,
-      label: new Date(item.at).toLocaleDateString(undefined, {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-      }),
+      label: dayLabel(date, { weekday: 'short', day: 'numeric', month: 'short' }),
       accepted: 0,
       completed: 0,
       rejected: 0,
@@ -440,15 +437,15 @@ export function personBreakdown(activity: readonly PersonActivity[]): {
 }
 
 // One person's report in one spreadsheet.
-export function personCsv(report: PersonReport, hospitalName: string): string {
+export function personCsv(report: PersonReport, hospitalInfo: HospitalInfo): string {
   const { work, hospital } = report;
-  const { byService, byDay } = personBreakdown(report.activity);
+  const { byService, byDay } = personBreakdown(report.activity, hospitalInfo.timezone);
   return toCsv([
     ['CARE QR staff work report'],
     ['Person', report.person.name],
-    ['Hospital', hospitalName],
-    ['Period', periodLabel(report.range)],
-    ['Downloaded', formatWhen(new Date().toISOString())],
+    ['Hospital', hospitalInfo.name],
+    ['Period', periodLabel(report.range, hospitalInfo.timezone)],
+    ['Downloaded', formatWhen(new Date().toISOString(), hospitalInfo.timezone)],
     [],
     ['Summary', 'This person', 'Whole hospital'],
     ['Assigned to them', work.assigned, null],
@@ -500,7 +497,7 @@ export function personCsv(report: PersonReport, hospitalName: string): string {
     ['Every action'],
     ['When', 'What', 'Request', 'Service', 'Where', 'With', 'Minutes', 'On time', 'Reason'],
     ...report.activity.map((item) => [
-      formatWhen(item.at),
+      formatWhen(item.at, hospitalInfo.timezone),
       activityLabels[item.kind],
       item.publicId,
       item.serviceName,
