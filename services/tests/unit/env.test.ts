@@ -22,6 +22,27 @@ describe('environment configuration', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(ZodError);
   });
 
+  it('runs the SLA worker every minute and allows 10 seconds to shut down, unless told otherwise', () => {
+    expect(loadConfig(validEnvironment)).toMatchObject({
+      escalationIntervalSeconds: 60,
+      shutdownTimeoutSeconds: 10,
+    });
+    // A blank value keeps the default; only 0 turns the worker off.
+    expect(
+      loadConfig({
+        ...validEnvironment,
+        ESCALATION_INTERVAL_SECONDS: '',
+        SHUTDOWN_TIMEOUT_SECONDS: '',
+      }),
+    ).toMatchObject({ escalationIntervalSeconds: 60, shutdownTimeoutSeconds: 10 });
+    expect(loadConfig({ ...validEnvironment, ESCALATION_INTERVAL_SECONDS: '0' })).toMatchObject({
+      escalationIntervalSeconds: 0,
+    });
+    expect(() => loadConfig({ ...validEnvironment, SHUTDOWN_TIMEOUT_SECONDS: '0' })).toThrow(
+      ZodError,
+    );
+  });
+
   it('starts without Redis, which nothing needs yet', () => {
     const config = loadConfig({ ...validEnvironment, REDIS_URL: '' });
     expect(config.redisUrl).toBeNull();

@@ -1,27 +1,34 @@
-# Render Blueprint for the CARE QR API and its PostgreSQL database.
+# Render Blueprint for the CARE QR API.
 # Render dashboard → New → Blueprint → choose this repository. When asked,
-# set PUBLIC_APP_URL to the web app's address (for example the Vercel URL).
+# set DATABASE_URL to your PostgreSQL connection string (the live deployment
+# uses Neon) and PUBLIC_APP_URL to the web app's address (the Vercel URL).
+# This file never creates or replaces a database: DATABASE_URL is entered by
+# you once and is not overwritten when the Blueprint syncs.
 # Step-by-step guide: docs/deployment.md
 services:
   - type: web
     name: careqr-api
     runtime: node
     rootDir: services
+    # Free instances sleep after 15 minutes without traffic: the first request
+    # then waits about a minute, and the SLA worker (escalations) does not run
+    # while asleep. Use an always-on instance for a hospital pilot.
     plan: free
     # Dev dependencies are needed to build (TypeScript, Prisma CLI).
     buildCommand: npm ci --include=dev && npm run build
     # Applies new database migrations, then starts the API.
     startCommand: npm run start:prod
+    # Liveness only: a database outage must not restart a healthy process.
+    # Point uptime monitoring at /ready, which also checks PostgreSQL.
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: "24"
       - key: NODE_ENV
         value: production
+      # Your PostgreSQL connection string, entered once in the dashboard.
       - key: DATABASE_URL
-        fromDatabase:
-          name: careqr-db
-          property: connectionString
+        sync: false
       # The web app address, e.g. https://care-qr.vercel.app (no trailing slash).
       - key: PUBLIC_APP_URL
         sync: false
@@ -33,9 +40,3 @@ services:
       # visitor's own address.
       - key: TRUST_PROXY
         value: "3"
-
-databases:
-  - name: careqr-db
-    plan: free
-    databaseName: careqr
-    user: careqr

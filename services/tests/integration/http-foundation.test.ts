@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import express from 'express';
 import { createApp } from '../../src/app.js';
 import { createLogger } from '../../src/config/logger.js';
+import { createHealthRouter } from '../../src/http/health.routes.js';
+import { errorHandler } from '../../src/middleware/error-handler.js';
 
 const logger = createLogger('silent');
 
@@ -168,5 +171,30 @@ describe('HTTP foundation', () => {
     const response = await request(createApp({ logger })).get('/ready');
 
     expect(response.status).toBe(503);
+  });
+
+  it('answers 503 instead of hanging when a dependency does not respond', async () => {
+    const application = express();
+    application.use((request, _response, next) => {
+      request.log = logger;
+      next();
+    });
+    application.use(
+      createHealthRouter([{ name: 'postgresql', check: () => new Promise(() => {}) }], 50),
+    );
+    application.use(errorHandler);
+    const started = Date.now();
+    const response = await request(application).get('/ready');
+    expect(response.status).toBe(503);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it('keeps /health answering while a dependency is down, so the host does not restart it', async () => {
+    const application = createApp({
+      logger,
+      readinessProbes: [{ name: 'postgresql', check: () => Promise.reject(new Error('down')) }],
+    });
+    expect((await request(application).get('/health')).status).toBe(200);
+    expect((await request(application).get('/ready')).status).toBe(503);
   });
 });

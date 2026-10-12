@@ -1,15 +1,19 @@
 # Deploying CARE QR
 
-The API (`services/`) runs on **Render** with a Render PostgreSQL database. The web app (`frontend/`) runs on **Vercel**. The browser calls the API directly; the API allows calls only from the web app's address.
+The API (`services/`) runs on **Render**. The database is any managed **PostgreSQL** 17 or newer; the live deployment uses **Neon**. The web app (`frontend/`) runs on **Vercel**. The browser calls the API directly; the API allows calls only from the web app's address.
 
 ```text
-Phone / staff browser ──► Vercel (web app) ──► Render (API) ──► Render PostgreSQL
+Phone / staff browser ──► Vercel (web app) ──► Render (API) ──► PostgreSQL (Neon)
                          VITE_API_URL ─────────┘   PUBLIC_APP_URL = the Vercel address
 ```
 
-Order: **1.** API and database on Render → **2.** web app on Vercel → **3.** tell the API the web app's address → **4.** create the first super admin.
+Order: **1.** a PostgreSQL database → **2.** API on Render → **3.** web app on Vercel → **4.** tell the API the web app's address → **5.** create the first super admin.
 
-## 1. API and database on Render
+## 1. The database
+
+Create a PostgreSQL database with your provider (Neon: **New project**; Render PostgreSQL also works) and copy its connection string. Use it as `DATABASE_URL` below. Nothing in this repository creates, replaces, or deletes a database.
+
+## 2. API on Render
 
 ### Option A: Blueprint (recommended)
 
@@ -101,8 +105,11 @@ The demo and test seeds (`seed:demo`, `seed:test`) refuse to run against anythin
 | Refreshing `/admin/...` on Vercel shows 404 | `frontend/vercel.json` must be deployed (Root Directory `frontend`). |
 | Opening the API address shows `{"service":"CARE QR API","status":"ok",...}` | Expected: that is the API, not the web app. Open the Vercel address to use CARE QR. |
 | Many people get "Too many requests" at sign-in | Set `TRUST_PROXY=3` on Render so each visitor is counted separately. |
-| The first request takes about a minute | Render's free plan sleeps after 15 minutes without traffic. A paid instance stays awake. |
-| Free database stops working | Render's free PostgreSQL expires after a trial period; upgrade the database plan before going live. |
+| The first request takes about a minute | Render's free plan sleeps after 15 minutes without traffic (and the SLA worker pauses too). An always-on instance stays awake. |
+| Free database stops working | Free database plans can expire or pause (Render's free PostgreSQL expires after a trial period); check your provider's plan before going live. |
+| Render log: `API failed to start: Port ... is already in use` | Another process uses the port; on Render, do not set `PORT`. |
+| Staff see "Choose a new password" after signing in | An administrator reset their password; they enter the temporary one and choose their own. |
+| Browser console: "Refused to connect ... Content Security Policy" | The web app was built with a different `VITE_API_URL` than the API it calls: fix it on Vercel and redeploy. |
 
 ## Local development is unchanged
 
