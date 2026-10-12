@@ -4,7 +4,7 @@ Every module lives in `services/src/modules/<name>/` and follows the [five layer
 
 | Module | What it does | Writes | Main routes |
 |---|---|---|---|
-| [auth](#auth) | Staff sign-in, sessions, and the staff context used for every access check | `StaffSession` | `/auth/staff/*` |
+| [auth](#auth) | Staff sign-in, sessions, password change, and the staff context used for every access check | `StaffSession` | `/auth/staff/*` |
 | [platform](#platform) | Super admin: sign-in, clients, hospitals, managers | `Client`, `Hospital` (status, client), `PlatformSession` | `/auth/platform/*`, `/platform/*` |
 | [hospitals](#hospitals) | Hospital onboarding, profile, logo, "is this hospital open" | `Client`, `Hospital`, `HospitalLogo` | `/admin/hospital*`, `/public/logos/:id` |
 | [roles](#roles) | Permissions, built-in and custom roles, who holds which role where | `Permission`, `Role`, `RolePermission`, `UserRole`, `ScopeAssignment` | `/admin/roles*`, `/admin/memberships/:id/roles*` |
@@ -15,7 +15,7 @@ Every module lives in `services/src/modules/<name>/` and follows the [five layer
 | [qr](#qr) | Bed QR codes (issue, replace, disable, print in bulk) and scanning | `BedQrCode` | `/admin/qr-codes*`, `/admin/beds/:id/qr*`, `/public/qr/resolve` |
 | [catalog](#catalog) | Service categories and services; the request snapshot | `ServiceCategory`, `ServiceItem` | `/admin/service-categories*`, `/admin/services*`, `/public/services` |
 | [sla](#sla) | Response-time targets (versioned) and escalation policies | `SlaPolicy`, `SlaPolicyVersion`, `EscalationPolicy`, `EscalationLevel` | `/admin/sla-policies*`, `/admin/escalation-policies*` |
-| [requests](#requests) | The patient request lifecycle and its event history | `ServiceRequest`, `RequestEvent` | `/admin/requests*`, `/public/requests*` |
+| [requests](#requests) | The patient request lifecycle, its event history, the paged work queue, alerts, and the SLA escalation worker | `ServiceRequest`, `RequestEvent`, `RequestEscalation` | `/admin/requests*`, `/public/requests*` |
 | [reports](#reports) | Request reports: totals, staff work, one person's work, why not completed, history | — (read only) | `/admin/reports/requests*`, `/admin/reports/people/:id` |
 | [audit](#audit) | Recording every change and reading the audit log | `AuditLog` | `/admin/audit-log` |
 
@@ -29,7 +29,7 @@ Staff sign-in by hospital code, email, and password; 8-hour sessions (only the t
 
 - **Public interface:** `StaffAuthService`, `AuthController`, `createAuthRoutes`, `revokeStaffSessions`, `revokeHospitalSessions`, `hashPassword`, `verifyPasswordOrDummy`, and the access helpers `StaffContext`, `scopesFor`, `canAccessLocation`, `bedScopeWhere`.
 - **Files:** `auth.*` layers, `password.ts` (scrypt hashing, timing-safe checks), `staff-context.ts` (who is signed in and what they may do where).
-- **Notes:** a failed sign-in takes the same time whether or not the hospital or email exists; sign-in is rate limited per account and per network address.
+- **Notes:** a failed sign-in takes the same time whether or not the hospital or email exists; sign-in is rate limited per account and per network address. `POST /auth/staff/password` changes one's own password (other sessions end). After a manager's reset (`resetStaffPassword`, used by the staff module) `mustChangePassword` is set and every route except who-am-I, change password, and sign out answers `PASSWORD_CHANGE_REQUIRED`.
 
 ## platform
 
@@ -58,7 +58,7 @@ The simplest module and the best template to copy. Standard list / get / create 
 
 - **Public interface:** `StaffService`, `ShiftService`, their controllers, `createStaffRoutes`, `createStaffAccount`, `findEligibleStaff`.
 - **Eligibility rule** (`eligibility.ts`): a person can receive a request only when their membership and account are active, they are on duty, they belong to the request's department, and their coverage includes the bed (hospital, floor, or ward).
-- **Rules:** a staff manager can only change the status of someone with less access; going inactive also ends their sessions and duty.
+- **Rules:** a staff manager can only change the status of, or reset the password of, someone whose permissions they hold; going inactive also ends their sessions and duty. A reset is refused for oneself and for an account also used at another hospital or on the platform.
 
 ## locations
 
@@ -82,13 +82,15 @@ The simplest module and the best template to copy. Standard list / get / create 
 
 ## sla
 
-- **Public interface:** `SlaPolicyService`, `EscalationPolicyService`, `SlaController`, `createSlaRoutes`, `createSlaPolicy`.
+- **Public interface:** `SlaPolicyService`, `EscalationPolicyService`, `SlaController`, `createSlaRoutes`, `createSlaPolicy`, `findEscalationLevels` (for the SLA worker in requests).
 - **Rules:** changing timings creates a new immutable version (a database trigger forbids edits); escalation levels must start later than the previous level.
 
 ## requests
 
-- **Public interface:** `RequestService`, `RequestController`, `PatientRequestController`, routes, `requestAreaWhere`.
+- **Public interface:** `RequestService`, `RequestController`, `PatientRequestController`, routes, `requestAreaWhere`, `EscalationService`, `startEscalationWorker`.
 - **Rules:** see the [state machine](./request-state-machine.md). Every command checks permission, area, version, and status; adds exactly one event; and audits assign, transfer, cancel, and reject.
+- **Work queue:** `GET /admin/requests?view=open|completed|history&page=&pageSize=` returns one page and every list's count; open work comes overdue first, then oldest first. `GET /admin/requests/alerts` lists new, overdue, and escalated work for the signed-in person, with stable keys.
+- **SLA worker** (`escalation.service.ts`): runs in the API process; for open requests past their current deadline it takes each escalation level once (a `RequestEscalation` row unique per request, deadline, and level), marks the request escalated, and audits `request.escalate`. A new deadline clears the flag.
 
 ## reports
 

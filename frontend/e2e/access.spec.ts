@@ -110,6 +110,7 @@ test('older waiting requests stay reachable beyond the first page', async ({ pag
   await expect(page.getByText(newest)).toBeVisible();
 });
 
+// Chromium only: other browsers' PDF viewers are not covered here.
 test('QR labels open as a PDF in a new tab under the security policy', async ({ page }) => {
   await signIn(page, fixture.a.code, fixture.a.adminEmail, fixture.password);
   await page.goto('/admin/beds');
@@ -117,11 +118,12 @@ test('QR labels open as a PDF in a new tab under the security policy', async ({ 
   await row.getByRole('button', { name: 'Generate QR' }).click();
   const popup = page.waitForEvent('popup');
   await page.getByRole('button', { name: 'Open PDF to print' }).click();
+  // The tab opens blank, then moves to the PDF once it is built.
   const tab = await popup;
   const blocked = watchSecurityPolicy(tab);
-  await tab.waitForLoadState();
-  expect(tab.url()).toMatch(/^blob:/);
   await expect(page.getByText('The PDF opened in a new tab.')).toBeVisible();
+  await tab.waitForURL(/^blob:/);
+  await tab.waitForLoadState();
   // Give the PDF viewer a moment to load the document.
   await tab.waitForTimeout(1_000);
   expect(blocked).toEqual([]);

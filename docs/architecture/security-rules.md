@@ -23,6 +23,7 @@ This is the V1 security policy, not a claim that every item is implemented today
 - Authorization is enforced server-side for HTTP, WebSocket, worker, and administrative paths.
 - Sensitive administrative actions require explicit permissions and immutable AuditLog records.
 - Session and credential expiration, revocation, and rotation are enforced against authoritative server-side state.
+- Staff passwords: a person changes their own with their current password (other sessions end; guesses are rate limited). A staff manager may reset a forgotten one with a temporary password only for someone whose permissions they hold, never their own and never an account also used outside the hospital; the person's sessions end and they must choose a new password before any other route works. Passwords never appear in audit entries or logs.
 
 ## QR and guest-session security
 
@@ -42,6 +43,7 @@ This is the V1 security policy, not a claim that every item is implemented today
 - Logs are structured and include a request/correlation ID.
 - Production traffic uses TLS. Cookies, if used, are `Secure`, `HttpOnly`, and use an appropriate `SameSite` policy.
 - CORS, trusted proxy behavior, body limits, security headers, and rate limits are configured explicitly per environment.
+- The web app is served with Referrer-Policy `no-referrer` (QR links carry a secret), framing blocked (`frame-ancestors 'none'`, `X-Frame-Options: DENY`), a Permissions-Policy that allows only this site's camera, and a Content Security Policy allowing only the app's own code and the API it was built for (`frontend/vercel.json`, `frontend/content-security-policy.ts`). The staff token is kept in localStorage, which these headers protect but do not make immune to injected script; httpOnly cookies would need the web app and API on one site.
 - Environment variables are validated before the application accepts traffic. The application fails startup on missing or invalid required configuration.
 
 ## State and transaction integrity

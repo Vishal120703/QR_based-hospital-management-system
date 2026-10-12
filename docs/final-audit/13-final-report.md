@@ -46,3 +46,15 @@ Baseline: 18 PASS / 0 FAIL / 0 BLOCKED. Existing tests: 23 backend unit + 131 ba
 Stages 4–13 in full; browser/system timezone mismatch and DST boundaries; every report measure/export/truncation; full secret-content/history/distribution scan; practical XSS and CSP; process restart/scaling/rate-limit/proxy behavior; clean install and remote CI; PostgreSQL 17 runtime; live deployed startup/readiness/graceful shutdown/dependency failures; full responsive/keyboard/camera/print testing; load/staging/pilot. No unverified area is converted to PASS because compilation or tests are green.
 
 Dead-code cleanup: no evidence-backed deletion candidate approved by this bounded run. Source, migrations, dependencies, UI and existing docs are unchanged by audit work; only this audit directory and ignored generated build/client output were written. Test infrastructure was isolated from development/production.
+
+## Update after fixes (2026-10-12)
+
+AUD-001 is resolved and independently rechecked (probe 94/94, no leaks). The areas below changed; the verdict is still **NOT_READY for production sign-off** until the remaining stages, hosted checks, backups, and a hospital pilot are done.
+
+| Area | Now | Evidence/limit |
+|---|---|---|
+| Authorization/scopes | PASS for AUD-001's cases | Regression tests and probe rerun; Stage 4–9 still not run in full |
+| Reports/data correctness | PARTIAL | Scope fixed; hospital time zone implemented and tested; full arithmetic recheck pending |
+| Frontend functional | PARTIAL | Component tests plus browser end-to-end tests of the main workflow |
+| Security | PARTIAL | Headers/CSP, password management added; token in localStorage remains a documented limitation |
+| Deployment | PARTIAL | Lifecycle, health, render.yaml, backup docs fixed; hosted verification pending |

@@ -389,6 +389,21 @@ The numbers below are what the data had when loaded, for **Last 30 days**. Your 
 | N02 | Sign in with a hospital code that does not exist, and with an email that does not exist. | The same message in both cases. It never says which part was wrong. |
 | N03 | As a care staff member, open `/admin/staff`, `/admin/roles`, `/admin/audit`, and `/admin/reports`. | **Access restricted** on each. |
 | N04 | As **Meera**, try to suspend herself while she is the only Hospital Manager. | Refused: "A hospital must keep at least one active Hospital Manager." |
+| N05 | As any staff member, click **Password** (top bar) and change your password: first with a wrong current password, then correctly. | Wrong current password: "Your current password is not right." and you stay signed in. Correct: a confirmation; signing in elsewhere with the old password fails. If you were signed in on a second device, that one is signed out. |
+| N06 | As **Meera**, **Staff & coverage → Manage** a care staff member → **Password** → type a temporary password (12+ characters) → **Reset password** → confirm. Then sign in as that person with the temporary password. | They are signed out everywhere. After signing in they see only **Choose a new password**; nothing else opens until they choose one. The audit log shows "Reset a staff password" without the password. |
+| N07 | As a Floor Manager, open a staff member's **Manage** (if allowed) and try to reset **Meera's** password. | Not allowed: you cannot reset the password of someone with more permissions. |
+
+### 6.13 Alerts, escalation, and the request queue
+
+| ID | Do this | ✔ Expected |
+|---|---|---|
+| A01 | As **Meera**, open **Requests** and press **Sound on/off** and **Turn on desktop alerts**. | The browser asks about notifications only when you press the button. Sound on/off is remembered. |
+| A02 | Keep Meera's tab open (another tab is fine). From a patient tab, send a new request. | Within about 30 seconds: a chime (if sound is on), a desktop notification (if allowed), and a red number on **Requests** in the menu. The same request does not alert twice. |
+| A03 | Leave a request unassigned past its accept target (or use an overdue one in the data). | It is marked overdue (red edge) and appears under the **Overdue** filter. If its service has an escalation policy, within about a minute it shows **Escalated · level 1**, and the policy's role holders who may see it get an alert. |
+| A04 | Accept the escalated request as the assigned staff member. | The escalated badge disappears (a new deadline applies). |
+| A05 | **Requests** with more than 25 open requests (the test data has many). | "Showing 1–25 of …", overdue first, then oldest; **Next** shows the rest. Tab counts show the totals, not just this page. |
+| A06 | **Reports → Choose dates**, clear **From**. | "Choose both a start and an end date."; **Show** is disabled; the page keeps working. |
+| A07 | Set your computer's time zone to another country (or use a second computer), then **Reports → Today**. | "Today" is still the hospital's date (CityCare: India), not your computer's. |
 
 ---
 
@@ -405,6 +420,12 @@ cd ~/Downloads/QR_Hospital_management/frontend && npm test
 ```
 
 `tests/integration/test-seed.test.ts` loads this same test data into the test database and checks every sign-in, each role's access, the report numbers, and that every request's history is complete and in order.
+
+Browser end-to-end tests run the whole patient-to-report workflow in a real browser on their own ports (3101 and 4173), against the same test database:
+
+```bash
+cd ~/Downloads/QR_Hospital_management/frontend && npx playwright install chromium && npm run test:e2e
+```
 
 ---
 
@@ -438,4 +459,5 @@ Copy this table and fill it in as you go.
 | PT01–PT07 | | |
 | R01–R13 | | |
 | S01–S04 | | |
-| N01–N04 | | |
+| N01–N07 | | |
+| A01–A07 | | |

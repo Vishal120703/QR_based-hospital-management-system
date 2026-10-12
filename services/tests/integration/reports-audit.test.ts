@@ -24,7 +24,7 @@ const uuid = z.string().uuid();
 let hospital: HospitalFixture;
 let roleIds: Record<string, string>;
 let departments: Record<string, string>;
-let beds: { a: string; b: string; floorA: string };
+let beds: { a: string; b: string; floorA: string; wardA: string };
 const people: Record<string, { id: string; email: string; token: string }> = {};
 const requests: Record<string, { id: string; publicId: string }> = {};
 
@@ -166,7 +166,7 @@ beforeAll(async () => {
   const bedB = await database.bed.create({
     data: { hospitalId, wardId: wardB.id, code: 'B1', displayName: 'Bed B1' },
   });
-  beds = { a: bedA.id, b: bedB.id, floorA: floorA.id };
+  beds = { a: bedA.id, b: bedB.id, floorA: floorA.id, wardA: wardA.id };
 
   const pantry = await staff('Pavan', 'CARE_STAFF', 'PANTRY');
   const nurse = await staff('Nisha', 'CARE_STAFF', 'NURSING');
@@ -423,14 +423,16 @@ describe('Request reports and audit', () => {
     expect((await as(floorManager.token).get('/admin/audit-log')).status).toBe(403);
   });
 
-  it('lets a floor or department manager open only people who worked in their area', async () => {
+  it('lets a floor, ward, or department manager open only people who worked in their area', async () => {
     const open = (token: string, id: string, query = '') =>
       as(token)
         .get(`/admin/reports/people/${id}${query}`)
         .then((response) => response.status);
     const floor = people.Farah!.token; // Floor A: Pavan's requests, not the nurses'.
     const pantry = people.Dev!.token; // Pantry: Pavan's requests only.
+    const ward = (await staff('Wendy', 'WARD_MANAGER', undefined, beds.wardA)).token; // Ward A.
     const longAgo = '?from=2020-01-01&to=2020-01-02';
+    expect(await open(ward, people.Pavan!.id)).toBe(200);
 
     expect(await open(floor, people.Pavan!.id)).toBe(200);
     expect(await open(pantry, people.Pavan!.id)).toBe(200);
@@ -439,7 +441,7 @@ describe('Request reports and audit', () => {
     expect(await open(pantry, people.Pavan!.id, longAgo)).toBe(200);
     // Staff who never worked in the area look the same as an unknown ID.
     const answers = new Set<string>();
-    for (const token of [floor, pantry]) {
+    for (const token of [floor, ward, pantry]) {
       for (const id of [people.Nisha!.id, people.Neel!.id, randomUUID()]) {
         for (const query of ['', longAgo]) {
           const response = await as(token).get(`/admin/reports/people/${id}${query}`);

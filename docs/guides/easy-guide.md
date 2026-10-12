@@ -39,7 +39,7 @@ Every hospital starts with these five built-in roles. A Hospital Manager can add
 
 ### Reports and audit (who did what, and why not)
 
-- **Work → Reports** (managers): pick a period (today, 7 days, 30 days, this month, or your own dates). You see how many requests came in, how many were completed, still open, overdue, cancelled (and how many by the patient), or turned down, and how often they were accepted and completed on time.
+- **Work → Reports** (managers): pick a period (today, 7 days, 30 days, this month, or your own dates). Days are the hospital's own days (its time zone), whatever time zone your computer is in. You see how many requests came in, how many were completed, still open, overdue, cancelled (and how many by the patient), or turned down, and how often they were accepted and completed on time.
   - **Staff work**: for every nurse or staff member, how many requests were assigned to them, accepted, completed (and how many on time), turned down (with their reasons), handed over to someone else, and still open, plus average time to accept and to finish. Managers also show how many requests they assigned and closed. Click a name to open **that person's own report**: their figures beside the whole hospital's, day by day, by service, and every action they took (accepted, completed on time or late, turned down and why, handed over to whom), with **Download** and **Print / PDF**.
   - **Not completed**: every cancelled, turned-down, or overdue request, with who did it, when, and the reason.
   - **Request log**: every request with who assigned, accepted, and completed it, and whether each step was on time. Filter it and **Download CSV** for Excel.
@@ -47,6 +47,13 @@ Every hospital starts with these five built-in roles. A Hospital Manager can add
 - **Hospital → Audit log** (Hospital Manager): every change in the hospital, such as staff added or suspended, roles given, patients admitted, QR codes replaced, and requests assigned or cancelled, with who did it, when, and what changed (before → after, with names). Filter by person, kind of change, or dates; click a person to see everything they changed, or an item to see its whole history; **Download CSV** saves what is shown. Entries cannot be edited or deleted.
 
 Floor and ward managers and department supervisors see reports only for their own area; care staff see neither.
+
+### Alerts, overdue work, and passwords
+
+- **Requests** shows one page at a time (25), overdue work first, then the oldest, so nothing waiting is hidden behind new requests; **Next** shows the rest, and **Overdue** / **Waiting for assignment** narrow the list.
+- While signed in, new and overdue requests (and escalations sent to you) show a red number on **Requests**, play a short chime (**Sound on/off**), and show a desktop notification if you pressed **Turn on desktop alerts**. Keep the app open in a tab to get them; they are not sent by SMS or email.
+- If a service has an **escalation policy** (Service catalog → Response targets), the API escalates a request that misses its accept or complete target, step by step, and the people the policy names are alerted.
+- **Password** (top bar) changes your own password. If someone forgets theirs, a manager opens **Staff & coverage → Manage → Password**, sets a temporary one, and tells them in person; they must choose their own at the next sign-in.
 
 ---
 

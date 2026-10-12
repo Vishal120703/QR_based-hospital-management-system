@@ -1,0 +1,7 @@
+{
+  "run": "2026-10-12, after the AUD-001 fix (commit 391959a), with all 15 migrations",
+  "assertions": 94,
+  "passed": 94,
+  "failed": [],
+  "identityLeaks": []
+}

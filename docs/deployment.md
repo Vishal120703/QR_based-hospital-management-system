@@ -18,13 +18,13 @@ Create a PostgreSQL database with your provider (Neon: **New project**; Render P
 ### Option A: Blueprint (recommended)
 
 1. Push the repository to GitHub.
-2. Render dashboard → **New → Blueprint** → choose the repository. Render reads [`render.yaml`](../render.yaml) and creates the **careqr-api** web service and the **careqr-db** database.
-3. When asked for `PUBLIC_APP_URL`, enter your Vercel address if you know it (for example `https://care-qr.vercel.app`), or any placeholder such as `https://example.com` and fix it in step 3. Leave `CORS_ORIGINS` empty.
+2. Render dashboard → **New → Blueprint** → choose the repository. Render reads [`render.yaml`](../render.yaml) and creates the **careqr-api** web service.
+3. When asked, enter `DATABASE_URL` (your connection string) and `PUBLIC_APP_URL` (your Vercel address, for example `https://care-qr.vercel.app`, or a placeholder such as `https://example.com` that you fix in step 4). Leave `CORS_ORIGINS` empty. Render keeps these values; later Blueprint syncs do not overwrite them.
 4. Wait for the deploy. Open `https://<your-api>.onrender.com/ready`; it should show `"status":"ok"`.
 
 ### Option B: a web service you already created
 
-Create a PostgreSQL database in Render first, then set these on the web service (**Settings** and **Environment**):
+Set these on the web service (**Settings** and **Environment**):
 
 | Setting | Value |
 |---|---|
@@ -38,40 +38,42 @@ Create a PostgreSQL database in Render first, then set these on the web service 
 |---|---|
 | `NODE_VERSION` | `24` |
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | the database's **Internal Database URL** |
+| `DATABASE_URL` | your database's connection string (Neon: from **Connect**; Render PostgreSQL: the **Internal Database URL**) |
 | `PUBLIC_APP_URL` | your Vercel address, e.g. `https://care-qr.vercel.app` (no trailing slash) |
 | `CORS_ORIGINS` | optional: other web addresses allowed to call the API, comma-separated |
 | `TRUST_PROXY` | `3` (Cloudflare, Render's load balancer, and a local proxy sit in front of the API) |
+| `ESCALATION_INTERVAL_SECONDS` | optional, default `60`: how often the SLA worker escalates overdue requests; `0` turns it off in that instance |
+| `SHUTDOWN_TIMEOUT_SECONDS` | optional, default `10`: on a redeploy or stop, how long requests in progress may take to finish (keep under Render's 30 seconds) |
 
 Do **not** set `HOST`, `PORT`, or `REDIS_URL`; Render provides the port, and nothing needs Redis yet. Without `TRUST_PROXY=3`, every visitor looks like Render's internal address, so sign-in and QR-scan rate limits would be shared by everyone.
 
-`npm run build` generates the database client and compiles the API. `npm run start:prod` applies any new database migrations, then starts the API, so the database is always up to date.
+`npm run build` generates the database client and compiles the API. `npm run start:prod` applies any new database migrations, then starts the API, so the database is always up to date. If a migration ever fails through a pooled connection (Neon's `-pooler` host), run that deploy's migration once with the direct (non-pooled) connection string: `DATABASE_URL="<direct URL>" npx prisma migrate deploy` from `services/`.
 
-## 2. Web app on Vercel
+## 3. Web app on Vercel
 
 1. Vercel → **Add New → Project** → import the repository.
 2. **Root Directory:** `frontend`. Vercel detects Vite: build `npm run build`, output `dist`.
 3. **Environment Variables:** `VITE_API_URL` = your Render API address, e.g. `https://careqr-api.onrender.com` (no trailing slash, no `/api`).
-4. Deploy. [`frontend/vercel.json`](../frontend/vercel.json) makes every page link (`/admin/...`, printed QR links `/q/...`) open the app.
+4. Deploy. [`frontend/vercel.json`](../frontend/vercel.json) makes every page link (`/admin/...`, printed QR links `/q/...`) open the app, and sends the security headers (no referrer, no framing by other sites, camera only for this site).
 
-`VITE_API_URL` is built into the app, so after changing it, redeploy (**Deployments → Redeploy**).
+`VITE_API_URL` is built into the app, and into its Content Security Policy (the only API address the page may call), so after changing it, redeploy (**Deployments → Redeploy**).
 
-## 3. Tell the API the web app's address
+## 4. Tell the API the web app's address
 
 In Render, set `PUBLIC_APP_URL` to the exact Vercel address (for example `https://care-qr.vercel.app`) and save; Render redeploys. This address:
 
 - is the only web origin allowed to call the API (add others, such as preview deployments, to `CORS_ORIGINS`);
 - is where printed QR codes point (`<PUBLIC_APP_URL>/q/<token>`). If you later move to your own domain, update it and replace the printed labels.
 
-## 4. Create the first super admin
+## 5. Create the first super admin
 
 The super admin creates clients and hospitals (each with its first Hospital Manager) from `/platform/login`. Create the super admin once from your computer, against the Render database:
 
-1. Render → database → **Connections** → copy the **External Database URL**.
+1. Copy the database's connection string that works from outside the provider (Neon: the connection string; Render PostgreSQL: **Connections → External Database URL**).
 2. In `services/` on your computer (Node 24 and `npm install` done):
 
 ```bash
-DATABASE_URL="<External Database URL>" PLATFORM_ADMIN_EMAIL="you@example.com" PLATFORM_ADMIN_NAME="Your Name" PLATFORM_ADMIN_PASSWORD="<at least 12 characters>" npm run bootstrap:platform-admin
+DATABASE_URL="<connection string>" PLATFORM_ADMIN_EMAIL="you@example.com" PLATFORM_ADMIN_NAME="Your Name" PLATFORM_ADMIN_PASSWORD="<at least 12 characters>" npm run bootstrap:platform-admin
 ```
 
 The values typed on the command line take priority over `services/.env`. If the connection is refused, add `?sslmode=require` to the end of the URL.
@@ -87,9 +89,53 @@ The demo and test seeds (`seed:demo`, `seed:test`) refuse to run against anythin
 | `https://<api>.onrender.com/` | `{"service":"CARE QR API","status":"ok",...}` |
 | `https://<api>.onrender.com/health` | `{"status":"ok"}` |
 | `https://<api>.onrender.com/ready` | `"status":"ok"` with `postgresql` ok |
-| Render logs at start-up | `CARE QR API listening` with your `publicAppUrl` and `corsOrigins` |
+| Render logs at start-up | `CARE QR API listening` with your `publicAppUrl`, `corsOrigins`, and `escalationIntervalSeconds` |
 | `https://<web>.vercel.app/login` | the sign-in page; signing in works |
-| A printed QR label | opens `https://<web>.vercel.app/q/...` on a phone |
+| A printed QR label | opens `https://<web>.vercel.app/q/...` on a phone; the patient can send a request |
+| Requests screen (as a manager) | the request appears; assign, accept, complete, and close work |
+
+### Deploying a new version, and going back
+
+1. **API first, then the web app.** A new web app may call API features the old API does not have yet (for example the paged Requests list). Render and Vercel both deploy on push; if Vercel finishes first, the Requests screen can fail for a few minutes until Render is live. For a pilot, deploy outside busy hours, or turn off Vercel's automatic deploys and redeploy the web app once Render shows the new version live.
+2. After both are live, repeat the checks above.
+3. **Going back:** Render → the service → **Events** → choose the previous deploy → **Rollback**; Vercel → **Deployments** → the previous one → **Promote to Production**. Database migrations only move forward and are written to stay compatible with the version before (new columns have defaults; new tables are unused by older code), so rolling the app back does not need a database change. Never undo a migration on the live database by hand.
+
+## Health checks and monitoring
+
+| Endpoint | Meaning | Use it for |
+|---|---|---|
+| `/health` | The API process is running and answering. Checks nothing else. | Render's health check (a database outage must not make Render restart a healthy API). |
+| `/ready` | The API can serve requests: PostgreSQL (and Redis, if set) answered within 3 seconds. `503` otherwise, without internal details; the log names the failed dependency. | An uptime monitor (for example every 1–5 minutes) that alerts you. |
+
+Nothing in this repository sets up an uptime monitor: add one with your monitoring service and point it at `https://<api>.onrender.com/ready`.
+
+On a redeploy or stop, the API stops taking new requests, lets those in progress finish (up to `SHUTDOWN_TIMEOUT_SECONDS`), stops the SLA worker, then closes the database connection. If the port is taken or a setting is wrong at start-up, the log says so in one line and the process exits.
+
+The **SLA worker** runs inside the API: every minute it escalates requests past their deadline by the service's escalation policy, once per step. It runs only while the API is awake: on Render's free plan it pauses with the API after 15 minutes without traffic. Several API instances can run it at the same time safely.
+
+## Backups and restore
+
+The database holds every hospital's staff accounts (with password hashes), requests and their history, and the audit log. Back it up, and test that a backup restores, before a pilot.
+
+**What your provider keeps.** Neon keeps history you can restore to a past moment ("restore" / "instant restore" in the Neon console), but how far back depends on your plan, so check the restore window in your Neon project settings before relying on it. Render PostgreSQL backups also depend on the plan. Do not assume a plan includes them.
+
+**Your own copy (works with any plan).** From a trusted computer with PostgreSQL 17+ client tools, using the **direct** (non-pooled) connection string:
+
+```bash
+pg_dump --format=custom --no-owner --file "careqr-$(date +%Y-%m-%d).dump" "<direct connection string>"
+```
+
+Keep dumps encrypted and off the database provider (they contain personal data), keep several days and weeks, and never commit them to the repository.
+
+**Test a restore regularly**, into a separate, empty database (local or staging), never the live one:
+
+```bash
+createdb careqr_restore_test
+pg_restore --no-owner --dbname "postgresql://<you>@localhost:5432/careqr_restore_test" careqr-YYYY-MM-DD.dump
+DATABASE_URL="postgresql://<you>@localhost:5432/careqr_restore_test" npx prisma migrate status
+```
+
+`migrate status` (run in `services/`) should say the schema is up to date; then check that the counts of hospitals, staff, and requests look right, and delete the test database. Restoring into the live database replaces its data: do it only as a planned recovery, with the hospital's approval.
 
 ## Troubleshooting
 

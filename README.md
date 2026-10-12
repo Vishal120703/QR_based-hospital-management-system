@@ -99,3 +99,15 @@ npm run build
 ```
 
 Integration tests do not read `.env`. Set `TEST_DATABASE_URL` to a disposable PostgreSQL database with migrations applied. Tests create isolated fixture hospitals with unique codes, so they can run repeatedly against the same database.
+
+Browser end-to-end tests (Playwright) run the whole workflow in Chromium: a patient scans a QR and asks for help, staff assign, complete, and close it, and the report counts it, plus the main must-not-happen cases. They start their own API (port 3101) and production build of the web app (port 4173) against `TEST_DATABASE_URL`, never your development servers. Inside `frontend/`, once:
+
+```bash
+npx playwright install chromium
+```
+
+then, with `TEST_DATABASE_URL` set:
+
+```bash
+npm run test:e2e
+```

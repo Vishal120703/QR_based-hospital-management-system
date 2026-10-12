@@ -9,3 +9,7 @@ The existing person-report test covered hospital-wide zero-work membership repor
 Additional independent probe: evidence/stage3-probe.mjs, 94 assertions / 91 PASS / 3 FAIL, one confirmed defect across three scoped manager roles. The script restricts its database path/socket to the disposable audit naming scheme, creates synthetic records only, and never emits tokens. Its process exit 0 means the harness completed; it does NOT mean the failing authorization assertions passed.
 
 Unverified testing: clean npm ci, CI execution on PostgreSQL 17, exhaustive session lifecycle, full independent report arithmetic/timezone fixture, browser responsive/accessibility tour, deployment/proxy behavior, failure/load/staging/pilot testing. Stages 4–13 remain deferred. No source/test suite was weakened.
+
+## Update 2026-10-12
+
+Suites now include, among others: paged request queue (ordering, every request reachable, filters, validation, isolation), hospital-time-zone report periods, password change/reset, SLA escalation (once per step, overlapping runs, stage changes, cancellation) and per-person alerts, server lifecycle and readiness timeouts, and the AUD-001 floor/ward/department cases. Browser end-to-end tests (Playwright, real Chromium, production build with production headers, isolated test database) cover the patient-to-report workflow and the main must-not-happen cases. Counts are in [project status](../project-status.md).

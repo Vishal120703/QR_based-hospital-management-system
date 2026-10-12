@@ -14,3 +14,9 @@ Date: 2026-10-09 (Asia/Kolkata). Scope: FIRST RUN, stages 1–3 only, as request
 - Next recommended stage: 4 — authentication/session lifecycle; keep AUD-001 queued for a separately authorized fix.
 
 Details: [baseline](./01-baseline.md), [API inventory](./03-backend-api.md), [isolation finding](./04-auth-authorization-tenancy.md), [first-run report](./13-final-report.md).
+
+## Update 2026-10-12 (fixes after this first run)
+
+- AUD-001 is **resolved**: verified by regression tests for floor, ward, and department managers, unknown and other-hospital IDs, and empty periods, and by rerunning this audit's probe: 94 assertions, 94 passing, no identity leaks ([result](./evidence/stage3-results-2026-10-12.json)). Details in [04](./04-auth-authorization-tenancy.md#resolution-2026-10-12).
+- Also fixed since: request queue paging (no 500-request limit), hospital-time-zone report days, cleared report dates crashing, staff password change and reset, web security headers and Content Security Policy, an SLA escalation worker with staff alerts, graceful shutdown, and stale Render database configuration. Browser end-to-end tests now cover the main workflow.
+- Stages 4–13 of this audit were not rerun as a whole; the sections below say what changed and what is still unverified.

@@ -47,3 +47,11 @@ Final probe: 94 assertions / 91 PASS / 3 FAIL; the failures are three reproducti
 ## Coverage limits
 
 Identical-name guest/request checks existed before this run; the new probe adds independent UUID/mutation/scope cases. Full auth lifecycle, all inactive-resource cases, every mixed custom-permission combination, every mutation race, report arithmetic/date-boundary semantics and hosted UI behavior are not certified by stages 1–3.
+
+## Resolution (2026-10-12)
+
+Status: RESOLVED.
+
+- Fix (commit 391959a, `services/src/modules/reports/report.service.ts`): when the person has no work in the caller's report area for the period, a hospital-wide analytics holder still gets their zero-work report; a floor, ward, or department manager gets it only if the person has ever taken part in a request in that area (assigned, acted, handed over or to). Otherwise the answer is the same 404 as an unknown ID: "There is no report for this person in your area."
+- Regression tests (`services/tests/integration/reports-audit.test.ts`, "lets a floor, ward, or department manager open only people who worked in their area"): floor, ward, and department managers; outsiders, other-hospital members, and unknown IDs; current and empty periods; identical 404 code and message for all; hospital-wide managers keep zero-work reports. The existing person-report test still covers other-hospital IDs and care-staff denial.
+- Independent recheck: this audit's probe, rerun unchanged on a fresh disposable cluster with all 15 migrations: 94/94 passing, no identity leaks ([result](./evidence/stage3-results-2026-10-12.json)).
