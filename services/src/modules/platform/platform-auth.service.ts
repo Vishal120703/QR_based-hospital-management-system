@@ -1,7 +1,11 @@
 import { type PrismaClient } from '@prisma/client';
-import { UnauthorizedError } from '../../common/errors/app-error.js';
+import {
+  ConflictError,
+  InvalidInputError,
+  UnauthorizedError,
+} from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
-import { lockCredentialAccount, verifyPasswordOrDummy } from '../auth/index.js';
+import { hashPassword, lockCredentialAccount, verifyPasswordOrDummy } from '../auth/index.js';
 import { PlatformAuthRepository } from './platform-auth.repository.js';
 
 const sessionDurationMs = 8 * 60 * 60 * 1000;
@@ -73,5 +77,37 @@ export class PlatformAuthService {
 
   public async logout(context: PlatformContext): Promise<void> {
     await this.auth.revokeSession(this.database, context.sessionId);
+  }
+
+  // The current operator keeps this session; all their other platform and
+  // staff sessions end because every role shares the same credential account.
+  public async changePassword(
+    context: PlatformContext,
+    input: { currentPassword: string; newPassword: string },
+  ): Promise<void> {
+    const stored = await this.auth.findPasswordHash(this.database, context.userId);
+    if (!(await verifyPasswordOrDummy(input.currentPassword, stored?.passwordHash))) {
+      throw new InvalidInputError('Your current password is not right.');
+    }
+    if (input.newPassword === input.currentPassword) {
+      throw new InvalidInputError('Choose a new password that is different from the current one.');
+    }
+    const passwordHash = await hashPassword(input.newPassword);
+    await this.database.$transaction(async (transaction) => {
+      if (
+        !stored ||
+        !(await this.auth.replacePasswordIfUnchanged(
+          transaction,
+          context.userId,
+          stored.passwordHash,
+          passwordHash,
+        ))
+      ) {
+        throw new ConflictError(
+          'Your password changed meanwhile. Try again with your current password.',
+        );
+      }
+      await this.auth.revokeOtherSessions(transaction, context.userId, context.sessionId);
+    });
   }
 }

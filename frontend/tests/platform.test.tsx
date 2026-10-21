@@ -8,6 +8,7 @@ import { PlatformClientPage } from '../src/features/platform/PlatformClientPage'
 import { PlatformClientsPage } from '../src/features/platform/PlatformClientsPage';
 import { PlatformHospitalsPage } from '../src/features/platform/PlatformHospitalsPage';
 import { PlatformLayout, type PlatformContext } from '../src/features/platform/PlatformLayout';
+import { PlatformPasswordPage } from '../src/features/platform/PlatformPasswordPage';
 
 const sunrise: PlatformHospital = {
   id: 'h1',
@@ -58,6 +59,23 @@ function show(page: ReactNode, path = '/') {
 const showHospitals = () => show(<PlatformHospitalsPage />);
 
 describe('Platform administration', () => {
+  it('lets the operator change their own password', async () => {
+    const user = userEvent.setup();
+    const change = vi.spyOn(platformApi, 'changePassword').mockResolvedValue(null);
+    const context = show(<PlatformPasswordPage />);
+
+    await user.type(screen.getByLabelText('Current password'), 'old platform password');
+    await user.type(screen.getByLabelText('New password'), 'new platform password 42');
+    await user.type(screen.getByLabelText('New password again'), 'new platform password 42');
+    await user.click(screen.getByRole('button', { name: 'Change password' }));
+
+    expect(change).toHaveBeenCalledWith('platform-token', {
+      currentPassword: 'old platform password',
+      newPassword: 'new platform password 42',
+    });
+    expect(context.reportSuccess).toHaveBeenCalledWith(expect.stringContaining('Other devices'));
+  });
+
   it('clears the platform workspace when another tab signs out', async () => {
     credentials.setPlatform('platform-token');
     vi.spyOn(platformApi, 'me').mockResolvedValue({

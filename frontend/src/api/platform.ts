@@ -63,6 +63,8 @@ export const platformApi = {
       token,
     ),
   logout: (token: string) => call<null>('POST', '/auth/platform/logout', token),
+  changePassword: (token: string, input: { currentPassword: string; newPassword: string }) =>
+    call<null>('POST', '/auth/platform/password', token, input),
   clients: async (token: string) =>
     (await call<{ clients: PlatformClient[] }>('GET', '/platform/clients', token)).clients,
   client: async (token: string, id: string) =>

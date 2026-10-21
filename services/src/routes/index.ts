@@ -22,6 +22,7 @@ export interface RouteSettings {
   readonly qrResolveRateLimit: RateLimitOptions;
   readonly platformLoginRateLimit: RateLimitOptions;
   readonly platformAccountLoginRateLimit?: RateLimitOptions | undefined;
+  readonly platformPasswordChangeRateLimit?: RateLimitOptions | undefined;
   readonly staffLoginRateLimits?: LoginRateLimits | undefined;
 }
 
@@ -42,6 +43,7 @@ export function createRoutes(container: Container, settings: RouteSettings): Rou
       platformAuth,
       settings.platformLoginRateLimit,
       settings.platformAccountLoginRateLimit,
+      settings.platformPasswordChangeRateLimit,
     ),
   );
 

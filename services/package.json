@@ -19,6 +19,7 @@
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "bootstrap:hospital": "tsx src/cli/bootstrap-hospital.ts",
     "bootstrap:platform-admin": "node --env-file=.env --import tsx src/cli/bootstrap-platform-admin.ts",
+    "reset:platform-password": "node --env-file=.env --import tsx src/cli/reset-platform-password.ts",
     "seed:demo": "node --env-file=.env --import tsx src/cli/seed-demo.ts",
     "seed:test": "node --env-file=.env --import tsx src/cli/seed-test.ts",
     "docs:er": "node --import tsx src/cli/generate-er-diagram.ts",

@@ -35,6 +35,10 @@ export const platformLoginSchema = z
   .object({ email: emailSchema, password: loginPasswordSchema })
   .strict();
 
+export const platformChangePasswordSchema = z
+  .object({ currentPassword: loginPasswordSchema, newPassword: newPasswordSchema })
+  .strict();
+
 const newClientSchema = z
   .object({
     name: lineSchema(2, 200),

@@ -14,6 +14,7 @@ export function createPlatformRoutes(
   auth: PlatformAuthService,
   addressLoginLimit: RateLimitOptions,
   accountLoginLimit: RateLimitOptions = { windowMs: 15 * 60_000, max: 10 },
+  passwordChangeLimit: RateLimitOptions = { windowMs: 15 * 60_000, max: 10 },
 ): Router {
   const signedIn = requirePlatformAuth(auth);
 
@@ -26,6 +27,15 @@ export function createPlatformRoutes(
   );
   session.get('/me', signedIn, authController.me);
   session.post('/logout', signedIn, authController.logout);
+  session.post(
+    '/password',
+    signedIn,
+    rateLimit({
+      ...passwordChangeLimit,
+      key: (request) => `password|${request.platform?.userId ?? request.ip ?? 'unknown'}`,
+    }),
+    authController.changePassword,
+  );
 
   const operator = Router();
   operator.use(signedIn);

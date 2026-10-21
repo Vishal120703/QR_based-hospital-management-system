@@ -66,6 +66,10 @@ const PlatformHospitalPage = page(
   () => import('./features/platform/PlatformHospitalPage'),
   'PlatformHospitalPage',
 );
+const PlatformPasswordPage = page(
+  () => import('./features/platform/PlatformPasswordPage'),
+  'PlatformPasswordPage',
+);
 
 const container = document.getElementById('root');
 if (!container) {
@@ -92,6 +96,7 @@ root.render(
               <Route path="clients/:id" element={<PlatformClientPage />} />
               <Route path="hospitals" element={<PlatformHospitalsPage />} />
               <Route path="hospitals/:id" element={<PlatformHospitalPage />} />
+              <Route path="password" element={<PlatformPasswordPage />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<AdminIndex />} />

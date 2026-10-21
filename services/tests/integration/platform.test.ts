@@ -74,6 +74,42 @@ afterAll(async () => {
 });
 
 describe('SaaS platform administration', () => {
+  it('lets an operator change their password and ends their other sessions', async () => {
+    const account = await createPlatformToken(database, application);
+    const secondLogin = await request(application)
+      .post('/auth/platform/login')
+      .send({ email: account.email, password: fixturePassword });
+    const secondToken = z.object({ token: z.string() }).parse(secondLogin.body).token;
+    const newPassword = 'A new platform passphrase 42';
+
+    const wrong = await as(account.token).post('/auth/platform/password', {
+      currentPassword: 'not the current password',
+      newPassword,
+    });
+    expect(wrong.status).toBe(400);
+    const changed = await as(account.token).post('/auth/platform/password', {
+      currentPassword: fixturePassword,
+      newPassword,
+    });
+    expect(changed.status).toBe(204);
+    expect((await as(account.token).get('/auth/platform/me')).status).toBe(200);
+    expect((await as(secondToken).get('/auth/platform/me')).status).toBe(401);
+    expect(
+      (
+        await request(application)
+          .post('/auth/platform/login')
+          .send({ email: account.email, password: fixturePassword })
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await request(application)
+          .post('/auth/platform/login')
+          .send({ email: account.email, password: newPassword })
+      ).status,
+    ).toBe(200);
+  });
+
   it('onboards a client hospital whose manager can sign in with the built-in roles', async () => {
     const input = newHospital();
     const created = await as(operator).post('/platform/hospitals', input);

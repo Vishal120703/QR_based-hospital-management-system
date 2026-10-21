@@ -26,10 +26,15 @@ export function ChangePasswordForm({
   token,
   forced,
   onChanged,
+  changePassword = staffApi.changePassword,
 }: {
   token: string;
   forced: boolean;
   onChanged: () => void;
+  changePassword?: (
+    token: string,
+    input: { currentPassword: string; newPassword: string },
+  ) => Promise<unknown>;
 }) {
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -48,7 +53,7 @@ export function ChangePasswordForm({
     setBusy(true);
     setError(null);
     try {
-      await staffApi.changePassword(token, { currentPassword: current, newPassword: next });
+      await changePassword(token, { currentPassword: current, newPassword: next });
       setCurrent('');
       setNext('');
       setRepeat('');

@@ -6,6 +6,7 @@ import { type PlatformAuthService } from './platform-auth.service.js';
 import {
   addManagerSchema,
   createHospitalSchema,
+  platformChangePasswordSchema,
   platformLoginSchema,
   updateClientSchema,
   updateHospitalSchema,
@@ -30,6 +31,14 @@ export class PlatformAuthController {
   public readonly logout: RequestHandler = async (request, response) => {
     emptySchema.parse(request.body ?? {});
     await this.auth.logout(getPlatformContext(request));
+    response.status(204).send();
+  };
+
+  public readonly changePassword: RequestHandler = async (request, response) => {
+    await this.auth.changePassword(
+      getPlatformContext(request),
+      platformChangePasswordSchema.parse(request.body),
+    );
     response.status(204).send();
   };
 }

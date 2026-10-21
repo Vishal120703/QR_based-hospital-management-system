@@ -119,6 +119,7 @@ export function PlatformLayout() {
           Clients
         </NavLink>
         <NavLink to="/platform/hospitals">Hospitals</NavLink>
+        <NavLink to="/platform/password">Password</NavLink>
       </nav>
       <main ref={mainRef} id="main-content" className="admin-main platform-main" tabIndex={-1}>
         <NoticeStack
