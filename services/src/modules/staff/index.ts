@@ -5,4 +5,5 @@ export { ShiftController } from './shift.controller.js';
 export { ShiftService } from './shift.service.js';
 export { StaffController } from './staff.controller.js';
 export { createStaffRoutes } from './staff.routes.js';
-export { createStaffAccount, StaffService } from './staff.service.js';
+export { createStaffAccount } from './staff-account.js';
+export { StaffService } from './staff.service.js';

@@ -16,6 +16,7 @@ import {
 } from '../auth/index.js';
 import { lockedRoleKey } from '../roles/index.js';
 import { findEligibleStaff } from './eligibility.js';
+import { createStaffAccount } from './staff-account.js';
 import { StaffRepository, type StaffRow } from './staff.repository.js';
 import { type CoverageInput, type CreateStaffInput, type StaffFilter } from './staff.schemas.js';
 
@@ -42,34 +43,6 @@ function toView(row: StaffRow) {
       scopes: item.scopes.map((scope) => ({ type: scope.scopeType, id: scope.scopeId })),
     })),
   };
-}
-
-// Creates a person's account and their membership in a hospital, inside the
-// caller's transaction. Used by staff creation, hospital setup, and the super
-// admin. Fails if the email already has an account.
-export async function createStaffAccount(
-  transaction: Transaction,
-  input: {
-    readonly hospitalId: string;
-    readonly email: string;
-    readonly displayName: string;
-    readonly passwordHash: string;
-  },
-): Promise<{ userId: string; membershipId: string }> {
-  const email = input.email.trim().toLowerCase();
-  if (await repository.findUserByEmail(transaction, email)) {
-    throw new ConflictError('A user with this email already exists.');
-  }
-  const user = await repository.createUser(transaction, {
-    email,
-    displayName: input.displayName.trim(),
-    passwordHash: input.passwordHash,
-  });
-  const membership = await repository.createMembership(transaction, {
-    hospitalId: input.hospitalId,
-    userId: user.id,
-  });
-  return { userId: user.id, membershipId: membership.id };
 }
 
 export class StaffService {
