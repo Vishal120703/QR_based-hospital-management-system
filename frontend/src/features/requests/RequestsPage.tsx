@@ -1,56 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   ApiError,
   staffApi,
   type EligibleStaff,
-  type RequestQueue,
-  type RequestQueueQuery,
   type StaffRequest,
   type StaffRequestAction,
 } from '../../api';
-import { LoadState, Modal, PageHeading } from '../../components';
-import {
-  clockTime,
-  currentDeadline,
-  formatDuration,
-  isOverdue,
-  statusBadgeClass,
-  statusLabels,
-  timeAgo,
-  useAutoRefresh,
-  useNow,
-} from '../../lib/request-status';
+import { LoadState, PageHeading } from '../../components';
+import { clockTime, useAutoRefresh, useNow } from '../../lib/request-status';
 import { useAdmin } from '../workspace/AdminLayout';
 import { AlertSettings } from './AlertSettings';
+import { RequestCard } from './RequestCard';
+import { cancelReasons, ReasonDialog, rejectReasons, TransferDialog } from './RequestDialogs';
 import { RequestTimelineDialog } from './RequestTimelineDialog';
-
-type Tab = 'open' | 'completed' | 'history';
-// Narrows the open list: everything, only overdue, or only unassigned.
-type OpenFilter = 'all' | 'overdue' | 'waiting';
-const pageSize = 25;
-
-const cancelReasons = [
-  'Patient no longer needs it',
-  'Duplicate request',
-  'Raised by mistake',
-  'Other',
-];
-
-const rejectReasons = [
-  'Item or equipment not available',
-  'Not my department or skill',
-  'Patient not at the bed',
-  'Patient refused the service',
-  'Other',
-];
-
-const transferReasons = [
-  'My shift has ended',
-  'Busy with another patient',
-  'Needs someone more experienced',
-  'Other',
-];
+import { pageSize, useRequestQueue, type OpenFilter, type Tab } from './use-request-queue';
 
 const successMessages: Record<StaffRequestAction, string> = {
   assign: 'Request assigned.',
@@ -67,82 +31,21 @@ export function RequestsPage() {
   const [params, setParams] = useSearchParams();
   const selected = params.get('request');
   const { token, me, can, canAnywhere, reportError, reportSuccess } = useAdmin();
-  const [queue, setQueue] = useState<RequestQueue | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('open');
   const [filter, setFilter] = useState<OpenFilter>('all');
-  const [page, setPage] = useState(1);
   const [candidates, setCandidates] = useState<Record<string, EligibleStaff[]>>({});
   const [assignees, setAssignees] = useState<Record<string, string>>({});
   const [cancelTarget, setCancelTarget] = useState<StaffRequest | null>(null);
   const [rejectTarget, setRejectTarget] = useState<StaffRequest | null>(null);
   const [transferTarget, setTransferTarget] = useState<StaffRequest | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
-  const loading = useRef(false);
-  const loadSequence = useRef(0);
   const now = useNow();
-
-  // The page being shown. The server orders it: overdue work first, then the
-  // oldest, so nothing outstanding hides behind newer requests.
-  const query = useMemo<RequestQueueQuery>(
-    () => ({
-      view: tab,
-      page: selected ? 1 : page,
-      pageSize,
-      ...(selected ? { id: selected } : {}),
-      ...(!selected && tab === 'open' && filter === 'overdue' ? { overdue: true } : {}),
-      ...(!selected && tab === 'open' && filter === 'waiting'
-        ? { status: 'SUBMITTED' as const }
-        : {}),
-    }),
-    [tab, page, filter, selected],
+  const { queue, error, updatedAt, page, setPage, refresh } = useRequestQueue(
+    token,
+    { tab, filter, selected },
+    reportError,
   );
-  const show = useCallback((loaded: RequestQueue) => {
-    // The last item on a later page may have just moved on: step back.
-    if (loaded.serviceRequests.length === 0 && loaded.page > 1 && loaded.total > 0) {
-      setPage(Math.ceil(loaded.total / loaded.pageSize));
-      return;
-    }
-    setQueue(loaded);
-    setUpdatedAt(Date.now());
-    setError(null);
-  }, []);
-
-  const refresh = useCallback(async () => {
-    if (loading.current) return;
-    loading.current = true;
-    const current = ++loadSequence.current;
-    try {
-      const loaded = await staffApi.requests(token, query);
-      if (current === loadSequence.current) show(loaded);
-    } catch (cause) {
-      if (current !== loadSequence.current) return;
-      setError(cause instanceof Error ? cause.message : 'Could not load requests.');
-      if (cause instanceof ApiError && cause.status === 401) reportError(cause);
-    } finally {
-      loading.current = false;
-    }
-  }, [token, query, show, reportError]);
-
-  useEffect(() => {
-    const current = ++loadSequence.current;
-    loading.current = false;
-    staffApi.requests(token, query).then(
-      (loaded) => {
-        if (current === loadSequence.current) show(loaded);
-      },
-      (cause: unknown) => {
-        if (current !== loadSequence.current) return;
-        setError(cause instanceof Error ? cause.message : 'Could not load requests.');
-        if (cause instanceof ApiError && cause.status === 401) reportError(cause);
-      },
-    );
-    return () => {
-      loadSequence.current += 1;
-    };
-  }, [token, query, show, reportError]);
   // New patient requests appear without a manual refresh.
   useAutoRefresh(
     useCallback(() => {
@@ -356,191 +259,29 @@ export function RequestsPage() {
             </div>
           ) : (
             <div className="request-list">
-              {visible.map((request) => {
-                const deadline = currentDeadline(request);
-                const late = isOverdue(request, now);
-                const isMine = request.assigneeId === me.membershipId;
-                const busy = busyId !== null;
-                return (
-                  <article
-                    className={[
-                      'card request-card',
-                      late ? 'late' : request.status === 'SUBMITTED' ? 'waiting' : '',
-                      request.isEscalated ? 'escalated' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    key={request.id}
-                  >
-                    <div className="request-card-head">
-                      <div>
-                        <h2>{request.serviceName}</h2>
-                        <p className="muted small">
-                          <strong>{request.bed.displayName}</strong> · {request.publicId} · sent{' '}
-                          {timeAgo(request.submittedAt, now)}
-                        </p>
-                      </div>
-                      <div className="request-badges">
-                        {request.isEscalated && (
-                          <span className="badge badge-danger">
-                            Escalated · level {request.escalationLevel}
-                          </span>
-                        )}
-                        {request.priority !== 'NORMAL' && (
-                          <span className="badge badge-danger">
-                            {request.priority.toLowerCase()}
-                          </span>
-                        )}
-                        <span className={statusBadgeClass(request.status)}>
-                          {statusLabels[request.status]}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="request-facts small">
-                      {request.assigneeName && (
-                        <span>
-                          Assigned to <strong>{isMine ? 'you' : request.assigneeName}</strong>
-                        </span>
-                      )}
-                      {deadline && (
-                        <span className={late ? 'late-text' : ''}>
-                          {late
-                            ? `${deadline.label} overdue by ${formatDuration(now - deadline.dueAt)}`
-                            : `${deadline.label} by ${clockTime(deadline.dueAt)} (in ${formatDuration(deadline.dueAt - now)})`}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="actions">
-                      {manager &&
-                        request.status === 'SUBMITTED' &&
-                        (!candidates[request.id] ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void showCandidates(request)}
-                          >
-                            Choose staff
-                          </button>
-                        ) : candidates[request.id]?.length === 0 ? (
-                          <p className="muted small">
-                            No eligible on-duty staff.{' '}
-                            {can('staff.manage')
-                              ? 'Check the department, duty, and bed coverage on the Staff screen.'
-                              : 'Ask a Hospital Manager to check staff duty, department, and bed coverage.'}
-                          </p>
-                        ) : (
-                          <>
-                            <select
-                              aria-label={`Staff for ${request.publicId}`}
-                              value={assignees[request.id] ?? ''}
-                              onChange={(event) =>
-                                setAssignees((current) => ({
-                                  ...current,
-                                  [request.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">Choose eligible staff…</option>
-                              {candidates[request.id]?.map((staff) => (
-                                <option key={staff.membershipId} value={staff.membershipId}>
-                                  {staff.displayName}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              disabled={busy || !assignees[request.id]}
-                              onClick={() => void act(request, 'assign')}
-                            >
-                              Assign request
-                            </button>
-                          </>
-                        ))}
-                      {isMine && request.status === 'ASSIGNED' && canAnywhere('request.accept') && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void act(request, 'accept')}
-                        >
-                          Accept
-                        </button>
-                      )}
-                      {isMine && request.status === 'ASSIGNED' && canAnywhere('request.reject') && (
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={busy}
-                          onClick={() => setRejectTarget(request)}
-                        >
-                          Turn down…
-                        </button>
-                      )}
-                      {isMine && request.status === 'ACCEPTED' && canAnywhere('request.start') && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void act(request, 'start')}
-                        >
-                          Start work
-                        </button>
-                      )}
-                      {isMine &&
-                        request.status === 'IN_PROGRESS' &&
-                        canAnywhere('request.complete') && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void act(request, 'complete')}
-                          >
-                            Mark complete
-                          </button>
-                        )}
-                      {request.status === 'COMPLETED' && canAnywhere('request.close') && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void act(request, 'close')}
-                        >
-                          Close request
-                        </button>
-                      )}
-                      {(request.status === 'ACCEPTED' || request.status === 'IN_PROGRESS') &&
-                        canAnywhere('request.transfer') && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={busy}
-                            onClick={() => setTransferTarget(request)}
-                          >
-                            Hand over…
-                          </button>
-                        )}
-                      {(request.status === 'SUBMITTED' || request.status === 'ASSIGNED') &&
-                        canAnywhere('request.cancel') && (
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={busy}
-                            onClick={() => setCancelTarget(request)}
-                          >
-                            Cancel…
-                          </button>
-                        )}
-                      {canAnywhere('analytics.read') && (
-                        <button
-                          type="button"
-                          className="link"
-                          onClick={() => setHistoryId(request.id)}
-                        >
-                          History
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
+              {visible.map((request) => (
+                <RequestCard
+                  key={request.id}
+                  request={request}
+                  now={now}
+                  isMine={request.assigneeId === me.membershipId}
+                  manager={manager}
+                  busy={busyId !== null}
+                  candidates={candidates[request.id]}
+                  assignee={assignees[request.id] ?? ''}
+                  canManageStaff={can('staff.manage')}
+                  canAnywhere={canAnywhere}
+                  onChooseStaff={() => void showCandidates(request)}
+                  onAssignee={(membershipId) =>
+                    setAssignees((current) => ({ ...current, [request.id]: membershipId }))
+                  }
+                  onAct={(action) => void act(request, action)}
+                  onReject={() => setRejectTarget(request)}
+                  onTransfer={() => setTransferTarget(request)}
+                  onCancel={() => setCancelTarget(request)}
+                  onHistory={() => setHistoryId(request.id)}
+                />
+              ))}
             </div>
           )}
           {total > pageSize && (
@@ -615,203 +356,5 @@ export function RequestsPage() {
         />
       )}
     </>
-  );
-}
-
-// Who can take over this work: eligible on-duty staff other than the current assignee.
-function TransferDialog({
-  request,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  request: StaffRequest;
-  busy: boolean;
-  onClose: () => void;
-  onConfirm: (assigneeId: string, reason: string) => Promise<void>;
-}) {
-  const { token } = useAdmin();
-  const [staff, setStaff] = useState<EligibleStaff[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const [assigneeId, setAssigneeId] = useState('');
-  const [choice, setChoice] = useState(transferReasons[0]!);
-  const [details, setDetails] = useState('');
-  const reason = choice === 'Other' ? details.trim() : choice;
-
-  useEffect(() => {
-    let current = true;
-    staffApi.eligible(token, request.bedId, request.departmentId).then(
-      (loaded) => {
-        if (!current) return;
-        const others = loaded.filter((person) => person.membershipId !== request.assigneeId);
-        setStaff(others);
-        if (others.length === 1 && others[0]) setAssigneeId(others[0].membershipId);
-      },
-      (cause: unknown) => {
-        if (current) setError(cause instanceof Error ? cause.message : 'Could not load staff.');
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [token, request.bedId, request.departmentId, request.assigneeId, attempt]);
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (assigneeId && reason) void onConfirm(assigneeId, reason);
-  }
-
-  return (
-    <Modal title={`Hand over ${request.serviceName}`} onClose={onClose}>
-      <form className="create-form" onSubmit={submit}>
-        <p className="muted small">
-          {request.bed.displayName} · {request.publicId} · now with{' '}
-          {request.assigneeName ?? 'nobody'}. The new person must accept it again; the handover and
-          its reason are kept in the request history.
-        </p>
-        {!staff ? (
-          <LoadState
-            loading={!error}
-            error={error}
-            label="Finding eligible staff…"
-            onRetry={() => {
-              setError(null);
-              setAttempt((value) => value + 1);
-            }}
-          />
-        ) : staff.length === 0 ? (
-          <p className="notice notice-warning">
-            Nobody else is eligible right now: they must be on duty, in this department, and cover
-            this bed.
-          </p>
-        ) : (
-          <label>
-            Hand over to
-            <select
-              value={assigneeId}
-              required
-              onChange={(event) => setAssigneeId(event.target.value)}
-            >
-              <option value="">Choose eligible staff…</option>
-              {staff.map((person) => (
-                <option key={person.membershipId} value={person.membershipId}>
-                  {person.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <ReasonFields
-          reasons={transferReasons}
-          choice={choice}
-          details={details}
-          onChoice={setChoice}
-          onDetails={setDetails}
-        />
-        <div className="actions">
-          <button type="button" className="secondary" onClick={onClose}>
-            Keep with {request.assigneeName ?? 'current person'}
-          </button>
-          <button type="submit" disabled={busy || !assigneeId || !reason}>
-            Hand over
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function ReasonFields({
-  reasons,
-  choice,
-  details,
-  onChoice,
-  onDetails,
-}: {
-  reasons: readonly string[];
-  choice: string;
-  details: string;
-  onChoice: (choice: string) => void;
-  onDetails: (details: string) => void;
-}) {
-  return (
-    <>
-      <label>
-        Reason
-        <select value={choice} onChange={(event) => onChoice(event.target.value)}>
-          {reasons.map((item) => (
-            <option key={item}>{item}</option>
-          ))}
-        </select>
-      </label>
-      {choice === 'Other' && (
-        <label>
-          Describe the reason
-          <input
-            value={details}
-            maxLength={500}
-            required
-            onChange={(event) => onDetails(event.target.value)}
-          />
-        </label>
-      )}
-    </>
-  );
-}
-
-function ReasonDialog({
-  title,
-  request,
-  explanation,
-  reasons,
-  keepLabel,
-  confirmLabel,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  title: string;
-  request: StaffRequest;
-  explanation: string;
-  reasons: readonly string[];
-  keepLabel: string;
-  confirmLabel: string;
-  busy: boolean;
-  onClose: () => void;
-  onConfirm: (reason: string) => Promise<void>;
-}) {
-  const [choice, setChoice] = useState(reasons[0] ?? 'Other');
-  const [details, setDetails] = useState('');
-  const reason = choice === 'Other' ? details.trim() : choice;
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (reason) void onConfirm(reason);
-  }
-
-  return (
-    <Modal title={title} onClose={onClose}>
-      <form className="create-form" onSubmit={submit}>
-        <p className="muted small">
-          {request.bed.displayName} · {request.publicId}. {explanation}
-        </p>
-        <ReasonFields
-          reasons={reasons}
-          choice={choice}
-          details={details}
-          onChoice={setChoice}
-          onDetails={setDetails}
-        />
-        <div className="actions">
-          <button type="button" className="secondary" onClick={onClose}>
-            {keepLabel}
-          </button>
-          <button type="submit" className="danger" disabled={busy || !reason}>
-            {confirmLabel}
-          </button>
-        </div>
-      </form>
-    </Modal>
   );
 }
