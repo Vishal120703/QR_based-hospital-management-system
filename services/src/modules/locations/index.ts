@@ -3,4 +3,5 @@
 export { occupyBed, releaseAllBeds, releaseBed } from './bed-occupancy.js';
 export { LocationController } from './location.controller.js';
 export { createLocationRoutes } from './location.routes.js';
-export { areaFilters, LocationService } from './location.service.js';
+export { areaFilters } from './location-access.js';
+export { LocationService } from './location.service.js';
