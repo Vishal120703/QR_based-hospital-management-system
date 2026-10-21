@@ -29,6 +29,8 @@ import { ChangePasswordForm } from '../auth/ChangePassword';
 
 // `anyScope` pages filter their data by floor or ward on the server, so a
 // permission held for only part of the hospital is enough to open them.
+// `bedOccupancy` pages leave the menu while the hospital uses QR codes
+// without admitting patients.
 export const adminPages = [
   { path: 'overview', label: 'Overview', group: 'Work', permissions: [], icon: LayoutDashboard },
   {
@@ -49,7 +51,7 @@ export const adminPages = [
   },
   {
     path: 'hospital',
-    label: 'Profile & logo',
+    label: 'Profile & settings',
     group: 'Hospital',
     permissions: ['hospital.manage'],
     icon: Hospital,
@@ -67,6 +69,7 @@ export const adminPages = [
     group: 'Care locations',
     permissions: ['bed.read'],
     anyScope: true,
+    bedOccupancy: true,
     icon: BedDouble,
   },
   {
@@ -147,6 +150,18 @@ type AdminPage = (typeof adminPages)[number];
 function pageAllowed(page: AdminPage, context: Pick<AdminContext, 'can' | 'canAnywhere'>) {
   const check = 'anyScope' in page ? context.canAnywhere : context.can;
   return page.permissions.every((permission) => check(permission));
+}
+
+// Pages offered in the menu and as shortcuts. A page left out can still be
+// opened by its address; it explains why it is not in use.
+export function pageInMenu(
+  page: AdminPage,
+  context: Pick<AdminContext, 'can' | 'canAnywhere'> & { me: Me | null },
+) {
+  return (
+    pageAllowed(page, context) &&
+    (!('bedOccupancy' in page) || (context.me?.tenant.bedOccupancyEnabled ?? false))
+  );
 }
 
 export function AdminIndex() {
@@ -268,7 +283,7 @@ export function AdminLayout() {
   const mustChangePassword = me?.mustChangePassword ?? false;
   const available = mustChangePassword
     ? []
-    : adminPages.filter((page) => pageAllowed(page, { can, canAnywhere }));
+    : adminPages.filter((page) => pageInMenu(page, { can, canAnywhere, me }));
   // A page's own sub-pages (such as one person's report) count as that page,
   // for the title and for the permission check.
   const current = adminPages.find(

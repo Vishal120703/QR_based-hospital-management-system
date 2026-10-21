@@ -145,6 +145,7 @@ function show(
         name: 'Test Hospital',
         logoUrl: null,
         timezone: 'Asia/Kolkata',
+        bedOccupancyEnabled: true,
       },
       mustChangePassword: false,
       permissions: hospitalWide,

@@ -12,6 +12,7 @@ export class HospitalRepository {
         code: true,
         timezone: true,
         status: true,
+        bedOccupancyEnabled: true,
         createdAt: true,
         updatedAt: true,
         logo: { select: { publicId: true, byteSize: true, updatedAt: true } },

@@ -2,12 +2,14 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, type ConsoleMessage, type Page } from '@playwright/test';
 
-// What global setup made for this run: two hospitals in the test database.
+// What global setup made for this run: three hospitals in the test database.
 export interface Fixture {
   password: string;
   operatorEmail: string;
   a: { code: string; adminEmail: string; nurseEmail: string; qrPath: string };
   b: { code: string; adminEmail: string; waitingPublicIds: string[] };
+  // Uses QR codes only: nobody is admitted.
+  c: { code: string; adminEmail: string; qrPath: string };
 }
 
 export const fixturePath = fileURLToPath(new URL('./.fixture.json', import.meta.url));

@@ -17,6 +17,7 @@ function show(hospitalWide: string[], anywhere: string[] = hospitalWide) {
         name: 'Test Hospital',
         logoUrl: null,
         timezone: 'Asia/Kolkata',
+        bedOccupancyEnabled: true,
       },
       mustChangePassword: false,
       permissions: hospitalWide,

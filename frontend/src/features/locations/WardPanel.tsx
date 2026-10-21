@@ -107,7 +107,7 @@ export function WardPanel({ tools, id }: { tools: PanelTools; id: string }) {
         <dl className="stat-row">
           {[
             ['Beds', stats.total],
-            ['Occupied', stats.occupied],
+            ...(tools.showOccupancy ? [['Occupied', stats.occupied]] : []),
             ['Available', stats.available],
             ['Maintenance', stats.maintenance],
             ['Rooms', rooms.length],

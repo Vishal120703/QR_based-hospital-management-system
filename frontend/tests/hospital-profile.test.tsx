@@ -12,6 +12,7 @@ const hospital: Hospital = {
   name: 'Sunrise Hospital',
   code: 'SUNRISE',
   timezone: 'Asia/Kolkata',
+  bedOccupancyEnabled: true,
   logoUrl: null,
   logoUpdatedAt: null,
 };
@@ -29,6 +30,7 @@ function show() {
         name: 'Sunrise Hospital',
         logoUrl: null,
         timezone: 'Asia/Kolkata',
+        bedOccupancyEnabled: true,
       },
       mustChangePassword: false,
       permissions: ['hospital.manage'],

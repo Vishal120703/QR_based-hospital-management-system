@@ -52,6 +52,7 @@ export function BedsPage() {
   // Floor and ward managers hold these for their own area; the server returns
   // only the beds there.
   const canReadLocations = canAnywhere('location.read');
+  const occupancy = me.tenant.bedOccupancyEnabled;
 
   const {
     data: rows,
@@ -140,7 +141,11 @@ export function BedsPage() {
     <>
       <PageHeading
         title="QR codes"
-        description="Patients and attendants use the bedside QR to request services; they do not need a staff login. Admit and discharge patients in Bed management."
+        description={`Patients and attendants use the bedside QR to request services; they do not need a staff login. ${
+          occupancy
+            ? 'Admit and discharge patients in Bed management.'
+            : 'Patients are not admitted here, so a QR works as soon as it is on the bed.'
+        }`}
       >
         <button
           type="button"
@@ -152,18 +157,20 @@ export function BedsPage() {
         </button>
       </PageHeading>
       <LoadState loading={false} error={loadError} onRetry={reload} />
-      {(canManageQr || canAnywhere('bedSession.manage')) && (
+      {(canManageQr || (occupancy && canAnywhere('bedSession.manage'))) && (
         <ol className="setup-steps" aria-label="Patient request setup">
+          {occupancy && (
+            <li>
+              <span>1</span>
+              Admit the patient
+              <small>
+                In <Link to="/admin/bed-management">Bed management</Link>, admit the patient to an
+                available bed.
+              </small>
+            </li>
+          )}
           <li>
-            <span>1</span>
-            Admit the patient
-            <small>
-              In <Link to="/admin/bed-management">Bed management</Link>, admit the patient to an
-              available bed.
-            </small>
-          </li>
-          <li>
-            <span>2</span>
+            <span>{occupancy ? 2 : 1}</span>
             Print the bedside QR
             <small>
               Hospital managers can generate and print a QR for each bed. If its printable link was
@@ -171,7 +178,7 @@ export function BedsPage() {
             </small>
           </li>
           <li>
-            <span>3</span>
+            <span>{occupancy ? 3 : 2}</span>
             Patient sends a request
             <small>Scan the QR, choose a service, and track the request on the patient page.</small>
           </li>

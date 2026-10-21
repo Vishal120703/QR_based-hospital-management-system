@@ -16,7 +16,7 @@ import {
 import { dayIn, startOfDay } from '../../common/time-zone.js';
 import { recordStaffAudit } from '../audit/index.js';
 import { canAccessLocation, type StaffContext } from '../auth/index.js';
-import { type GuestContext } from '../bed-sessions/index.js';
+import { bedTakesPatients, type GuestContext } from '../bed-sessions/index.js';
 import { snapshotService } from '../catalog/index.js';
 import { hospitalIsOpen } from '../hospitals/index.js';
 import { findEligibleStaff } from '../staff/index.js';
@@ -447,8 +447,7 @@ export class RequestService {
       session.expiresAt <= now ||
       !hospitalIsOpen(session.hospital) ||
       session.bedSession.status !== 'ACTIVE' ||
-      !session.bedSession.bed.active ||
-      session.bedSession.bed.status !== 'OCCUPIED'
+      !bedTakesPatients(session.bedSession.bed, session.hospital.bedOccupancyEnabled)
     ) {
       throw new UnauthorizedError();
     }

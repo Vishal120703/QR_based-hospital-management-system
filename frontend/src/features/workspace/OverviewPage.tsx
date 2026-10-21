@@ -12,7 +12,7 @@ import {
 } from '../../api';
 import { LoadState, PageHeading } from '../../components';
 import { useAutoRefresh, useNow } from '../../lib/request-status';
-import { adminPages, useAdmin } from './AdminLayout';
+import { adminPages, pageInMenu, useAdmin } from './AdminLayout';
 
 interface Snapshot {
   // Only the counts are used: one small page carries them.
@@ -27,7 +27,8 @@ interface Snapshot {
 const pageHelp: Record<string, string> = {
   hospital: 'Your hospital name and logo, shown to staff and patients.',
   requests: 'Assign, track, and close patient requests.',
-  beds: 'Admit a patient to a bed and print its QR code.',
+  'bed-management': 'See which beds are free or occupied; admit and discharge patients.',
+  beds: 'Print, replace, and disable bedside QR codes.',
   roles: 'Decide who can do what, hospital-wide or for one floor, ward, or department.',
   locations: 'Add floors, wards, rooms, and beds.',
   departments: 'Teams that handle requests, like Nursing or Pantry.',
@@ -51,6 +52,7 @@ export function OverviewPage() {
   const canRequests = canAnywhere('request.read');
   // Floor and ward managers see the beds of their own area.
   const canBeds = canAnywhere('bed.read');
+  const occupancy = me.tenant.bedOccupancyEnabled;
   const canStaff = can('staff.read');
   const canServices = can('service.read');
 
@@ -60,13 +62,15 @@ export function OverviewPage() {
     const [requests, beds, sessions, qrCodes, staff, services] = await Promise.all([
       optional(canRequests, () => staffApi.requests(token, { pageSize: 1 })),
       optional(canBeds, () => staffApi.list<Bed>(token, 'beds')),
-      optional(canBeds, () => staffApi.list<BedSession>(token, 'bed-sessions', '?status=ACTIVE')),
+      optional(canBeds && occupancy, () =>
+        staffApi.list<BedSession>(token, 'bed-sessions', '?status=ACTIVE'),
+      ),
       optional(canBeds, () => staffApi.list<QrCode>(token, 'qr-codes')),
       optional(canStaff, () => staffApi.list<StaffMember>(token, 'staff')),
       optional(canServices, () => staffApi.list<ServiceItem>(token, 'services')),
     ]);
     return { requests, beds, sessions, qrCodes, staff, services };
-  }, [token, canRequests, canBeds, canStaff, canServices]);
+  }, [token, canRequests, canBeds, occupancy, canStaff, canServices]);
 
   const showResult = useCallback(
     (result: Promise<Snapshot>, isCurrent: () => boolean = () => true) =>
@@ -95,15 +99,18 @@ export function OverviewPage() {
   }, [fetchSnapshot, showResult]);
   useAutoRefresh(load, 30_000);
 
-  const shortcutOrder = ['requests', 'beds', 'locations', 'staff', 'services', 'roles', 'hospital'];
+  const shortcutOrder = [
+    'requests',
+    'bed-management',
+    'beds',
+    'locations',
+    'staff',
+    'services',
+    'roles',
+    'hospital',
+  ];
   const shortcuts = adminPages
-    .filter(
-      (page) =>
-        page.path !== 'overview' &&
-        page.permissions.every((permission) =>
-          'anyScope' in page ? canAnywhere(permission) : can(permission),
-        ),
-    )
+    .filter((page) => page.path !== 'overview' && pageInMenu(page, { can, canAnywhere, me }))
     .sort((left, right) => {
       const rank = (path: string) => {
         const position = shortcutOrder.indexOf(path);
@@ -123,11 +130,16 @@ export function OverviewPage() {
         <LoadState loading={!error} error={error} label="Loading your overview…" onRetry={load} />
       ) : (
         <>
-          <Stats data={data} manager={canAnywhere('request.assign')} />
+          <Stats data={data} manager={canAnywhere('request.assign')} occupancy={occupancy} />
           {can('hospital.manage') && (
-            <SetupChecklist data={data} hasLogo={Boolean(me.tenant.logoUrl)} can={can} />
+            <SetupChecklist
+              data={data}
+              hasLogo={Boolean(me.tenant.logoUrl)}
+              can={can}
+              occupancy={occupancy}
+            />
           )}
-          {can('hospital.manage') && <HowItWorks />}
+          {can('hospital.manage') && <HowItWorks occupancy={occupancy} />}
           <section aria-labelledby="shortcuts-title">
             <h2 id="shortcuts-title" className="section-title">
               Next places to go
@@ -150,7 +162,15 @@ export function OverviewPage() {
   );
 }
 
-function Stats({ data, manager }: { data: Snapshot; manager: boolean }) {
+function Stats({
+  data,
+  manager,
+  occupancy,
+}: {
+  data: Snapshot;
+  manager: boolean;
+  occupancy: boolean;
+}) {
   // Counted by the server: managers' counts cover their area, other staff
   // their own work, and "today" is the hospital's day.
   const counts = data.requests?.counts;
@@ -190,12 +210,25 @@ function Stats({ data, manager }: { data: Snapshot; manager: boolean }) {
   }
   if (data.beds) {
     const active = data.beds.filter((bed) => bed.active);
-    tiles.push({
-      label: 'Occupied beds',
-      value: data.sessions?.length ?? 0,
-      hint: `of ${active.length} active beds`,
-      to: '/admin/bed-management',
-    });
+    if (occupancy) {
+      tiles.push({
+        label: 'Occupied beds',
+        value: data.sessions?.length ?? 0,
+        hint: `of ${active.length} active beds`,
+        to: '/admin/bed-management',
+      });
+    } else {
+      // Without admissions, what matters is that every bed has a working QR.
+      const activeIds = new Set(active.map((bed) => bed.id));
+      tiles.push({
+        label: 'Beds with a QR',
+        value: (data.qrCodes ?? []).filter(
+          (qr) => qr.status === 'ACTIVE' && activeIds.has(qr.bedId),
+        ).length,
+        hint: `of ${active.length} active beds`,
+        to: '/admin/beds',
+      });
+    }
   }
   if (data.staff) {
     const working = data.staff.filter((member) => member.status === 'ACTIVE');
@@ -228,10 +261,12 @@ function SetupChecklist({
   data,
   hasLogo,
   can,
+  occupancy,
 }: {
   data: Snapshot;
   hasLogo: boolean;
   can: (permission: string) => boolean;
+  occupancy: boolean;
 }) {
   const occupiedBedIds = new Set((data.sessions ?? []).map((session) => session.bedId));
   const steps = [
@@ -263,15 +298,23 @@ function SetupChecklist({
       help: 'Choose what patients can ask for.',
       to: '/admin/services',
     },
-    {
-      done: (data.qrCodes ?? []).some(
-        (qr) => qr.status === 'ACTIVE' && occupiedBedIds.has(qr.bedId),
-      ),
-      available: can('bed.read') && can('bedSession.manage') && can('qr.generate'),
-      title: 'Admit a patient and print the QR',
-      help: 'Start a bed session, then generate its QR code.',
-      to: '/admin/beds',
-    },
+    occupancy
+      ? {
+          done: (data.qrCodes ?? []).some(
+            (qr) => qr.status === 'ACTIVE' && occupiedBedIds.has(qr.bedId),
+          ),
+          available: can('bed.read') && can('bedSession.manage') && can('qr.generate'),
+          title: 'Admit a patient and print the QR',
+          help: 'Print the bed’s QR code, then admit the patient in Bed management.',
+          to: '/admin/beds',
+        }
+      : {
+          done: (data.qrCodes ?? []).some((qr) => qr.status === 'ACTIVE'),
+          available: can('bed.read') && can('qr.generate'),
+          title: 'Print the bedside QR codes',
+          help: 'Patients can scan as soon as a label is on the bed.',
+          to: '/admin/beds',
+        },
     {
       // Any request that got past "waiting for assignment".
       done: data.requests
@@ -316,7 +359,7 @@ function SetupChecklist({
   );
 }
 
-function HowItWorks() {
+function HowItWorks({ occupancy }: { occupancy: boolean }) {
   return (
     <details className="card" aria-label="How CARE QR works">
       <summary>How CARE QR works</summary>
@@ -324,7 +367,12 @@ function HowItWorks() {
         <li>
           <span>1</span>
           Patient scans the bed QR
-          <small>No app or login. The QR only works while the bed has an active session.</small>
+          <small>
+            No app or login.{' '}
+            {occupancy
+              ? 'The QR works only while a patient is admitted to the bed.'
+              : 'The QR works as soon as it is on the bed.'}
+          </small>
         </li>
         <li>
           <span>2</span>

@@ -188,7 +188,7 @@ Rules that always apply:
 
 | Person | Menu |
 |---|---|
-| Meera (Hospital Manager) | Overview, Requests, Reports, Profile & logo, Audit log, Bed management, QR codes, Location setup, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog, Response targets (SLA) |
+| Meera (Hospital Manager) | Overview, Requests, Reports, Profile & settings, Audit log, Bed management, QR codes, Location setup, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog, Response targets (SLA) |
 | Arjun (Operations Manager) | Overview, Requests, Reports, Audit log, Bed management, QR codes, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog |
 | Kavita (Admission Desk) | Overview, Bed management, QR codes |
 | Ravi, Sunita (Floor Managers); Priya (Ward Manager) | Overview, Requests, Reports, Bed management, QR codes |
@@ -271,14 +271,16 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 | H14 | Open **Requests**. | **Open** has 11 requests, the most urgent first, with red "overdue by …" where late. **Ready to close** has 3, **History** about 96. Accepted and in-progress cards show **Hand over…**. |
 | H15 | Open **Audit log**. Set **What** to **Request handling**, then **Staff**, then **Load older changes**. | Changes grouped by day, each with who, what, and the item, for example "Handed a request to someone else" showing **Assigned to: Pavan → Neha** and the reason, "Changed staff status" for Karan (**Status: active → suspended**), and "Changed duty (on/off)" for Rahul. The oldest entries are the hospital setup about 20 days earlier. |
 | H15b | In the audit log click a person's name (for example **Arjun Mehta**), then an item name (for example **Karan Malhotra**). Then **Clear filters**. | First only Arjun's changes ("Changes by Arjun Mehta" chip), then only what happened to Karan ("History of Karan Malhotra"); the **Who** filter does the same. **Download CSV** saves the changes shown. |
-| H16 | Open **Profile & logo**. Upload a different PNG logo and save. | The new logo shows in the top bar straight away and on the patient page (PT01). |
+| H16 | Open **Profile & settings**. Upload a different PNG logo and save. | The new logo shows in the top bar straight away and on the patient page (PT01). |
 | H17 | Sign out and sign in with the branch hospital and manager you created in P04. | The new hospital is empty apart from its starter departments and services. None of CityCare's people or beds appear. |
+| H18 | Still in the branch hospital: in **Location setup** add a floor, a ward, and one bed, and in **QR codes** generate its QR. Then open **Profile & settings**, choose **QR codes only**, and confirm. | **Bed management** leaves the menu; Overview shows **Beds with a QR** instead of occupied beds; the QR codes guide has no "Admit the patient" step. Open the bed's QR (**Open patient view**, or the PDF link): the patient page opens although nobody admitted anyone, and **Drinking Water** can be requested. The bed still shows as available. |
+| H19 | In **Profile & settings** choose **Admit and discharge patients** and confirm. Refresh the patient tab. | The warning says connected patients are disconnected. The patient tab shows that the session has ended; the QR works again only after **Admit** in **Bed management**, which is back in the menu. The audit log shows "Switched to QR codes only" and "Turned on admissions". |
 
 ### 6.3 Operations Manager: Arjun Mehta (custom role)
 
 | ID | Do this | ✔ Expected |
 |---|---|---|
-| O01 | Sign in. Check the menu. | As in [section 4](#what-each-person-sees-in-the-menu). There is no **Profile & logo**, **Location setup**, or **Response targets** page. |
+| O01 | Sign in. Check the menu. | As in [section 4](#what-each-person-sees-in-the-menu). There is no **Profile & settings**, **Location setup**, or **Response targets** page. |
 | O02 | Open **Bed management**, then **QR codes**. | **Admit** and **Discharge** are available in Bed management; QR codes has no Generate, Replace, or Print QR buttons. |
 | O03 | Open **Roles & access**. | Roles are visible but cannot be created, edited, or deleted. |
 | O04 | In **Staff & coverage**, try to **suspend Dr. Meera Iyer**. | Refused: "You do not have permission to perform this action." Meera stays active. |

@@ -4485,3 +4485,18 @@ button.danger-solid:hover:not(:disabled) {
     font-size: 1.5rem;
   }
 }
+
+/* Profile & settings: how the hospital uses the bedside QR. */
+.profile-grid > .occupancy-setting {
+  grid-column: 1 / -1;
+}
+.occupancy-setting .size-picker {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.occupancy-setting .size-picker:disabled label {
+  cursor: progress;
+  opacity: 0.7;
+}
+.occupancy-off .button {
+  margin-top: 0.25rem;
+}

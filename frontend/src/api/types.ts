@@ -10,6 +10,8 @@ export interface Me {
     logoUrl: string | null;
     // IANA time zone; report days follow it.
     timezone: string;
+    // Off: patients use bedside QR codes without being admitted.
+    bedOccupancyEnabled: boolean;
   };
   // An administrator reset the password: the person must choose a new one.
   mustChangePassword: boolean;
@@ -23,8 +25,20 @@ export interface Hospital {
   name: string;
   code: string;
   timezone: string;
+  bedOccupancyEnabled: boolean;
   logoUrl: string | null;
   logoUpdatedAt: string | null;
+}
+
+// What turning bed occupancy management on or off changed.
+export interface BedOccupancyChange {
+  enabled: boolean;
+  // Turned off: beds that showed as occupied (their patients stay connected).
+  releasedBeds: number;
+  // Turned on: stays opened by QR scans that ended, and the patient
+  // connections that ended with them.
+  closedStays: number;
+  revokedGuestSessions: number;
 }
 
 export interface Building {

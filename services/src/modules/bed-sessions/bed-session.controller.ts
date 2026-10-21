@@ -3,7 +3,11 @@ import { emptySchema, idParamsSchema } from '../../common/validation.js';
 import { getGuestContext } from '../../middleware/guest-auth.js';
 import { getRequestId } from '../../middleware/request-id.js';
 import { getStaffContext } from '../../middleware/staff-auth.js';
-import { bedSessionFilterSchema, startBedSessionSchema } from './bed-session.schemas.js';
+import {
+  bedOccupancySchema,
+  bedSessionFilterSchema,
+  startBedSessionSchema,
+} from './bed-session.schemas.js';
 import { type BedSessionService } from './bed-session.service.js';
 import { type GuestSessionService } from './guest-session.service.js';
 
@@ -35,6 +39,16 @@ export class BedSessionController {
       getRequestId(response),
     );
     response.status(200).json({ bedSession: session });
+  };
+
+  public readonly setOccupancy: RequestHandler = async (request, response) => {
+    const { enabled } = bedOccupancySchema.parse(request.body);
+    const change = await this.bedSessions.setOccupancyManagement(
+      getStaffContext(request),
+      enabled,
+      getRequestId(response),
+    );
+    response.status(200).json({ bedOccupancy: change });
   };
 }
 

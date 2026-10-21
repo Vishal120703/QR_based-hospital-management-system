@@ -11,7 +11,7 @@ Every module lives in `services/src/modules/<name>/` and follows the [five layer
 | [departments](#departments) | Teams such as Nursing or Pantry | `Department` | `/admin/departments*` |
 | [staff](#staff) | Staff accounts, status, duty, departments, coverage, shifts, eligibility | `User`, `HospitalMembership`, `StaffDepartment`, `StaffLocationScope`, `Shift` | `/admin/staff*`, `/admin/shifts*` |
 | [locations](#locations) | Building → Floor → Ward → Room → Bed, bulk beds, bed occupancy | `Building`, `Floor`, `Ward`, `Room`, `Bed` | `/admin/buildings` … `/admin/beds`, `/admin/wards/:id/bulk-beds` |
-| [bed-sessions](#bed-sessions) | Admitting and discharging (bed sessions) and patient guest sessions | `BedSession`, `GuestSession` | `/admin/bed-sessions*`, `/public/session` |
+| [bed-sessions](#bed-sessions) | Admitting and discharging (bed sessions), the hospital's choice to admit at all, and patient guest sessions | `BedSession`, `GuestSession` | `/admin/bed-sessions*`, `/admin/bed-occupancy`, `/public/session` |
 | [qr](#qr) | Bed QR codes (issue, replace, disable, print in bulk) and scanning | `BedQrCode` | `/admin/qr-codes*`, `/admin/beds/:id/qr*`, `/public/qr/resolve` |
 | [catalog](#catalog) | Service categories and services; the request snapshot | `ServiceCategory`, `ServiceItem` | `/admin/service-categories*`, `/admin/services*`, `/public/services` |
 | [sla](#sla) | Response-time targets (versioned) and escalation policies | `SlaPolicy`, `SlaPolicyVersion`, `EscalationPolicy`, `EscalationLevel` | `/admin/sla-policies*`, `/admin/escalation-policies*` |
@@ -67,8 +67,8 @@ The simplest module and the best template to copy. Standard list / get / create 
 
 ## bed-sessions
 
-- **Public interface:** `BedSessionService`, `GuestSessionService`, `GuestContext`, `GuestLocation`, their controllers and routes.
-- **Rules:** starting a session moves the bed AVAILABLE → OCCUPIED in one conditional update (race-free); closing ends every guest session of that stay.
+- **Public interface:** `BedSessionService`, `GuestSessionService`, `GuestContext`, `GuestLocation`, `bedTakesPatients`, their controllers and routes.
+- **Rules:** starting a session moves the bed AVAILABLE → OCCUPIED in one conditional update (race-free); closing ends every guest session of that stay. With bed occupancy management off, nobody admits: a QR scan opens the bed's stay, and starts a fresh one once nobody is using the last.
 
 ## qr
 

@@ -1,10 +1,12 @@
-// Test data for the browser end-to-end tests (frontend/e2e): two new
+// Test data for the browser end-to-end tests (frontend/e2e): three new
 // hospitals in the isolated test database, printed as JSON on stdout.
 //
 //   A: one floor, ward, and two beds; a patient admitted on bed A1 with a
 //      printed QR; a Pantry care-staff member on duty.
 //   B: another hospital (its staff must never see A's work), holding 30
 //      waiting requests so its queue has more than one page.
+//   C: a hospital that uses QR codes only (bed occupancy management off),
+//      with a printed QR on bed A1 and nobody admitted.
 //
 // Run by frontend/e2e/global-setup.ts with DATABASE_URL set to the test
 // database. Refuses anything that is not a local database.
@@ -62,6 +64,7 @@ async function hospital(label: string) {
 async function main() {
   const a = await hospital('A');
   const b = await hospital('B');
+  const c = await hospital('C');
   const operatorEmail = `operator-${suffix}@example.test`.toLowerCase();
   const operator = await database.user.create({
     data: {
@@ -81,6 +84,16 @@ async function main() {
   const qrToken = createOpaqueToken();
   await database.bedQrCode.create({
     data: { hospitalId: a.hospitalId, bedId: bedA1.id, tokenHash: hashOpaqueToken(qrToken) },
+  });
+
+  // C: QR codes only. Its bed A1 has a printed QR; nobody is admitted.
+  await database.hospital.update({
+    where: { id: c.hospitalId },
+    data: { bedOccupancyEnabled: false },
+  });
+  const qrTokenC = createOpaqueToken();
+  await database.bedQrCode.create({
+    data: { hospitalId: c.hospitalId, bedId: c.beds[0]!.id, tokenHash: hashOpaqueToken(qrTokenC) },
   });
 
   // A: a Pantry care-staff member, on duty everywhere in the hospital.
@@ -177,6 +190,7 @@ async function main() {
       operatorEmail,
       a: { code: a.code, adminEmail: a.adminEmail, nurseEmail, qrPath: `/q/${qrToken}` },
       b: { code: b.code, adminEmail: b.adminEmail, waitingPublicIds },
+      c: { code: c.code, adminEmail: c.adminEmail, qrPath: `/q/${qrTokenC}` },
     }),
   );
 }

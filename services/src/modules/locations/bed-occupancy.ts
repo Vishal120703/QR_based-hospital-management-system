@@ -33,3 +33,12 @@ export async function releaseBed(
 ): Promise<void> {
   await repository.releaseBed(transaction, hospitalId, bedId);
 }
+
+// When a hospital turns bed occupancy management off, no bed is occupied any
+// more; returns how many beds were released.
+export function releaseAllBeds(
+  transaction: Prisma.TransactionClient,
+  hospitalId: string,
+): Promise<number> {
+  return repository.releaseAllBeds(transaction, hospitalId);
+}

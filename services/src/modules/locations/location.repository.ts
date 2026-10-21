@@ -347,4 +347,13 @@ export class LocationRepository {
       data: { status: 'AVAILABLE' },
     });
   }
+
+  public async releaseAllBeds(db: Db, hospitalId: string): Promise<number> {
+    return (
+      await db.bed.updateMany({
+        where: { hospitalId, status: 'OCCUPIED' },
+        data: { status: 'AVAILABLE' },
+      })
+    ).count;
+  }
 }

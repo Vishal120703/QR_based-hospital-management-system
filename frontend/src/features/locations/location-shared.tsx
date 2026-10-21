@@ -38,6 +38,8 @@ export interface PanelTools {
   canReadBeds: boolean;
   // Hospital managers can issue and print bedside QR labels.
   canPrintQr: boolean;
+  // Off when the hospital uses QR codes without admissions: no bed is occupied.
+  showOccupancy: boolean;
 }
 
 export function bedStats(beds: Bed[]) {

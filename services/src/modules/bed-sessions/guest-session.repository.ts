@@ -59,6 +59,19 @@ export class GuestSessionRepository {
     ).count;
   }
 
+  public async revokeForBedSessions(
+    db: Db,
+    hospitalId: string,
+    bedSessionIds: readonly string[],
+  ): Promise<number> {
+    return (
+      await db.guestSession.updateMany({
+        where: { hospitalId, bedSessionId: { in: [...bedSessionIds] }, revokedAt: null },
+        data: { revokedAt: new Date() },
+      })
+    ).count;
+  }
+
   public async revokeForBedSession(
     db: Db,
     hospitalId: string,

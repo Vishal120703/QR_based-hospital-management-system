@@ -1,9 +1,10 @@
-import { type Prisma, type PrismaClient } from '@prisma/client';
+import { type BedSession, type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
 import { hospitalIsOpen, logoUrl } from '../hospitals/index.js';
 import { BedSessionRepository } from './bed-session.repository.js';
 import { GuestSessionRepository } from './guest-session.repository.js';
+import { bedTakesPatients } from './patient-access.js';
 
 const activityWriteIntervalMs = 60_000;
 
@@ -36,13 +37,24 @@ export class GuestSessionService {
     private readonly bedSessions = new BedSessionRepository(),
   ) {}
 
-  // Returns null when the bed has no active BedSession.
+  // Returns null when patients cannot use the bed now: with bed occupancy
+  // management on, only an admitted bed can; with it off, any bed in service,
+  // and the scan opens the bed's stay itself. The caller holds the bed's QR
+  // row lock, so two scans of one bed run one after the other.
   public async issue(
     transaction: Prisma.TransactionClient,
     hospitalId: string,
     bedId: string,
   ): Promise<{ token: string; context: GuestContext } | null> {
-    const bedSession = await this.bedSessions.findActiveForBed(transaction, hospitalId, bedId);
+    const occupancyManaged = await this.bedSessions.lockOccupancySetting(transaction, hospitalId);
+    const bed = await this.bedSessions.findBedState(transaction, hospitalId, bedId);
+    if (occupancyManaged === null || !bed || !bedTakesPatients(bed, occupancyManaged)) {
+      return null;
+    }
+    let bedSession = await this.bedSessions.findActiveForBed(transaction, hospitalId, bedId);
+    if (!occupancyManaged) {
+      bedSession = await this.stayForScan(transaction, hospitalId, bedId, bedSession);
+    }
     if (!bedSession) {
       return null;
     }
@@ -94,6 +106,14 @@ export class GuestSessionService {
     };
   }
 
+  public revokeForBedSessions(
+    transaction: Prisma.TransactionClient,
+    hospitalId: string,
+    bedSessionIds: readonly string[],
+  ): Promise<number> {
+    return this.guests.revokeForBedSessions(transaction, hospitalId, bedSessionIds);
+  }
+
   public revokeForBed(
     transaction: Prisma.TransactionClient,
     hospitalId: string,
@@ -108,6 +128,28 @@ export class GuestSessionService {
     bedSessionId: string,
   ): Promise<number> {
     return this.guests.revokeForBedSession(transaction, hospitalId, bedSessionId);
+  }
+
+  // Without admissions the QR belongs to the bed. A scan joins the bed's stay
+  // while it is in use (someone connected within the guest session lifetime,
+  // or a request still open); otherwise it starts a fresh stay, so the next
+  // patient never sees the previous patient's requests.
+  private async stayForScan(
+    transaction: Prisma.TransactionClient,
+    hospitalId: string,
+    bedId: string,
+    current: BedSession | null,
+  ): Promise<BedSession> {
+    if (
+      current &&
+      (await this.bedSessions.inUse(transaction, hospitalId, current.id, new Date()))
+    ) {
+      return current;
+    }
+    if (current) {
+      await this.bedSessions.closeMany(transaction, hospitalId, [current.id], null);
+    }
+    return this.bedSessions.create(transaction, { hospitalId, bedId, startedByMembershipId: null });
   }
 }
 

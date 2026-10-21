@@ -56,7 +56,7 @@ function parseSelection(value: string | null): Selection {
 }
 
 export function LocationsPage() {
-  const { token, reportError, reportSuccess, can } = useAdmin();
+  const { token, me, reportError, reportSuccess, can } = useAdmin();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
@@ -129,6 +129,7 @@ export function LocationsPage() {
     canManageBeds: can('bed.manage'),
     canReadBeds,
     canPrintQr: canReadBeds && can('hospital.manage') && can('qr.generate'),
+    showOccupancy: me.tenant.bedOccupancyEnabled,
   };
 
   return (
@@ -459,7 +460,7 @@ function HospitalPanel({ tools }: { tools: PanelTools }) {
           { label: 'Floors', value: layout.floors.filter((item) => item.active).length },
           { label: 'Units / wards', value: layout.wards.filter((item) => item.active).length },
           { label: 'Beds', value: stats.total },
-          { label: 'Occupied', value: stats.occupied },
+          ...(tools.showOccupancy ? [{ label: 'Occupied', value: stats.occupied }] : []),
         ]}
       />
       {layout.floors.length === 0 ? (
@@ -490,8 +491,9 @@ function HospitalPanel({ tools }: { tools: PanelTools }) {
                 <li key={row.type}>
                   <strong>{unitPresets[row.type].label}</strong>
                   <span className="muted small">
-                    {row.wards} unit{row.wards === 1 ? '' : 's'} · {row.total} beds · {row.occupied}{' '}
-                    occupied · {row.available} available
+                    {row.wards} unit{row.wards === 1 ? '' : 's'} · {row.total} beds ·{' '}
+                    {tools.showOccupancy && `${row.occupied} occupied · `}
+                    {row.available} available
                   </span>
                 </li>
               ))}
@@ -566,7 +568,7 @@ function BuildingPanel({ tools, id }: { tools: PanelTools; id: string }) {
           { label: 'Floors', value: floors.length },
           { label: 'Units', value: wards.length },
           { label: 'Beds', value: stats.total },
-          { label: 'Occupied', value: stats.occupied },
+          ...(tools.showOccupancy ? [{ label: 'Occupied', value: stats.occupied }] : []),
         ]}
       />
       <h3 className="section-title">Floors</h3>
@@ -642,7 +644,7 @@ function FloorPanel({ tools, id }: { tools: PanelTools; id: string }) {
         items={[
           { label: 'Units', value: wards.length },
           { label: 'Beds', value: stats.total },
-          { label: 'Occupied', value: stats.occupied },
+          ...(tools.showOccupancy ? [{ label: 'Occupied', value: stats.occupied }] : []),
           { label: 'Available', value: stats.available },
         ]}
       />
@@ -657,7 +659,9 @@ function FloorPanel({ tools, id }: { tools: PanelTools; id: string }) {
               <ChildCard
                 key={ward.id}
                 title={ward.name}
-                subtitle={`${unitPresets[ward.unitType].label} · ${beds.total} beds · ${beds.occupied} occupied`}
+                subtitle={`${unitPresets[ward.unitType].label} · ${beds.total} beds${
+                  tools.showOccupancy ? ` · ${beds.occupied} occupied` : ''
+                }`}
                 active={ward.active}
                 onOpen={() => tools.select({ kind: 'ward', id: ward.id })}
               />

@@ -15,6 +15,8 @@ export interface StaffContext {
     readonly logoUrl: string | null;
     // IANA time zone; report days and "today" follow it.
     readonly timezone: string;
+    // Off: patients use bedside QR codes without being admitted.
+    readonly bedOccupancyEnabled: boolean;
   };
   readonly membershipId: string;
   readonly sessionId: string;

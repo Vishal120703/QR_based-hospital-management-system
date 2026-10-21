@@ -56,6 +56,7 @@ function show(path: string, permissions: string[]) {
         name: 'Test Hospital',
         logoUrl: null,
         timezone: 'Asia/Kolkata',
+        bedOccupancyEnabled: true,
       },
       mustChangePassword: false,
       permissions,

@@ -109,6 +109,7 @@ Inventory sources: every `services/src/modules/*/*.routes.ts`, `services/src/htt
 | GET | `/admin/bed-sessions` | STAFF | bed.read (any scope) | AREA + TENANT | BedSessionController.list | BedSessionService |
 | POST | `/admin/bed-sessions` | STAFF | bedSession.manage (any scope) | AREA + TENANT | BedSessionController.start | BedSessionService |
 | POST | `/admin/bed-sessions/:id/close` | STAFF | bedSession.manage (any scope) | AREA + TENANT | BedSessionController.close | BedSessionService |
+| PUT | `/admin/bed-occupancy` | STAFF | hospital.manage (HW) | session hospital | BedSessionController.setOccupancy | BedSessionService |
 | GET | `/public/session` | GUEST | — | GS | GuestSessionController.describe | GuestSessionService |
 | GET | `/admin/qr-codes` | STAFF | bed.read (any scope) | AREA + TENANT | QrController.list | QrCodeService |
 | POST | `/admin/qr-codes/batch` | STAFF | hospital.manage + qr.generate (+ qr.rotate when replacing) (HW) | HW + TENANT | QrController.generateBatch | QrCodeService |

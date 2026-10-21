@@ -76,6 +76,7 @@ function show(permissions: string[], membershipId = 'manager') {
       name: 'Test Hospital',
       logoUrl: null,
       timezone: 'Asia/Kolkata',
+      bedOccupancyEnabled: true,
     },
     mustChangePassword: false,
     permissions: [],

@@ -114,10 +114,49 @@ function useOneAtATime() {
   }, []);
 }
 
+// Bed management is the hospital's choice: some hospitals use the bedside QR
+// codes only and never admit or discharge patients.
+export function BedManagementPage() {
+  const { me } = useAdmin();
+  return me.tenant.bedOccupancyEnabled ? <BedBoard /> : <BedManagementOff />;
+}
+
+function BedManagementOff() {
+  const { can } = useAdmin();
+  return (
+    <>
+      <PageHeading
+        title="Bed management"
+        description="Which beds are free, occupied, or out of use, with admissions and discharges."
+      />
+      <section className="card occupancy-off" aria-labelledby="occupancy-off-title">
+        <h2 id="occupancy-off-title">Bed management is turned off</h2>
+        <p>
+          This hospital uses bedside QR codes without admitting patients: a QR works as soon as it
+          is on the bed, and beds are not shown as occupied.
+        </p>
+        <p>
+          {can('hospital.manage') ? (
+            <>
+              To admit and discharge patients and see occupancy, turn it on in{' '}
+              <Link to="/admin/hospital">Profile &amp; settings</Link>.
+            </>
+          ) : (
+            'A hospital manager can turn it on.'
+          )}
+        </p>
+        <Link className="button secondary" to="/admin/beds">
+          Go to QR codes
+        </Link>
+      </section>
+    </>
+  );
+}
+
 // Every bed's state at a glance: occupancy by floor and ward, and a board of
 // beds to admit, discharge, or take out of use for maintenance. QR codes are
 // on their own screen.
-export function BedManagementPage() {
+function BedBoard() {
   const { token, me, can, canAnywhere, reportError, reportSuccess } = useAdmin();
   const confirm = useConfirm();
   const now = useNow();

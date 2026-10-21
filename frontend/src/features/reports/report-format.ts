@@ -66,6 +66,8 @@ const actionLabels: Record<string, string> = {
   'staff.password.reset': 'Reset a staff password',
   'hospital.logo.update': 'Changed the hospital logo',
   'hospital.logo.remove': 'Removed the hospital logo',
+  'hospital.bedOccupancy.enable': 'Turned on admissions (bed occupancy management)',
+  'hospital.bedOccupancy.disable': 'Switched to QR codes only (no admissions)',
   'platform.hospital.create': 'Platform created this hospital',
   'platform.hospital.update': 'Platform changed this hospital',
   'platform.hospital.logo': 'Platform changed the logo',

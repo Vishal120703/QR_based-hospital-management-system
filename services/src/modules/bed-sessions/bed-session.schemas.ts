@@ -9,4 +9,6 @@ export const bedSessionFilterSchema = z
 
 export const startBedSessionSchema = z.object({ bedId: z.string().uuid() }).strict();
 
+export const bedOccupancySchema = z.object({ enabled: z.boolean() }).strict();
+
 export type BedSessionFilter = z.infer<typeof bedSessionFilterSchema>;
