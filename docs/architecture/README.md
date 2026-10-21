@@ -114,13 +114,15 @@ An arrow means "uses". The full description of each module (tables, public inter
 ```mermaid
 flowchart LR
   server["server.ts<br/>config, DB (+ optional Redis) connections,<br/>graceful shutdown"] --> app["app.ts<br/>shared middleware, health,<br/>404 and error handling"]
-  app --> container["container.ts<br/>creates every service and controller once;<br/>groups routes"]
-  container --> root["root routes<br/>/auth/staff/*, /auth/platform/*, /platform/*"]
-  container --> admin["/admin/*<br/>staff session checked once"]
-  container --> public["/public/*<br/>guest session checked per route"]
+  app --> container["container.ts<br/>creates every service and controller once"]
+  app --> routes["routes/index.ts<br/>the URL map: which module serves which paths"]
+  container --> routes
+  routes --> root["root routes<br/>/auth/staff/*, /auth/platform/*, /platform/*"]
+  routes --> admin["/admin/*<br/>staff session checked once"]
+  routes --> public["/public/*<br/>guest session checked per route"]
 ```
 
-`container.ts` is the only place where modules are wired together. Adding a module means creating its folder, exporting it from its `index.ts`, and wiring it in the container (see [adding a feature](../adding-a-feature.md)).
+`container.ts` is the only place where modules are wired together, and `routes/index.ts` is the one place that lists every module's routes and where they are mounted. Adding a module means creating its folder, exporting it from its `index.ts`, creating its controller in the container, and mounting its routes in `routes/index.ts` (see [adding a feature](../adding-a-feature.md)).
 
 ## 6. Folder structure
 
@@ -135,6 +137,7 @@ QR_Hospital_management/
 │   │   ├── server.ts             process entry point
 │   │   ├── app.ts                Express app: middleware, health, errors
 │   │   ├── container.ts          composition root: wires every module
+│   │   ├── routes/index.ts       URL map: mounts every module's routes
 │   │   ├── config/               environment (env.ts) and logger
 │   │   ├── database/             Prisma client, Db type, Redis
 │   │   ├── common/               shared errors, validation helpers, tokens

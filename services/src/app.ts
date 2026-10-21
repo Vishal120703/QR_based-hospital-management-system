@@ -11,6 +11,7 @@ import { errorHandler } from './middleware/error-handler.js';
 import { type RateLimitOptions } from './middleware/rate-limit.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { type LoginRateLimits } from './modules/auth/index.js';
+import { createRoutes } from './routes/index.js';
 
 const noQuerySchema = z.object({}).strict();
 
@@ -31,7 +32,7 @@ export interface CreateAppOptions {
 }
 
 // The HTTP application: shared middleware, health checks, every module's
-// routes (from the container), then "not found" and error handling.
+// routes (src/routes/index.ts), then "not found" and error handling.
 export function createApp(options: CreateAppOptions): Express {
   const application = express();
   application.disable('x-powered-by');
@@ -77,17 +78,18 @@ export function createApp(options: CreateAppOptions): Express {
 
   application.use(createHealthRouter(options.readinessProbes ?? []));
   if (options.database) {
-    const routes = createContainer(options.database, {
+    const container = createContainer(options.database, {
       logger: options.logger,
       publicAppUrl: options.publicAppUrl ?? 'http://localhost:5173',
       guestSessionTtlMinutes: options.guestSessionTtlMinutes ?? 120,
-      qrResolveRateLimit: options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 },
-      platformLoginRateLimit: options.platformLoginRateLimit ?? { windowMs: 60_000, max: 10 },
-      staffLoginRateLimits: options.staffLoginRateLimits,
     });
-    for (const router of routes.root) application.use(router);
-    application.use('/admin', routes.admin);
-    application.use('/public', routes.public);
+    application.use(
+      createRoutes(container, {
+        qrResolveRateLimit: options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 },
+        platformLoginRateLimit: options.platformLoginRateLimit ?? { windowMs: 60_000, max: 10 },
+        staffLoginRateLimits: options.staffLoginRateLimits,
+      }),
+    );
   }
   options.configureRoutes?.(application);
 

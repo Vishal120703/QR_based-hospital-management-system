@@ -1,81 +1,34 @@
-import { Router } from 'express';
 import { type PrismaClient } from '@prisma/client';
-import { type RateLimitOptions } from './middleware/rate-limit.js';
-import { requireStaffAuth } from './middleware/staff-auth.js';
-import { AuditController, AuditService, createAuditRoutes } from './modules/audit/index.js';
-import {
-  AuthController,
-  createAuthRoutes,
-  StaffAuthService,
-  type LoginRateLimits,
-} from './modules/auth/index.js';
+import { type Logger } from 'pino';
+import { AuditController, AuditService } from './modules/audit/index.js';
+import { AuthController, StaffAuthService } from './modules/auth/index.js';
 import {
   BedSessionController,
   BedSessionService,
-  createBedSessionRoutes,
-  createGuestSessionRoutes,
   GuestSessionController,
   GuestSessionService,
 } from './modules/bed-sessions/index.js';
+import { CatalogController, CategoryService, ServiceItemService } from './modules/catalog/index.js';
+import { DepartmentController, DepartmentService } from './modules/departments/index.js';
+import { HospitalController, HospitalService } from './modules/hospitals/index.js';
+import { LocationController, LocationService } from './modules/locations/index.js';
+import { NotificationController, NotificationService } from './modules/notifications/index.js';
 import {
-  CatalogController,
-  CategoryService,
-  createCatalogRoutes,
-  createPublicCatalogRoutes,
-  ServiceItemService,
-} from './modules/catalog/index.js';
-import {
-  createDepartmentRoutes,
-  DepartmentController,
-  DepartmentService,
-} from './modules/departments/index.js';
-import {
-  createHospitalRoutes,
-  createPublicLogoRoutes,
-  HospitalController,
-  HospitalService,
-} from './modules/hospitals/index.js';
-import {
-  createLocationRoutes,
-  LocationController,
-  LocationService,
-} from './modules/locations/index.js';
-import {
-  createPlatformRoutes,
   PlatformAuthController,
   PlatformAuthService,
   PlatformController,
   PlatformService,
 } from './modules/platform/index.js';
+import { QrCodeService, QrController } from './modules/qr/index.js';
+import { ReportController, ReportService } from './modules/reports/index.js';
 import {
-  createQrAdminRoutes,
-  createQrPublicRoutes,
-  QrCodeService,
-  QrController,
-} from './modules/qr/index.js';
-import { createReportRoutes, ReportController, ReportService } from './modules/reports/index.js';
-import {
-  createNotificationRoutes,
-  NotificationController,
-  NotificationService,
-} from './modules/notifications/index.js';
-import { type Logger } from 'pino';
-import {
-  createPatientRequestRoutes,
-  createRequestRoutes,
   PatientRequestController,
   RequestController,
   RequestService,
 } from './modules/requests/index.js';
-import { createRoleRoutes, RoleController, RoleService } from './modules/roles/index.js';
+import { RoleController, RoleService } from './modules/roles/index.js';
+import { EscalationPolicyService, SlaController, SlaPolicyService } from './modules/sla/index.js';
 import {
-  createSlaRoutes,
-  EscalationPolicyService,
-  SlaController,
-  SlaPolicyService,
-} from './modules/sla/index.js';
-import {
-  createStaffRoutes,
   ShiftController,
   ShiftService,
   StaffController,
@@ -86,96 +39,47 @@ export interface ContainerSettings {
   readonly logger: Logger;
   readonly publicAppUrl: string;
   readonly guestSessionTtlMinutes: number;
-  readonly qrResolveRateLimit: RateLimitOptions;
-  readonly platformLoginRateLimit: RateLimitOptions;
-  readonly staffLoginRateLimits?: LoginRateLimits | undefined;
 }
 
-export interface ApplicationRoutes {
-  // Mounted at the root: /auth/staff/*, /auth/platform/*, and /platform/*.
-  readonly root: Router[];
-  // Mounted under /admin, after one staff sign-in check.
-  readonly admin: Router;
-  // Mounted under /public, for patients (guest sessions) and logos.
-  readonly public: Router;
-}
+export type Container = ReturnType<typeof createContainer>;
 
-// The composition root: creates every module's service and controller once,
-// connects the modules that depend on each other, and groups their routes by
-// who may call them. A new module is added here and nowhere else.
-export function createContainer(
-  database: PrismaClient,
-  settings: ContainerSettings,
-): ApplicationRoutes {
-  // Services other modules depend on.
+// The composition root: creates every module's service and controller once
+// and connects the modules that depend on each other. src/routes/index.ts
+// decides which URLs reach each controller.
+export function createContainer(database: PrismaClient, settings: ContainerSettings) {
+  // Services other modules depend on, and that the routes use to sign callers in.
   const staffAuth = new StaffAuthService(database);
   const guestSessions = new GuestSessionService(database, settings.guestSessionTtlMinutes);
   const requests = new RequestService(database);
   const platformAuth = new PlatformAuthService(database);
 
-  // Controllers used by more than one route group.
-  const hospitals = new HospitalController(new HospitalService(database));
-  const catalog = new CatalogController(
-    new CategoryService(database),
-    new ServiceItemService(database),
-  );
-  const qrCodes = new QrController(
-    new QrCodeService(database, guestSessions, settings.publicAppUrl),
-  );
-
-  const root = [
-    createAuthRoutes(new AuthController(staffAuth), staffAuth, settings.staffLoginRateLimits),
-    createPlatformRoutes(
-      new PlatformAuthController(platformAuth),
-      new PlatformController(new PlatformService(database)),
-      platformAuth,
-      settings.platformLoginRateLimit,
-    ),
-  ];
-
-  // Every administrative route is authenticated exactly once, here; each
-  // route then checks its own permission.
-  const admin = Router();
-  admin.use(requireStaffAuth(staffAuth));
-  admin.use(createHospitalRoutes(hospitals));
-  admin.use(createRoleRoutes(new RoleController(new RoleService(database))));
-  admin.use(createLocationRoutes(new LocationController(new LocationService(database))));
-  admin.use(
-    createBedSessionRoutes(
-      new BedSessionController(new BedSessionService(database, guestSessions)),
-    ),
-  );
-  admin.use(createQrAdminRoutes(qrCodes));
-  admin.use(createDepartmentRoutes(new DepartmentController(new DepartmentService(database))));
-  admin.use(
-    createStaffRoutes(
-      new StaffController(new StaffService(database)),
-      new ShiftController(new ShiftService(database)),
-    ),
-  );
-  admin.use(createCatalogRoutes(catalog));
-  admin.use(
-    createSlaRoutes(
-      new SlaController(new SlaPolicyService(database), new EscalationPolicyService(database)),
-    ),
-  );
-  admin.use(createRequestRoutes(new RequestController(requests)));
-  admin.use(createReportRoutes(new ReportController(new ReportService(database))));
-  admin.use(createAuditRoutes(new AuditController(new AuditService(database))));
-  admin.use(
-    createNotificationRoutes(
-      new NotificationController(new NotificationService(database, settings.logger)),
-    ),
-  );
-
-  // Patient routes. Guest authentication is applied per route, so it can
-  // never leak onto another route.
-  const patient = Router();
-  patient.use(createPublicLogoRoutes(hospitals));
-  patient.use(createQrPublicRoutes(qrCodes, settings.qrResolveRateLimit));
-  patient.use(createGuestSessionRoutes(new GuestSessionController(guestSessions), guestSessions));
-  patient.use(createPublicCatalogRoutes(catalog, guestSessions));
-  patient.use(createPatientRequestRoutes(new PatientRequestController(requests), guestSessions));
-
-  return { root, admin, public: patient };
+  return {
+    staffAuth,
+    platformAuth,
+    guestSessions,
+    controllers: {
+      auth: new AuthController(staffAuth),
+      platformAuth: new PlatformAuthController(platformAuth),
+      platform: new PlatformController(new PlatformService(database)),
+      hospitals: new HospitalController(new HospitalService(database)),
+      roles: new RoleController(new RoleService(database)),
+      locations: new LocationController(new LocationService(database)),
+      bedSessions: new BedSessionController(new BedSessionService(database, guestSessions)),
+      qrCodes: new QrController(new QrCodeService(database, guestSessions, settings.publicAppUrl)),
+      departments: new DepartmentController(new DepartmentService(database)),
+      staff: new StaffController(new StaffService(database)),
+      shifts: new ShiftController(new ShiftService(database)),
+      catalog: new CatalogController(
+        new CategoryService(database),
+        new ServiceItemService(database),
+      ),
+      sla: new SlaController(new SlaPolicyService(database), new EscalationPolicyService(database)),
+      requests: new RequestController(requests),
+      reports: new ReportController(new ReportService(database)),
+      audit: new AuditController(new AuditService(database)),
+      notifications: new NotificationController(new NotificationService(database, settings.logger)),
+      guestSessions: new GuestSessionController(guestSessions),
+      patientRequests: new PatientRequestController(requests),
+    },
+  };
 }

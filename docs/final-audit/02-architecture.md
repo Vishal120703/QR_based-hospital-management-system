@@ -1,6 +1,6 @@
 # Architecture evidence — stages 1–2
 
-Current app is a modular monolith: one Express/Prisma backend and one React/Vite frontend. app.ts adds shared middleware and mounts the composition root; container.ts groups STAFF, PLATFORM and patient/public routes. Domain modules contain route/controller/schema/service/repository layers and expose public index.ts interfaces. The current architecture diagrams are in ../architecture/README.md and ../architecture/data-flow.md; the ER freshness check passed.
+Current app is a modular monolith: one Express/Prisma backend and one React/Vite frontend. app.ts adds shared middleware and mounts the routes; container.ts is the composition root and routes/index.ts groups STAFF, PLATFORM and patient/public routes. Domain modules contain route/controller/schema/service/repository layers and expose public index.ts interfaces. The current architecture diagrams are in ../architecture/README.md and ../architecture/data-flow.md; the ER freshness check passed.
 
 Hospital is the tenant; Client owns one or more hospitals. Hospital staff, platform operators, and guests resolve tokens using separate session tables. Staff permissions are derived from active persisted roles/scopes, not submitted UI values. Hospital-wide guards check hospitalPermissions; scoped guards check permissions and rely on service-level target filtering. RequestAreaWhere, visibleRequestsWhere, areaFilters and canAccessLocation enforce distinct read/command areas. The report person fallback omits that target-area step (AUD-001).
 

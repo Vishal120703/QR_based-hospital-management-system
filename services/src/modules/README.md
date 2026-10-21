@@ -24,7 +24,7 @@ Larger modules have multiple entities (for example `staff.*` and `shift.*`) or s
 - Input rules shared by several modules (codes, names, emails, passwords, date ranges) come from `src/common/validation.ts`; validation errors are turned into plain messages by `src/common/validation-errors.ts`.
 - Hospital-owned records are selected with server-derived `hospitalId`; never accept it as authority from the browser.
 - Administrative routes mount under `/admin` after staff authentication. Guest routes mount under `/public` and apply guest authentication only where needed.
-- `src/container.ts` creates services/controllers and wires the route groups. `src/app.ts` owns shared HTTP middleware.
+- `src/container.ts` creates services/controllers. `src/routes/index.ts` mounts every module's routes in their groups. `src/app.ts` owns shared HTTP middleware.
 - Service ESLint rules enforce import and repository boundaries; run lint, types, unit tests, integration tests with a disposable database, and build after changing a module.
 
 The `notifications` module owns the persistent staff inbox, recipient resolution, durable event processing, and authenticated Socket.IO delivery; see [notification architecture](../../../docs/architecture/notifications.md).

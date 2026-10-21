@@ -52,7 +52,7 @@ Administrative audit writes, an audit screen, reports, and security checks alrea
 The repository has only two application folders:
 
 - `frontend/`: one React app, with page groups in `src/features/<area>`, shared API calls in `src/api`, shared UI in `src/components`, and helpers in `src/lib`.
-- `services/`: one backend service. Domain behavior lives in `src/modules/<domain>` with routes, controllers, schemas, services, repositories, and a public `index.ts`; composition is in `src/container.ts`, technical infrastructure in `src/common`, `src/config`, `src/database`, `src/http`, and `src/middleware`, and database history in `prisma/migrations`.
+- `services/`: one backend service. Domain behavior lives in `src/modules/<domain>` with routes, controllers, schemas, services, repositories, and a public `index.ts`; composition is in `src/container.ts` and the URL map in `src/routes/index.ts`, technical infrastructure in `src/common`, `src/config`, `src/database`, `src/http`, and `src/middleware`, and database history in `prisma/migrations`.
 - `docs/`: the [documentation index](./README.md), architecture and data-flow diagrams, generated ER model, guides (including the full testing guide), and the deployment guide.
 
 Routes declare permissions, controllers validate transport input, services own business rules and transactions, and repositories own Prisma queries. Cross-module work uses the owner's public `index.ts`. Add a folder only when real functionality needs it. No microservices or additional frontend apps are required for V1. See [how to add a feature](./adding-a-feature.md).
