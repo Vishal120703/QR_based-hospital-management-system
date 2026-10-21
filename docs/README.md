@@ -6,6 +6,7 @@ CARE QR is one React frontend and one Express/Prisma backend. Start with the gui
 |---|---|
 | Understand the product, roles, demo data, and local setup | [Easy guide](./guides/easy-guide.md) |
 | Trace a request from QR scan to completion | [Data-flow diagrams and sequences](./architecture/data-flow.md) |
+| Find the files, checks, transaction, and tests behind one API request | [Code map](./architecture/code-map.md) |
 | Understand module boundaries and the folder layout | [Architecture](./architecture/README.md) and [module catalog](./architecture/modules.md) |
 | See tables, columns, and relationships | [Generated ER diagrams](./database/er-diagram.md) and [`schema.prisma`](../services/prisma/schema.prisma) |
 | Add a feature without breaking the boundaries | [Adding a feature](./adding-a-feature.md) |

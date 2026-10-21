@@ -171,7 +171,7 @@ modules/departments/
 └── department.repository.ts    database queries
 ```
 
-Larger modules have one set of files per entity (for example `staff` has `staff.*` and `shift.*`) and small pure helpers named after what they do (for example `locations/bulk-beds.ts`, `staff/eligibility.ts`, `requests/request-scope.ts`).
+Larger modules have one set of files per entity (for example `staff` has `staff.*` and `shift.*`), split a large service by job (for example `locations` has one service per level and `requests` has query, patient, and command services), and keep small pure helpers named after what they do (for example `locations/bulk-beds.ts`, `staff/eligibility.ts`, `requests/request-transitions.ts`, `reports/report-metrics.ts`). The [code map](./code-map.md) follows three real requests through these files.
 
 ## 7. Key design decisions
 

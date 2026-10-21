@@ -14,7 +14,7 @@ modules/departments/
 └── department.repository.ts    Prisma queries
 ```
 
-Larger modules have multiple entities (for example `staff.*` and `shift.*`) or small pure helpers. `reports` is read-only, while `audit` records changes in the caller's transaction. Do not create empty placeholder files or folders merely to match a template.
+Larger modules have multiple entities (for example `staff.*` and `shift.*`), split a large service by job (`locations` has one service per level; `requests` has query, patient, and command services composed by `request.service.ts`), or keep small pure helpers (`request-transitions.ts`, `report-metrics.ts`). `reports` is read-only, while `audit` records changes in the caller's transaction. Do not create empty placeholder files or folders merely to match a template. The [code map](../../../docs/architecture/code-map.md) follows three real requests through these files.
 
 ## Boundary rules
 
