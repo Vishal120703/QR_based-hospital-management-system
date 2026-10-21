@@ -55,6 +55,21 @@ describe('API recovery', () => {
     expect(credentials.staff()).toBe(null);
   });
 
+  it('keeps privileged credentials tab-scoped and removes legacy persistent tokens', () => {
+    localStorage.setItem('careqr.staffToken', 'legacy-staff-token');
+    localStorage.setItem('careqr.platformToken', 'legacy-platform-token');
+
+    credentials.setStaff('staff-token');
+    credentials.setPlatform('platform-token');
+
+    expect(sessionStorage.getItem('careqr.staffToken')).toBe('staff-token');
+    expect(sessionStorage.getItem('careqr.platformToken')).toBe('platform-token');
+    expect(localStorage.getItem('careqr.staffToken')).toBeNull();
+    expect(localStorage.getItem('careqr.platformToken')).toBeNull();
+    expect(credentials.staff()).toBe('staff-token');
+    expect(credentials.platform()).toBe('platform-token');
+  });
+
   it('uses the guest token and public request contract for list, submit, and cancel', async () => {
     const request = {
       publicId: 'CR-12345678',

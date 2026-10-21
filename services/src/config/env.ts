@@ -24,6 +24,24 @@ const connectionUrl = (protocols: readonly string[]) =>
 const optional = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 
+function protocolOf(value: string): string | null {
+  try {
+    return new URL(value).protocol;
+  } catch {
+    return null;
+  }
+}
+
+function databaseUsesTls(value: string): boolean {
+  try {
+    return ['require', 'verify-ca', 'verify-full'].includes(
+      new URL(value).searchParams.get('sslmode') ?? '',
+    );
+  } catch {
+    return false;
+  }
+}
+
 const environmentSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -76,6 +94,38 @@ const environmentSchema = z
         path: ['QR_TOKEN_ENCRYPTION_KEY'],
         message: 'QR_TOKEN_ENCRYPTION_KEY is required in production.',
       });
+    }
+    if (
+      value.NODE_ENV === 'production' &&
+      value.PUBLIC_APP_URL &&
+      protocolOf(value.PUBLIC_APP_URL) !== 'https:'
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['PUBLIC_APP_URL'],
+        message: 'PUBLIC_APP_URL must use HTTPS in production.',
+      });
+    }
+    if (value.NODE_ENV === 'production' && !databaseUsesTls(value.DATABASE_URL)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['DATABASE_URL'],
+        message: 'DATABASE_URL must include sslmode=require (or stronger) in production.',
+      });
+    }
+    if (value.NODE_ENV === 'production' && value.CORS_ORIGINS) {
+      for (const origin of value.CORS_ORIGINS.split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)) {
+        if (protocolOf(origin) !== 'https:') {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['CORS_ORIGINS'],
+            message: 'Every CORS_ORIGINS entry must use HTTPS in production.',
+          });
+          break;
+        }
+      }
     }
   });
 

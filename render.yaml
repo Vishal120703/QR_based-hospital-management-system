@@ -26,7 +26,8 @@ services:
         value: "24"
       - key: NODE_ENV
         value: production
-      # Your PostgreSQL connection string, entered once in the dashboard.
+      # Your PostgreSQL connection string, entered once in the dashboard. It
+      # must include sslmode=require (or verify-ca/verify-full).
       - key: DATABASE_URL
         sync: false
       # Generate once with `openssl rand -base64 32`; keep it stable so active

@@ -11,7 +11,7 @@ Order: **1.** a PostgreSQL database → **2.** API on Render → **3.** web app 
 
 ## 1. The database
 
-Create a PostgreSQL database with your provider (Neon: **New project**; Render PostgreSQL also works) and copy its connection string. Use it as `DATABASE_URL` below. Nothing in this repository creates, replaces, or deletes a database.
+Create a PostgreSQL database with your provider (Neon: **New project**; Render PostgreSQL also works) and copy its TLS connection string. It must include `sslmode=require` (or the stronger `verify-ca`/`verify-full` setting). Use it as `DATABASE_URL` below. Nothing in this repository creates, replaces, or deletes a database.
 
 ## 2. API on Render
 
@@ -38,7 +38,7 @@ Set these on the web service (**Settings** and **Environment**):
 |---|---|
 | `NODE_VERSION` | `24` |
 | `NODE_ENV` | `production` |
-| `DATABASE_URL` | your database's connection string (Neon: from **Connect**; Render PostgreSQL: the **Internal Database URL**) |
+| `DATABASE_URL` | your database's TLS connection string with `sslmode=require` or stronger (Neon: from **Connect**) |
 | `QR_TOKEN_ENCRYPTION_KEY` | a stable 32-byte Base64 secret from `openssl rand -base64 32`; protects active QR codes when managers reopen them for printing |
 | `PUBLIC_APP_URL` | your Vercel address, e.g. `https://care-qr.vercel.app` (no trailing slash) |
 | `CORS_ORIGINS` | optional: other web addresses allowed to call the API, comma-separated |

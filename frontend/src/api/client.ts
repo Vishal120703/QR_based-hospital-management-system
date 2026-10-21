@@ -77,14 +77,23 @@ export async function call<T>(
   return payload as T;
 }
 
-// Credentials. Staff stay signed in across tabs until the 8-hour session ends;
-// a guest session lives only in the tab that scanned the QR code.
+// Credentials live only for this browser tab. In particular, privileged
+// staff/platform bearer tokens never survive a browser restart or get shared
+// to another tab through localStorage.
 const staffKey = 'careqr.staffToken';
 const platformKey = 'careqr.platformToken';
 const guestKey = 'careqr.guestToken';
 
 const memory = new Map<string, string>();
 const volatileKeys = new Set<string>();
+
+function removeLegacyPersistentToken(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Storage may be blocked. There is no persistent value we can reach.
+  }
+}
 
 function read(storage: () => Storage, key: string): string | null {
   if (volatileKeys.has(key)) return memory.get(key) ?? null;
@@ -110,10 +119,22 @@ function write(storage: () => Storage, key: string, value: string | null): void 
 }
 
 export const credentials = {
-  staff: () => read(() => localStorage, staffKey),
-  platform: () => read(() => localStorage, platformKey),
-  setPlatform: (token: string | null) => write(() => localStorage, platformKey, token),
-  setStaff: (token: string | null) => write(() => localStorage, staffKey, token),
+  staff: () => {
+    removeLegacyPersistentToken(staffKey);
+    return read(() => sessionStorage, staffKey);
+  },
+  platform: () => {
+    removeLegacyPersistentToken(platformKey);
+    return read(() => sessionStorage, platformKey);
+  },
+  setPlatform: (token: string | null) => {
+    removeLegacyPersistentToken(platformKey);
+    write(() => sessionStorage, platformKey, token);
+  },
+  setStaff: (token: string | null) => {
+    removeLegacyPersistentToken(staffKey);
+    write(() => sessionStorage, staffKey, token);
+  },
   guest: () => read(() => sessionStorage, guestKey),
   setGuest: (token: string | null) => write(() => sessionStorage, guestKey, token),
 };

@@ -11,6 +11,8 @@ const validEnvironment = {
   QR_TOKEN_ENCRYPTION_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
   REDIS_URL: 'redis://localhost:6379',
 };
+const productionDatabaseUrl =
+  'postgresql://careqr:careqr@database.example:5432/careqr?sslmode=verify-full';
 
 describe('environment configuration', () => {
   it('parses a valid environment', () => {
@@ -51,18 +53,22 @@ describe('environment configuration', () => {
   });
 
   it('needs the web app address in production and allows it to call the API', () => {
-    const production = { ...validEnvironment, NODE_ENV: 'production', REDIS_URL: undefined };
+    const production = {
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      DATABASE_URL: productionDatabaseUrl,
+      REDIS_URL: undefined,
+    };
     expect(() => loadConfig(production)).toThrow('PUBLIC_APP_URL');
     const config = loadConfig({
       ...production,
       PUBLIC_APP_URL: 'https://care-qr.vercel.app/',
-      CORS_ORIGINS: 'https://preview.vercel.app/, http://localhost:5173',
+      CORS_ORIGINS: 'https://preview.vercel.app/',
     });
     expect(config.publicAppUrl).toBe('https://care-qr.vercel.app');
     expect(config.corsOrigins).toEqual([
       'https://care-qr.vercel.app',
       'https://preview.vercel.app',
-      'http://localhost:5173',
     ]);
     // Behind Render's proxy by default, so rate limits see each visitor.
     expect(config.trustProxy).toBe(1);
@@ -74,6 +80,7 @@ describe('environment configuration', () => {
       loadConfig({
         ...validEnvironment,
         NODE_ENV: 'production',
+        DATABASE_URL: productionDatabaseUrl,
         PUBLIC_APP_URL: 'https://care-qr.example',
         QR_TOKEN_ENCRYPTION_KEY: '',
       }),
@@ -81,6 +88,36 @@ describe('environment configuration', () => {
     expect(() => loadConfig({ ...validEnvironment, QR_TOKEN_ENCRYPTION_KEY: 'too-short' })).toThrow(
       'Base64-encoded 32-byte key',
     );
+  });
+
+  it('requires encrypted browser and database transport in production', () => {
+    const production = {
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      QR_TOKEN_ENCRYPTION_KEY: validEnvironment.QR_TOKEN_ENCRYPTION_KEY,
+    };
+    expect(() =>
+      loadConfig({
+        ...production,
+        PUBLIC_APP_URL: 'http://care-qr.example',
+        DATABASE_URL: productionDatabaseUrl,
+      }),
+    ).toThrow('PUBLIC_APP_URL must use HTTPS');
+    expect(() =>
+      loadConfig({
+        ...production,
+        PUBLIC_APP_URL: 'https://care-qr.example',
+        CORS_ORIGINS: 'http://preview.example',
+        DATABASE_URL: productionDatabaseUrl,
+      }),
+    ).toThrow('CORS_ORIGINS');
+    expect(() =>
+      loadConfig({
+        ...production,
+        PUBLIC_APP_URL: 'https://care-qr.example',
+        DATABASE_URL: 'postgresql://careqr:careqr@database.example:5432/careqr',
+      }),
+    ).toThrow('sslmode=require');
   });
 
   it('names a malformed address instead of crashing', () => {
