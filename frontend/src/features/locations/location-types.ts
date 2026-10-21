@@ -153,6 +153,10 @@ export const bedTypeLabels: Record<BedType, string> = {
   OTHER: 'Other',
 };
 
+// Every room and bed type, in the order their labels are listed.
+export const roomTypes = Object.keys(roomTypeLabels) as RoomType[];
+export const bedTypes = Object.keys(bedTypeLabels) as BedType[];
+
 export function floorLevelLabel(level: number | null): string {
   if (level === null) return '';
   if (level < 0) return `Basement ${-level}`;
