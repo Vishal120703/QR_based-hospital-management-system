@@ -32,12 +32,19 @@ const application = createApp({
 const uuid = z.string().uuid();
 const issueSchema = z.object({
   qrCode: z
-    .object({ id: uuid, bedId: uuid, status: z.string(), version: z.number() })
+    .object({
+      id: uuid,
+      bedId: uuid,
+      status: z.string(),
+      version: z.number(),
+      printable: z.boolean(),
+    })
     .passthrough(),
   token: z.string(),
   url: z.string(),
 });
 const qrViewSchema = z.object({ qrCode: issueSchema.shape.qrCode });
+const qrListSchema = z.object({ qrCodes: z.array(issueSchema.shape.qrCode) });
 const batchSchema = z.object({
   issues: z.array(
     issueSchema.extend({
@@ -235,7 +242,7 @@ describe('Phase 4 secure QR codes', () => {
     ).toBe(404);
   });
 
-  it('issues a QR code once and stores only the SHA-256 hash', async () => {
+  it('issues a QR code and safely reopens the same active label for printing', async () => {
     const { bedId } = await createBedFixture(database, hospitalA);
     const response = await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr`);
 
@@ -244,20 +251,55 @@ describe('Phase 4 secure QR codes', () => {
     const issue = issueSchema.parse(response.body);
     expect(issue.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(issue.url).toBe(`${publicAppUrl}/q/${issue.token}`);
-    expect(issue.qrCode).toMatchObject({ bedId, status: 'ACTIVE', version: 1 });
+    expect(issue.qrCode).toMatchObject({ bedId, status: 'ACTIVE', version: 1, printable: true });
     expect(Object.keys(issue.qrCode)).not.toContain('tokenHash');
+    expect(Object.keys(issue.qrCode)).not.toContain('tokenCiphertext');
 
     const stored = await database.bedQrCode.findUniqueOrThrow({ where: { id: issue.qrCode.id } });
     expect(stored.tokenHash).toBe(hashOpaqueToken(issue.token));
+    expect(stored.tokenCiphertext).not.toBeNull();
     expect(JSON.stringify(stored)).not.toContain(issue.token);
 
     const listed = await as(hospitalA.adminToken).get(`/admin/qr-codes?bedId=${bedId}`);
     expect(listed.status).toBe(200);
     expect(JSON.stringify(listed.body)).not.toContain(issue.token);
     expect(JSON.stringify(listed.body)).not.toContain(stored.tokenHash);
+    expect(JSON.stringify(listed.body)).not.toContain(stored.tokenCiphertext);
+
+    const printed = await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr/print`);
+    expect(printed.status).toBe(200);
+    expect(printed.headers['cache-control']).toBe('no-store');
+    expect(issueSchema.parse(printed.body)).toEqual(issue);
+    expect(
+      (
+        await database.bedQrCode.findUniqueOrThrow({
+          where: { id: issue.qrCode.id },
+        })
+      ).version,
+    ).toBe(1);
 
     const again = await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr`);
     expect(again.status).toBe(409);
+  });
+
+  it('requires one replacement before a legacy active QR can be reprinted', async () => {
+    const { bedId } = await createBedFixture(database, hospitalA);
+    const issue = await issueQr(hospitalA, bedId);
+    await database.bedQrCode.update({
+      where: { id: issue.qrCode.id },
+      data: { tokenCiphertext: null },
+    });
+
+    const listed = await as(hospitalA.adminToken).get(`/admin/qr-codes?bedId=${bedId}`);
+    expect(qrListSchema.parse(listed.body).qrCodes[0]).toMatchObject({ printable: false });
+    const printed = await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr/print`);
+    expect(printed.status).toBe(409);
+    expect(errorSchema.parse(printed.body).error.message).toContain('Replace it once');
+
+    const replaced = await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr/rotate`);
+    expect(replaced.status).toBe(200);
+    expect(issueSchema.parse(replaced.body).qrCode.printable).toBe(true);
+    expect((await as(hospitalA.adminToken).post(`/admin/beds/${bedId}/qr/print`)).status).toBe(200);
   });
 
   it('rejects random, revoked, and rotated tokens with one generic response', async () => {
@@ -527,12 +569,13 @@ describe('Phase 4 bed sessions and guest sessions', () => {
 
     const attempts = [
       await intruder.post(`/admin/beds/${owned.bedId}/qr`),
+      await intruder.post(`/admin/beds/${owned.bedId}/qr/print`),
       await intruder.post(`/admin/beds/${owned.bedId}/qr/rotate`),
       await intruder.post(`/admin/beds/${owned.bedId}/qr/revoke`),
       await intruder.post('/admin/bed-sessions', { bedId: owned.bedId }),
       await intruder.post(`/admin/bed-sessions/${owned.session.id}/close`),
     ];
-    expect(attempts.map((response) => response.status)).toEqual([404, 404, 404, 404, 404]);
+    expect(attempts.map((response) => response.status)).toEqual([404, 404, 404, 404, 404, 404]);
 
     const qrList = await intruder.get('/admin/qr-codes');
     const sessionList = await intruder.get(`/admin/bed-sessions?bedId=${owned.bedId}`);
@@ -576,10 +619,12 @@ describe('Phase 4 bed sessions and guest sessions', () => {
     expect((await reader.get('/admin/qr-codes')).status).toBe(200);
     expect((await reader.get('/admin/bed-sessions')).status).toBe(200);
     expect((await reader.post(`/admin/beds/${bedId}/qr`)).status).toBe(403);
+    expect((await reader.post(`/admin/beds/${bedId}/qr/print`)).status).toBe(403);
     expect((await reader.post('/admin/bed-sessions', { bedId })).status).toBe(403);
 
     const issuer = as(await createStaffToken(database, application, hospitalA, ['qr.generate']));
     expect((await issuer.post(`/admin/beds/${bedId}/qr`)).status).toBe(403);
+    expect((await issuer.post(`/admin/beds/${bedId}/qr/print`)).status).toBe(403);
     expect((await issuer.post(`/admin/beds/${bedId}/qr/rotate`)).status).toBe(403);
     expect((await issuer.post(`/admin/beds/${bedId}/qr/revoke`)).status).toBe(403);
 
@@ -587,6 +632,7 @@ describe('Phase 4 bed sessions and guest sessions', () => {
       await createStaffToken(database, application, hospitalA, ['hospital.manage', 'qr.generate']),
     );
     expect((await manager.post(`/admin/beds/${bedId}/qr`)).status).toBe(201);
+    expect((await manager.post(`/admin/beds/${bedId}/qr/print`)).status).toBe(200);
     expect((await manager.post(`/admin/beds/${bedId}/qr/rotate`)).status).toBe(403);
 
     const floorManager = as(

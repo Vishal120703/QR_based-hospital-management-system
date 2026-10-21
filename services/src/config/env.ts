@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  decodeQrTokenEncryptionKey,
+  developmentQrTokenEncryptionKey,
+} from '../common/qr-token-encryption.js';
 
 const connectionUrl = (protocols: readonly string[]) =>
   z
@@ -29,6 +33,13 @@ const environmentSchema = z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
     DATABASE_URL: connectionUrl(['postgresql:', 'postgres:']),
+    // 32 random bytes in Base64. It protects the recoverable copy used only
+    // when an authorized manager reprints an active bedside QR.
+    QR_TOKEN_ENCRYPTION_KEY: optional(
+      z.string().refine((value) => decodeQrTokenEncryptionKey(value) !== null, {
+        message: 'Expected a Base64-encoded 32-byte key.',
+      }),
+    ),
     // Optional: nothing needs Redis yet. When set, it must be reachable at
     // start-up and is part of the /ready check.
     REDIS_URL: optional(connectionUrl(['redis:', 'rediss:'])),
@@ -59,6 +70,13 @@ const environmentSchema = z
         message: 'PUBLIC_APP_URL (the web app address) is required in production.',
       });
     }
+    if (value.NODE_ENV === 'production' && !value.QR_TOKEN_ENCRYPTION_KEY) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['QR_TOKEN_ENCRYPTION_KEY'],
+        message: 'QR_TOKEN_ENCRYPTION_KEY is required in production.',
+      });
+    }
   });
 
 export interface AppConfig {
@@ -67,6 +85,7 @@ export interface AppConfig {
   readonly port: number;
   readonly logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   readonly databaseUrl: string;
+  readonly qrTokenEncryptionKey: Buffer;
   readonly redisUrl: string | null;
   readonly publicAppUrl: string;
   readonly corsOrigins: readonly string[];
@@ -106,6 +125,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     port: parsed.PORT,
     logLevel: parsed.LOG_LEVEL,
     databaseUrl: parsed.DATABASE_URL,
+    qrTokenEncryptionKey: parsed.QR_TOKEN_ENCRYPTION_KEY
+      ? decodeQrTokenEncryptionKey(parsed.QR_TOKEN_ENCRYPTION_KEY)!
+      : developmentQrTokenEncryptionKey,
     redisUrl: parsed.REDIS_URL ?? null,
     publicAppUrl,
     corsOrigins: [...new Set([originOf(publicAppUrl), ...extraOrigins])],

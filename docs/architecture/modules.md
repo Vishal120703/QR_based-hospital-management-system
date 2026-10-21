@@ -12,7 +12,7 @@ Every module lives in `services/src/modules/<name>/` and follows the [five layer
 | [staff](#staff) | Staff accounts, status, duty, departments, coverage, shifts, eligibility | `User`, `HospitalMembership`, `StaffDepartment`, `StaffLocationScope`, `Shift` | `/admin/staff*`, `/admin/shifts*` |
 | [locations](#locations) | Building → Floor → Ward → Room → Bed, bulk beds, bed occupancy | `Building`, `Floor`, `Ward`, `Room`, `Bed` | `/admin/buildings` … `/admin/beds`, `/admin/wards/:id/bulk-beds` |
 | [bed-sessions](#bed-sessions) | Admitting and discharging (bed sessions), the hospital's choice to admit at all, and patient guest sessions | `BedSession`, `GuestSession` | `/admin/bed-sessions*`, `/admin/bed-occupancy`, `/public/session` |
-| [qr](#qr) | Bed QR codes (issue, replace, disable, print in bulk) and scanning | `BedQrCode` | `/admin/qr-codes*`, `/admin/beds/:id/qr*`, `/public/qr/resolve` |
+| [qr](#qr) | Bed QR codes (issue, view/print, replace, disable, print in bulk) and scanning | `BedQrCode` | `/admin/qr-codes*`, `/admin/beds/:id/qr*`, `/public/qr/resolve` |
 | [catalog](#catalog) | Service categories and services; the request snapshot | `ServiceCategory`, `ServiceItem` | `/admin/service-categories*`, `/admin/services*`, `/public/services` |
 | [sla](#sla) | Response-time targets (versioned) and escalation policies | `SlaPolicy`, `SlaPolicyVersion`, `EscalationPolicy`, `EscalationLevel` | `/admin/sla-policies*`, `/admin/escalation-policies*` |
 | [requests](#requests) | The patient request lifecycle, its event history, the paged work queue, alerts, and the SLA escalation worker | `ServiceRequest`, `RequestEvent`, `RequestEscalation` | `/admin/requests*`, `/public/requests*` |
@@ -73,7 +73,7 @@ The simplest module and the best template to copy. Standard list / get / create 
 ## qr
 
 - **Public interface:** `QrCodeService`, `QrController`, routes.
-- **Rules:** the raw token is returned once and never stored; replacing or disabling a code ends the guest sessions opened with it; a scan locks the code row so it cannot race a replacement.
+- **Rules:** scans use a one-way token hash; an AES-256-GCM encrypted copy lets an authorized hospital manager reopen the same active label. Viewing/printing is audited and does not change the code or guest sessions. Replacing or disabling ends the guest sessions opened with the old code; a scan locks the row so it cannot race a replacement.
 
 ## catalog
 

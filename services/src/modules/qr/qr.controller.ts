@@ -51,6 +51,13 @@ export class QrController {
     noStore(response).status(200).json(issue);
   };
 
+  public readonly print: RequestHandler = async (request, response) => {
+    const { id } = idParamsSchema.parse(request.params);
+    emptySchema.parse(request.body ?? {});
+    const issue = await this.qrCodes.print(getStaffContext(request), id, getRequestId(response));
+    noStore(response).status(200).json(issue);
+  };
+
   public readonly revoke: RequestHandler = async (request, response) => {
     const { id } = idParamsSchema.parse(request.params);
     emptySchema.parse(request.body ?? {});

@@ -38,6 +38,7 @@ import {
 export interface ContainerSettings {
   readonly logger: Logger;
   readonly publicAppUrl: string;
+  readonly qrTokenEncryptionKey: Buffer;
   readonly guestSessionTtlMinutes: number;
 }
 
@@ -65,7 +66,14 @@ export function createContainer(database: PrismaClient, settings: ContainerSetti
       roles: new RoleController(new RoleService(database)),
       locations: new LocationController(new LocationService(database)),
       bedSessions: new BedSessionController(new BedSessionService(database, guestSessions)),
-      qrCodes: new QrController(new QrCodeService(database, guestSessions, settings.publicAppUrl)),
+      qrCodes: new QrController(
+        new QrCodeService(
+          database,
+          guestSessions,
+          settings.publicAppUrl,
+          settings.qrTokenEncryptionKey,
+        ),
+      ),
       departments: new DepartmentController(new DepartmentService(database)),
       staff: new StaffController(new StaffService(database)),
       shifts: new ShiftController(new ShiftService(database)),

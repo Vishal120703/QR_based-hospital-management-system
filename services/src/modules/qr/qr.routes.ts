@@ -16,6 +16,7 @@ export function createQrAdminRoutes(controller: QrController): Router {
     controller.generateBatch,
   );
   router.post('/beds/:id/qr', canManage, requirePermission('qr.generate'), controller.generate);
+  router.post('/beds/:id/qr/print', canManage, requirePermission('qr.generate'), controller.print);
   router.post('/beds/:id/qr/rotate', canManage, requirePermission('qr.rotate'), controller.rotate);
   router.post('/beds/:id/qr/revoke', canManage, requirePermission('qr.revoke'), controller.revoke);
   return router;

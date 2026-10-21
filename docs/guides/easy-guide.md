@@ -300,7 +300,7 @@ Do these in order. ✔ = what you should see.
 
 **Your hospital's logo.** Each hospital (each client) has its own logo. Open **Hospital → Profile & settings**, choose **Upload logo** (PNG, JPEG, WebP, or SVG), check the preview, then **Save logo**. It appears in the top bar for staff, at the top of the patient page, and on every QR label printed after that. When onboarding a new client from the command line, set `HOSPITAL_LOGO_PATH` before `npm run bootstrap:hospital`.
 
-**Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Location screens also have QR-label actions. In **QR codes → Print QR labels**, choose a floor, then optionally a unit or room. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”). Each new QR is shown only once: download the PDF straight away, keep it private, and delete it after printing. To reprint a lost active label, choose **Also reprint the existing labels**; the old label stops working.
+**Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Location screens also have QR-label actions. In **QR codes → Print QR labels**, choose a floor, then optionally a unit or room. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”) and keep copies private. For one bed, use **View / print QR** to print the same active code again without disconnecting anyone. A QR created before reprinting was added must be replaced once first; after that it can be reopened normally.
 
 **C. Make a QR code and test it like a patient**
 6. Click **QR codes**. On **Bed 02**, click **Generate QR**.
@@ -308,7 +308,7 @@ Do these in order. ✔ = what you should see.
 7. Click **Open patient view** (opens a new tab).
    ✔ "We couldn't connect" — because no patient is admitted yet. Correct!
 8. Go back, click **Done**, then open **Bed management** and click **Admit** on Bed 02.
-9. Open the **privately saved** Bed 02 patient link again, or paste it into the **Scan QR** screen at `http://localhost:5173`. If you did not save it, use **Replace QR** and open that new link. An old link stops working after replacement.
+9. Open the **privately saved** Bed 02 patient link again, or paste it into the **Scan QR** screen at `http://localhost:5173`. If you did not save it, use **View / print QR** to open the same active link again. **Replace QR** is only for invalidating the old label and issuing a new one.
    ✔ "You are connected to Bed 02" with service buttons and a red "Not for emergencies" box.
 
 **D. Send a request as the patient**

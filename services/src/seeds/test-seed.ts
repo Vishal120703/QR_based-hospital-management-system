@@ -8,6 +8,7 @@ import {
   type ScopeType,
 } from '@prisma/client';
 import { createOpaqueToken, hashOpaqueToken } from '../common/opaque-token.js';
+import { developmentQrTokenEncryptionKey, encryptQrToken } from '../common/qr-token-encryption.js';
 import { hashPassword } from '../modules/auth/index.js';
 import { type BootstrapCreatedHospital, bootstrapHospital } from '../modules/hospitals/index.js';
 import { demoHospital, seedDemoPlatformAdmin } from './demo-seed.js';
@@ -122,6 +123,7 @@ class HospitalSeeder {
     private readonly now: Date,
     private readonly platformUserId: string | null,
     private readonly passwordHashes: ReadonlyMap<string, string>,
+    private readonly qrTokenEncryptionKey: Buffer = developmentQrTokenEncryptionKey,
   ) {
     this.start = this.at(spec.createdAt);
   }
@@ -655,12 +657,13 @@ class HospitalSeeder {
       const issuedAt = new Date(
         (firstStay ?? this.at(revoked?.at ?? 0).getTime() - day) - 30 * minute,
       );
+      const qrToken = createOpaqueToken();
       const qr = await this.transaction.bedQrCode.create({
         data: {
           hospitalId: this.hospitalId,
           bedId: bed.id,
-          // Only the hash of a random secret; use Replace QR to get a printable link.
-          tokenHash: hashOpaqueToken(createOpaqueToken()),
+          tokenHash: hashOpaqueToken(qrToken),
+          tokenCiphertext: encryptQrToken(qrToken, this.qrTokenEncryptionKey),
           status: revoked ? 'REVOKED' : 'ACTIVE',
           version: rotated ? 2 : 1,
           issuedAt,
@@ -1039,6 +1042,7 @@ export interface TestSeedInput {
   readonly password: string;
   // Optional: also create platform.demo@careqr.example if it does not exist.
   readonly platformPassword?: string | undefined;
+  readonly qrTokenEncryptionKey?: Buffer | undefined;
   readonly now?: Date;
 }
 
@@ -1108,6 +1112,7 @@ export async function seedTestHospitals(
           now,
           platformUserId,
           passwordHashes,
+          input.qrTokenEncryptionKey,
         ).run();
       },
     );

@@ -1,5 +1,6 @@
 import { type PrismaClient } from '@prisma/client';
 import { createOpaqueToken, hashOpaqueToken } from '../common/opaque-token.js';
+import { developmentQrTokenEncryptionKey, encryptQrToken } from '../common/qr-token-encryption.js';
 import { hashPassword } from '../modules/auth/index.js';
 import { type BuiltInRoleKey } from '../modules/roles/index.js';
 import { bootstrapHospital } from '../modules/hospitals/index.js';
@@ -35,6 +36,7 @@ export interface DemoSeedInput {
   readonly adminPassword: string;
   readonly staffPassword: string;
   readonly publicAppUrl: string;
+  readonly qrTokenEncryptionKey?: Buffer;
 }
 
 export interface DemoSeedResult {
@@ -141,6 +143,10 @@ export async function seedDemoHospital(
           hospitalId: created.hospitalId,
           bedId: occupiedBed.id,
           tokenHash: hashOpaqueToken(qrToken),
+          tokenCiphertext: encryptQrToken(
+            qrToken,
+            input.qrTokenEncryptionKey ?? developmentQrTokenEncryptionKey,
+          ),
         },
       });
 

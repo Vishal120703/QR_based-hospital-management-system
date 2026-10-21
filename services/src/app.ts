@@ -4,6 +4,7 @@ import { type Logger, type SerializedRequest } from 'pino';
 import { type PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { NotFoundError } from './common/errors/app-error.js';
+import { developmentQrTokenEncryptionKey } from './common/qr-token-encryption.js';
 import { createContainer } from './container.js';
 import { createHealthRouter, type ReadinessProbe } from './http/health.routes.js';
 import { cors } from './middleware/cors.js';
@@ -20,6 +21,7 @@ export interface CreateAppOptions {
   readonly readinessProbes?: readonly ReadinessProbe[];
   readonly database?: PrismaClient;
   readonly publicAppUrl?: string;
+  readonly qrTokenEncryptionKey?: Buffer;
   readonly guestSessionTtlMinutes?: number;
   readonly qrResolveRateLimit?: RateLimitOptions;
   readonly platformLoginRateLimit?: RateLimitOptions;
@@ -81,6 +83,7 @@ export function createApp(options: CreateAppOptions): Express {
     const container = createContainer(options.database, {
       logger: options.logger,
       publicAppUrl: options.publicAppUrl ?? 'http://localhost:5173',
+      qrTokenEncryptionKey: options.qrTokenEncryptionKey ?? developmentQrTokenEncryptionKey,
       guestSessionTtlMinutes: options.guestSessionTtlMinutes ?? 120,
     });
     application.use(

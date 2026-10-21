@@ -132,12 +132,12 @@ sequenceDiagram
   API-->>M: 201 bedSession
   M->>API: POST /admin/beds/:id/qr (or /qr-codes/batch)
   API->>API: token = 256 random bits
-  API->>DB: INSERT BedQrCode (tokenHash only) + AuditLog qr.generate
-  API-->>M: 201 { token, url } (no-store; shown once)
+  API->>DB: INSERT BedQrCode (tokenHash + encrypted reprint copy)<br/>+ AuditLog qr.generate
+  API-->>M: 201 { token, url } (no-store)
   M->>M: print label PDF (QR = url)
 ```
 
-Replacing a QR (`/qr/rotate`) stores a new hash and ends every guest session opened with the old one. Closing the bed session ends the stay's guest sessions and sets the bed back to AVAILABLE.
+**View / print QR** decrypts the same active token for an authorized manager, records `qr.print`, and does not disconnect anyone. Replacing a QR (`/qr/rotate`) stores a new hash and encrypted copy and ends every guest session opened with the old one. Closing the bed session ends the stay's guest sessions and sets the bed back to AVAILABLE.
 
 ## 5. Patient scans the QR
 

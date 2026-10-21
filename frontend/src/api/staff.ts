@@ -201,6 +201,8 @@ export const staffApi = {
 
   generateQr: (token: string, bedId: string) =>
     call<QrIssue>('POST', `/admin/beds/${bedId}/qr`, token, {}),
+  printQr: (token: string, bedId: string) =>
+    call<QrIssue>('POST', `/admin/beds/${bedId}/qr/print`, token, {}),
   generateQrBatch: (token: string, scope: QrBatchScope, replaceExisting = false) =>
     call<QrBatch>('POST', '/admin/qr-codes/batch', token, { scope, replaceExisting }),
   rotateQr: (token: string, bedId: string) =>

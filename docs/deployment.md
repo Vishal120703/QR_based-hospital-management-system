@@ -19,7 +19,7 @@ Create a PostgreSQL database with your provider (Neon: **New project**; Render P
 
 1. Push the repository to GitHub.
 2. Render dashboard → **New → Blueprint** → choose the repository. Render reads [`render.yaml`](../render.yaml) and creates the **careqr-api** web service.
-3. When asked, enter `DATABASE_URL` (your connection string) and `PUBLIC_APP_URL` (your Vercel address, for example `https://care-qr.vercel.app`, or a placeholder such as `https://example.com` that you fix in step 4). Leave `CORS_ORIGINS` empty. Render keeps these values; later Blueprint syncs do not overwrite them.
+3. When asked, enter `DATABASE_URL` (your connection string), `QR_TOKEN_ENCRYPTION_KEY` (run `openssl rand -base64 32` once), and `PUBLIC_APP_URL` (your Vercel address, for example `https://care-qr.vercel.app`, or a placeholder such as `https://example.com` that you fix in step 4). Leave `CORS_ORIGINS` empty. Render keeps these values; later Blueprint syncs do not overwrite them. Keep the QR encryption key stable: changing it makes already-issued codes non-reprintable, although the printed codes still scan normally.
 4. Wait for the deploy. Open `https://<your-api>.onrender.com/ready`; it should show `"status":"ok"`.
 
 ### Option B: a web service you already created
@@ -39,6 +39,7 @@ Set these on the web service (**Settings** and **Environment**):
 | `NODE_VERSION` | `24` |
 | `NODE_ENV` | `production` |
 | `DATABASE_URL` | your database's connection string (Neon: from **Connect**; Render PostgreSQL: the **Internal Database URL**) |
+| `QR_TOKEN_ENCRYPTION_KEY` | a stable 32-byte Base64 secret from `openssl rand -base64 32`; protects active QR codes when managers reopen them for printing |
 | `PUBLIC_APP_URL` | your Vercel address, e.g. `https://care-qr.vercel.app` (no trailing slash) |
 | `CORS_ORIGINS` | optional: other web addresses allowed to call the API, comma-separated |
 | `TRUST_PROXY` | `3` (Cloudflare, Render's load balancer, and a local proxy sit in front of the API) |

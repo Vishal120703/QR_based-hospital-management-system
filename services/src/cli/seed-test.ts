@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { newPasswordSchema } from '../common/validation.js';
+import { loadConfig } from '../config/env.js';
 import { createPrismaClient } from '../database/prisma.js';
 import { requireLocalDatabase, SeedInputError } from './seed-guards.js';
 import { seedTestHospitals } from '../seeds/test-seed.js';
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
     throw new SeedInputError(`Missing or invalid test seed environment fields: ${fields}.`);
   }
   const input = parsed.data;
+  const config = loadConfig(process.env);
   requireLocalDatabase(input.DATABASE_URL);
 
   const database = createPrismaClient(input.DATABASE_URL);
@@ -27,6 +29,7 @@ async function main(): Promise<void> {
     const result = await seedTestHospitals(database, {
       password: input.DEMO_STAFF_PASSWORD,
       platformPassword: input.DEMO_PLATFORM_PASSWORD,
+      qrTokenEncryptionKey: config.qrTokenEncryptionKey,
     });
     for (const code of result.skipped) {
       process.stdout.write(`${code} already exists: left unchanged.\n`);

@@ -94,6 +94,7 @@ const actionLabels: Record<string, string> = {
   'bedSession.start': 'Admitted a patient (bed session started)',
   'bedSession.close': 'Discharged (bed session closed)',
   'qr.generate': 'Created a QR code',
+  'qr.print': 'Viewed a QR code for printing',
   'qr.rotate': 'Replaced a QR code',
   'qr.revoke': 'Disabled a QR code',
   'bed.bulk_create': 'Added beds in bulk',

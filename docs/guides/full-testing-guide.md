@@ -294,7 +294,7 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 |---|---|---|
 | K01 | Sign in. | Menu: **Overview**, **Bed management**, and **QR codes** only. No requests are visible. |
 | K02 | Open `http://localhost:5173/admin/requests` directly. | **Access restricted**. |
-| K03 | In **Bed management**, on **Bed A 06** (discharged, has a QR) click **Admit**. Then in **QR codes**, **Replace QR** → **Open patient view**. | The bed is now occupied. The patient page opens for Bed A 06 with no old requests (it is a new stay). Keep this tab for the patient tests. |
+| K03 | In **Bed management**, on **Bed A 06** (discharged, has a QR) click **Admit**. Then in **QR codes**, **View / print QR** → **Open patient view**. | The bed is now occupied. The patient page opens for Bed A 06 with no old requests (it is a new stay), and its QR version did not change. Keep this tab for the patient tests. |
 | K04 | **Discharge** Bed A 06 in Bed management and refresh the patient tab. | The patient sees "Your session has ended". |
 
 ### 6.5 Floor Manager: Ravi Shankar (First Floor)
@@ -344,7 +344,7 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 
 ### 6.9 Patient (QR scan, no login)
 
-Get a patient link first: as **Meera** or **Kavita**, open **QR codes** → **Bed A 01** → **Replace QR**. In the QR window click **Copy patient link** and paste it into a private note (you need it again in PT07), then click **Open patient view**. Keep the link private. Replacing a QR stops the old printed one.
+Get a patient link first: as **Meera** or **Kavita**, open **QR codes** → **Bed A 01** → **View / print QR**. In the QR window click **Copy patient link** and paste it into a private note (you need it again in PT07), then click **Open patient view**. Keep the link private. Viewing does not change the QR or disconnect anyone.
 
 | ID | Do this | ✔ Expected |
 |---|---|---|

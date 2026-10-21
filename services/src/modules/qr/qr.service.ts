@@ -6,6 +6,11 @@ import {
   NotFoundError,
 } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
+import {
+  decryptQrToken,
+  developmentQrTokenEncryptionKey,
+  encryptQrToken,
+} from '../../common/qr-token-encryption.js';
 import { recordStaffAudit } from '../audit/index.js';
 import { type StaffContext } from '../auth/index.js';
 import { hospitalIsOpen } from '../hospitals/index.js';
@@ -31,7 +36,9 @@ export interface QrIssue {
   readonly url: string;
 }
 
-export type QrCodeView = Omit<BedQrCode, 'tokenHash'>;
+export type QrCodeView = Omit<BedQrCode, 'tokenHash' | 'tokenCiphertext'> & {
+  readonly printable: boolean;
+};
 
 const maxBatchLabels = 300;
 
@@ -77,9 +84,9 @@ function byLocation(left: LocatedBed, right: LocatedBed): number {
   );
 }
 
-function toView({ tokenHash, ...view }: BedQrCode): QrCodeView {
+function toView({ tokenHash, tokenCiphertext, ...view }: BedQrCode): QrCodeView {
   void tokenHash;
-  return view;
+  return { ...view, printable: tokenCiphertext !== null };
 }
 
 // Issuing, replacing, and disabling bed QR codes, and exchanging a scanned
@@ -89,6 +96,7 @@ export class QrCodeService {
     private readonly database: PrismaClient,
     private readonly guestSessions: GuestSessionService,
     private readonly publicAppUrl: string,
+    private readonly qrTokenEncryptionKey: Buffer = developmentQrTokenEncryptionKey,
     private readonly qrCodes = new QrRepository(),
   ) {}
 
@@ -103,7 +111,7 @@ export class QrCodeService {
   public generate(context: StaffContext, bedId: string, requestId: string): Promise<QrIssue> {
     const hospitalId = context.tenant.hospitalId;
     const token = createOpaqueToken();
-    const tokenHash = hashOpaqueToken(token);
+    const storedToken = this.storedToken(token);
     return this.database.$transaction(async (transaction) => {
       const bed = await this.qrCodes.findBed(transaction, hospitalId, bedId);
       if (!bed) {
@@ -120,13 +128,13 @@ export class QrCodeService {
       let qrCode: BedQrCode;
       if (existing) {
         // Re-issue after revocation; the version guard rejects a concurrent re-issue.
-        if ((await this.qrCodes.reissue(transaction, existing, tokenHash)) !== 1) {
+        if ((await this.qrCodes.reissue(transaction, existing, storedToken)) !== 1) {
           throw new ConflictError();
         }
         qrCode = await this.qrCodes.findById(transaction, existing.id);
       } else {
         // A concurrent first issue fails on the (hospitalId, bedId) unique key.
-        qrCode = await this.qrCodes.create(transaction, { hospitalId, bedId, tokenHash });
+        qrCode = await this.qrCodes.create(transaction, { hospitalId, bedId, ...storedToken });
       }
 
       await recordStaffAudit(transaction, context, requestId, {
@@ -169,13 +177,13 @@ export class QrCodeService {
         let replaced = 0;
         for (const bed of eligible) {
           const token = createOpaqueToken();
-          const tokenHash = hashOpaqueToken(token);
+          const storedToken = this.storedToken(token);
           const existing = bed.qrCode;
           let qrCode: BedQrCode;
           if (existing?.status === 'ACTIVE') {
             // Same rules as a single rotation: the old label stops working and
             // patients connected through it must scan the new one.
-            if ((await this.qrCodes.rotate(transaction, existing, tokenHash)) !== 1) {
+            if ((await this.qrCodes.rotate(transaction, existing, storedToken)) !== 1) {
               throw new ConflictError('A bed QR changed. Refresh and retry.');
             }
             const revokedGuestSessions = await this.guestSessions.revokeForBed(
@@ -199,7 +207,7 @@ export class QrCodeService {
             });
           } else {
             if (existing) {
-              if ((await this.qrCodes.reissue(transaction, existing, tokenHash)) !== 1) {
+              if ((await this.qrCodes.reissue(transaction, existing, storedToken)) !== 1) {
                 throw new ConflictError('A bed QR changed. Refresh and retry.');
               }
               qrCode = await this.qrCodes.findById(transaction, existing.id);
@@ -207,7 +215,7 @@ export class QrCodeService {
               qrCode = await this.qrCodes.create(transaction, {
                 hospitalId,
                 bedId: bed.id,
-                tokenHash,
+                ...storedToken,
               });
             }
             await recordStaffAudit(transaction, context, requestId, {
@@ -247,7 +255,7 @@ export class QrCodeService {
     const token = createOpaqueToken();
     return this.database.$transaction(async (transaction) => {
       const existing = await this.requireActive(transaction, hospitalId, bedId);
-      if ((await this.qrCodes.rotate(transaction, existing, hashOpaqueToken(token))) !== 1) {
+      if ((await this.qrCodes.rotate(transaction, existing, this.storedToken(token))) !== 1) {
         throw new ConflictError();
       }
       // A rotated code may have leaked, so sessions opened with it end too.
@@ -267,6 +275,23 @@ export class QrCodeService {
           toVersion: qrCode.version,
           revokedGuestSessions,
         },
+      });
+      return this.toIssue(qrCode, token);
+    });
+  }
+
+  // Returns the same active label without changing its version or ending any
+  // patient sessions. Legacy rows have no encrypted token and need one replace.
+  public print(context: StaffContext, bedId: string, requestId: string): Promise<QrIssue> {
+    const hospitalId = context.tenant.hospitalId;
+    return this.database.$transaction(async (transaction) => {
+      const qrCode = await this.requireActive(transaction, hospitalId, bedId);
+      const token = this.recoverToken(qrCode);
+      await recordStaffAudit(transaction, context, requestId, {
+        action: 'qr.print',
+        targetType: 'BedQrCode',
+        targetId: qrCode.id,
+        metadata: { bedId, version: qrCode.version },
       });
       return this.toIssue(qrCode, token);
     });
@@ -337,5 +362,25 @@ export class QrCodeService {
 
   private toIssue(qrCode: BedQrCode, token: string): QrIssue {
     return { qrCode: toView(qrCode), token, url: `${this.publicAppUrl}/q/${token}` };
+  }
+
+  private storedToken(token: string) {
+    return {
+      tokenHash: hashOpaqueToken(token),
+      tokenCiphertext: encryptQrToken(token, this.qrTokenEncryptionKey),
+    };
+  }
+
+  private recoverToken(qrCode: BedQrCode): string {
+    try {
+      if (!qrCode.tokenCiphertext) throw new Error('Missing encrypted QR token.');
+      const token = decryptQrToken(qrCode.tokenCiphertext, this.qrTokenEncryptionKey);
+      if (hashOpaqueToken(token) !== qrCode.tokenHash) throw new Error('QR token hash mismatch.');
+      return token;
+    } catch {
+      throw new ConflictError(
+        'This QR code cannot be safely reprinted. Replace it once to make future reprints available.',
+      );
+    }
   }
 }

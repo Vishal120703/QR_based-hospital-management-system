@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { newPasswordSchema } from '../common/validation.js';
 import { ConflictError } from '../common/errors/app-error.js';
+import { loadConfig } from '../config/env.js';
 import { createPrismaClient } from '../database/prisma.js';
 import { demoHospital, seedDemoHospital, seedDemoPlatformAdmin } from '../seeds/demo-seed.js';
 import { requireLocalDatabase, SeedInputError } from './seed-guards.js';
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
     throw new SeedInputError(`Missing or invalid demo seed environment fields: ${fields}.`);
   }
   const input = parsed.data;
+  const config = loadConfig(process.env);
   requireLocalDatabase(input.DATABASE_URL);
   requirePublicAppUrl(input.PUBLIC_APP_URL);
 
@@ -39,6 +41,7 @@ async function main(): Promise<void> {
       adminPassword: input.DEMO_ADMIN_PASSWORD,
       staffPassword: input.DEMO_STAFF_PASSWORD,
       publicAppUrl: input.PUBLIC_APP_URL,
+      qrTokenEncryptionKey: config.qrTokenEncryptionKey,
     });
     process.stdout.write(`Created ${demoHospital.name} (${result.hospitalCode})\n`);
     process.stdout.write(`Hospital ID: ${result.hospitalId}\n`);

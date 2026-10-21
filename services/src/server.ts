@@ -39,6 +39,7 @@ async function main(): Promise<void> {
       logger,
       database: prisma,
       publicAppUrl: config.publicAppUrl,
+      qrTokenEncryptionKey: config.qrTokenEncryptionKey,
       guestSessionTtlMinutes: config.guestSessionTtlMinutes,
       corsOrigins: config.corsOrigins,
       trustProxy: config.trustProxy,

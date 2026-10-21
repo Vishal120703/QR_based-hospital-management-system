@@ -6,7 +6,8 @@ export function createOpaqueToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-// Only this hash is stored; the raw token is never persisted or logged.
+// Authentication lookups use only this hash. QR codes additionally keep an
+// encrypted reprint copy; raw tokens are never persisted or logged.
 export function hashOpaqueToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }

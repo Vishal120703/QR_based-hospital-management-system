@@ -29,6 +29,10 @@ services:
       # Your PostgreSQL connection string, entered once in the dashboard.
       - key: DATABASE_URL
         sync: false
+      # Generate once with `openssl rand -base64 32`; keep it stable so active
+      # bedside QR labels remain reprintable.
+      - key: QR_TOKEN_ENCRYPTION_KEY
+        sync: false
       # The web app address, e.g. https://care-qr.vercel.app (no trailing slash).
       - key: PUBLIC_APP_URL
         sync: false

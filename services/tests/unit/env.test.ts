@@ -8,6 +8,7 @@ const validEnvironment = {
   PORT: '4000',
   LOG_LEVEL: 'silent',
   DATABASE_URL: 'postgresql://careqr:careqr@localhost:5432/careqr',
+  QR_TOKEN_ENCRYPTION_KEY: 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=',
   REDIS_URL: 'redis://localhost:6379',
 };
 
@@ -16,6 +17,7 @@ describe('environment configuration', () => {
     const config = loadConfig(validEnvironment);
 
     expect(config.port).toBe(4000);
+    expect(config.qrTokenEncryptionKey).toHaveLength(32);
   });
 
   it('refuses startup when required environment values are missing', () => {
@@ -65,6 +67,20 @@ describe('environment configuration', () => {
     // Behind Render's proxy by default, so rate limits see each visitor.
     expect(config.trustProxy).toBe(1);
     expect(loadConfig({ ...validEnvironment }).trustProxy).toBe(0);
+  });
+
+  it('requires a valid QR reprint encryption key in production', () => {
+    expect(() =>
+      loadConfig({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        PUBLIC_APP_URL: 'https://care-qr.example',
+        QR_TOKEN_ENCRYPTION_KEY: '',
+      }),
+    ).toThrow('QR_TOKEN_ENCRYPTION_KEY');
+    expect(() => loadConfig({ ...validEnvironment, QR_TOKEN_ENCRYPTION_KEY: 'too-short' })).toThrow(
+      'Base64-encoded 32-byte key',
+    );
   });
 
   it('names a malformed address instead of crashing', () => {

@@ -19,6 +19,8 @@ export async function checkWorkerSchema(database: PrismaClient): Promise<void> {
   try {
     await Promise.all([
       database.user.findFirst({ select: { id: true, mustChangePassword: true } }),
+      database.hospital.findFirst({ select: { id: true, bedOccupancyEnabled: true } }),
+      database.bedQrCode.findFirst({ select: { id: true, tokenCiphertext: true } }),
       database.requestEscalation.findFirst(),
       database.staffNotification.findFirst(),
       database.notificationDispatch.findFirst(),

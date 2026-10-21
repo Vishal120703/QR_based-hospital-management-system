@@ -92,6 +92,7 @@ erDiagram
     string code UK
     string timezone
     HospitalStatus status
+    boolean bedOccupancyEnabled
     datetime createdAt
     datetime updatedAt
   }
@@ -287,6 +288,7 @@ erDiagram
     uuid hospitalId FK
     uuid bedId FK
     string tokenHash UK
+    string tokenCiphertext "optional"
     QrCodeStatus status
     int version
     datetime issuedAt
@@ -302,7 +304,7 @@ erDiagram
     BedSessionStatus status
     datetime startedAt
     datetime endedAt "optional"
-    uuid startedByMembershipId
+    uuid startedByMembershipId "optional"
     uuid closedByMembershipId "optional"
   }
   GuestSession {
@@ -582,7 +584,7 @@ erDiagram
     BedSessionStatus status
     datetime startedAt
     datetime endedAt "optional"
-    uuid startedByMembershipId
+    uuid startedByMembershipId "optional"
     uuid closedByMembershipId "optional"
   }
   ServiceItem {
@@ -649,6 +651,7 @@ erDiagram
     string code UK
     string timezone
     HospitalStatus status
+    boolean bedOccupancyEnabled
     datetime createdAt
     datetime updatedAt
   }

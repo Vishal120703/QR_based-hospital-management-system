@@ -24,8 +24,8 @@ function scopeWhere(scope: QrBatchScope): Prisma.BedWhereInput {
   }
 }
 
-// One QR code per bed. Only the hash of its token is stored; every change is
-// guarded by the code's status and version, so concurrent changes cannot both win.
+// One QR code per bed. The hash resolves scans and the encrypted copy supports
+// authorized reprinting; every change is guarded by status and version.
 export class QrRepository {
   public list(
     db: Db,
@@ -54,7 +54,10 @@ export class QrRepository {
     return db.bedQrCode.findUniqueOrThrow({ where: { id } });
   }
 
-  public create(db: Db, data: { hospitalId: string; bedId: string; tokenHash: string }) {
+  public create(
+    db: Db,
+    data: { hospitalId: string; bedId: string; tokenHash: string; tokenCiphertext: string },
+  ) {
     return db.bedQrCode.create({ data });
   }
 
@@ -62,13 +65,13 @@ export class QrRepository {
   public async reissue(
     db: Db,
     existing: { id: string; version: number },
-    tokenHash: string,
+    token: { tokenHash: string; tokenCiphertext: string },
   ): Promise<number> {
     return (
       await db.bedQrCode.updateMany({
         where: { id: existing.id, status: 'REVOKED', version: existing.version },
         data: {
-          tokenHash,
+          ...token,
           status: 'ACTIVE',
           version: existing.version + 1,
           issuedAt: new Date(),
@@ -82,13 +85,13 @@ export class QrRepository {
   public async rotate(
     db: Db,
     existing: { id: string; version: number },
-    tokenHash: string,
+    token: { tokenHash: string; tokenCiphertext: string },
   ): Promise<number> {
     return (
       await db.bedQrCode.updateMany({
         where: { id: existing.id, status: 'ACTIVE', version: existing.version },
         data: {
-          tokenHash,
+          ...token,
           version: existing.version + 1,
           issuedAt: new Date(),
           rotatedAt: new Date(),

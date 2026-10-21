@@ -72,7 +72,7 @@ describe('Permission-aware workspace', () => {
       '/admin/bed-management',
     );
     expect(guide.textContent).toContain('Print the bedside QR');
-    expect(guide.textContent).toContain('Replace QR');
+    expect(guide.textContent).toContain('View / print QR');
     expect(guide.textContent).toContain('Patient sends a request');
   });
 
@@ -136,7 +136,14 @@ describe('Permission-aware workspace', () => {
     const batch = vi.spyOn(staffApi, 'generateQrBatch').mockResolvedValue({
       issues: [
         {
-          qrCode: { id: 'qr-1', bedId: 'bed-1', status: 'ACTIVE', version: 1, issuedAt: '' },
+          qrCode: {
+            id: 'qr-1',
+            bedId: 'bed-1',
+            status: 'ACTIVE',
+            version: 1,
+            issuedAt: '',
+            printable: true,
+          },
           token: 'secret-1',
           url: 'https://example.test/q/secret-1',
           bedId: 'bed-1',
@@ -145,7 +152,14 @@ describe('Permission-aware workspace', () => {
           location: 'Floor 1 · Ward 1',
         },
         {
-          qrCode: { id: 'qr-2', bedId: 'bed-2', status: 'ACTIVE', version: 1, issuedAt: '' },
+          qrCode: {
+            id: 'qr-2',
+            bedId: 'bed-2',
+            status: 'ACTIVE',
+            version: 1,
+            issuedAt: '',
+            printable: true,
+          },
           token: 'secret-2',
           url: 'https://example.test/q/secret-2',
           bedId: 'bed-2',
@@ -182,6 +196,64 @@ describe('Permission-aware workspace', () => {
     expect(pdf.mock.calls[0]?.[1].fileName).toMatch(
       /^careqr-labels-floor-1-ward-1-\d{4}-\d{2}-\d{2}\.pdf$/,
     );
+  });
+
+  it('opens an existing active QR for viewing and printing without replacing it', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(staffApi, 'list').mockImplementation((_token, resource) =>
+      Promise.resolve(
+        resource === 'beds'
+          ? [
+              {
+                id: 'bed-1',
+                wardId: 'ward-1',
+                roomId: null,
+                code: '01',
+                displayName: 'Bed 01',
+                status: 'AVAILABLE',
+                active: true,
+              },
+            ]
+          : resource === 'qr-codes'
+            ? [
+                {
+                  id: 'qr-1',
+                  bedId: 'bed-1',
+                  status: 'ACTIVE',
+                  version: 2,
+                  issuedAt: '',
+                  printable: true,
+                },
+              ]
+            : resource === 'wards'
+              ? [{ id: 'ward-1', floorId: 'floor-1', code: 'W1', name: 'Ward 1', active: true }]
+              : resource === 'floors'
+                ? [{ id: 'floor-1', buildingId: null, code: 'F1', name: 'Floor 1', active: true }]
+                : [],
+      ),
+    );
+    const print = vi.spyOn(staffApi, 'printQr').mockResolvedValue({
+      qrCode: {
+        id: 'qr-1',
+        bedId: 'bed-1',
+        status: 'ACTIVE',
+        version: 2,
+        issuedAt: '',
+        printable: true,
+      },
+      token: 'same-active-secret',
+      url: 'https://example.test/q/same-active-secret',
+    });
+
+    renderPage(<BedsPage />, ['bed.read', 'location.read', 'hospital.manage', 'qr.generate']);
+    await user.click(await screen.findByRole('button', { name: 'View / print QR' }));
+
+    expect(print).toHaveBeenCalledWith('test-token', 'bed-1');
+    const dialog = await screen.findByRole('dialog', { name: 'QR label for Bed 01' });
+    expect(within(dialog).getByText(/print the same label again/)).toBeTruthy();
+    expect(
+      within(dialog).getByRole('link', { name: 'Open patient view' }).getAttribute('href'),
+    ).toBe('https://example.test/q/same-active-secret');
   });
 
   it('opens the overview first and hides inaccessible links', async () => {

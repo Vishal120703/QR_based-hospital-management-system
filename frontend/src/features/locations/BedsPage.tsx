@@ -85,9 +85,7 @@ export function BedsPage() {
     }
   }
 
-  // Generating or rotating returns the raw token once; show it for printing.
-  const issueQr = (row: BedRow, request: () => Promise<QrIssue>) => async () => {
-    const issue = await request();
+  function showIssue(row: BedRow, issue: QrIssue) {
     setIssued({
       items: [
         labelFromIssue(issue, {
@@ -99,7 +97,28 @@ export function BedsPage() {
       area: row.bed.displayName,
       url: issue.url,
     });
+  }
+
+  // Generating or rotating returns the raw token and stores an encrypted copy
+  // so this same label can be opened again later.
+  const issueQr = (row: BedRow, request: () => Promise<QrIssue>) => async () => {
+    const issue = await request();
+    showIssue(row, issue);
   };
+
+  async function printExisting(row: BedRow) {
+    if (pending.current) return;
+    pending.current = true;
+    setBusyBedId(row.bed.id);
+    try {
+      showIssue(row, await staffApi.printQr(token, row.bed.id));
+    } catch (cause) {
+      reportError(cause);
+    } finally {
+      setBusyBedId(null);
+      pending.current = false;
+    }
+  }
 
   async function generateBatch(scope: QrBatchScope, area: string, replaceExisting: boolean) {
     if (pending.current) return null;
@@ -173,8 +192,8 @@ export function BedsPage() {
             <span>{occupancy ? 2 : 1}</span>
             Print the bedside QR
             <small>
-              Hospital managers can generate and print a QR for each bed. If its printable link was
-              lost, Replace QR issues a new one and invalidates the old printout.
+              Hospital managers can generate a QR for each bed, then use View / print QR whenever
+              another copy of the same active label is needed.
             </small>
           </li>
           <li>
@@ -278,7 +297,21 @@ export function BedsPage() {
                       {qrCode?.status === 'ACTIVE' ? (
                         <>
                           <div className="muted">Active · version {qrCode.version}</div>
+                          {!qrCode.printable && (
+                            <div className="muted small">
+                              Replace this legacy QR once to enable reprinting.
+                            </div>
+                          )}
                           <div className="actions">
+                            {canManageQr && can('qr.generate') && qrCode.printable && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void printExisting(row)}
+                              >
+                                View / print QR
+                              </button>
+                            )}
                             {canManageQr && can('qr.rotate') && (
                               <button
                                 type="button"
@@ -577,7 +610,7 @@ function PrintLabels({
             checked={replace}
             onChange={(event) => setReplace(event.target.checked)}
           />
-          Also reprint the {withQr} existing labels (the old ones stop working)
+          Replace the {withQr} existing QR codes with new labels (old labels stop working)
         </label>
       )}
       <div className="actions">

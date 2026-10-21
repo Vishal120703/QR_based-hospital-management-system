@@ -1,7 +1,7 @@
 import { QRCodeSVG } from 'qrcode.react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { assetUrl, type QrBatch, type QrIssue } from '../../api';
-import { Modal, useConfirm } from '../../components';
+import { Modal } from '../../components';
 import {
   downloadLabelsPdf,
   labelSizes,
@@ -37,7 +37,7 @@ export function labelFromIssue(
 
 const previewLimit = 6;
 
-// Shows newly issued QR codes once, and turns them into a printable PDF.
+// Shows active QR codes and turns them into a printable PDF.
 export function QrLabelsDialog({
   items,
   area,
@@ -50,10 +50,8 @@ export function QrLabelsDialog({
   children?: ReactNode;
 }) {
   const { me } = useAdmin();
-  const confirm = useConfirm();
   const [size, setSize] = useState<LabelSize>(items.length === 1 ? 'large' : 'medium');
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [logo, setLogo] = useState<Awaited<ReturnType<typeof logoForPdf>>>(null);
   const logoUrl = me.tenant.logoUrl ? assetUrl(me.tenant.logoUrl) : null;
@@ -76,7 +74,6 @@ export function QrLabelsDialog({
     setMessage(null);
     try {
       await downloadLabelsPdf(items, { ...options, fileName: labelsFileName(area) });
-      setSaved(true);
       setMessage('PDF downloaded. Print it at 100% scale (“Actual size”) on A4 paper.');
     } catch {
       setMessage('Could not create the PDF. Try again, or use a different browser.');
@@ -90,7 +87,6 @@ export function QrLabelsDialog({
     setMessage(null);
     try {
       if (await openLabelsPdf(items, options)) {
-        setSaved(true);
         setMessage('The PDF opened in a new tab. Print it from there at 100% scale.');
       } else {
         setMessage('Your browser blocked the new tab. Use Download PDF instead.');
@@ -102,33 +98,17 @@ export function QrLabelsDialog({
     }
   }
 
-  async function close() {
-    if (
-      !saved &&
-      !(await confirm({
-        title: 'Close without saving these labels?',
-        message:
-          'You have not downloaded or printed them. Their QR codes cannot be shown again; you would have to replace them.',
-        confirmLabel: 'Close anyway',
-        danger: true,
-      }))
-    ) {
-      return;
-    }
-    onClose();
-  }
-
   return (
     <Modal
       title={
         items.length === 1 ? `QR label for ${items[0]!.bedName}` : `${items.length} QR labels ready`
       }
-      onClose={() => void close()}
+      onClose={onClose}
       wide
     >
       <p className="notice notice-warning">
-        These QR codes are shown only once. Download or print them now. Keep the PDF private and
-        delete it after printing: anyone with it could print a working label.
+        Keep QR copies private: anyone with one can open the patient page. While the code stays
+        active, you can return here and print the same label again.
       </p>
       <p className="muted small">
         {area} · sorted by location, so you can stick them on bed by bed.
@@ -179,7 +159,7 @@ export function QrLabelsDialog({
           Open PDF to print
         </button>
         {children}
-        <button type="button" className="secondary" onClick={() => void close()}>
+        <button type="button" className="secondary" onClick={onClose}>
           Done
         </button>
       </div>

@@ -311,7 +311,7 @@ export function QrLabelsButton({
         disabled={tools.busy || need === 0}
         title={
           need === 0
-            ? 'Every active bed here already has a QR label. To reprint, use QR codes → Print QR labels → reprint existing.'
+            ? 'Every active bed here already has a QR label. For one bed, use QR codes → View / print QR. Bulk replacement issues new codes and stops the old labels.'
             : undefined
         }
         aria-label={compact ? `Print QR labels for ${area}` : undefined}

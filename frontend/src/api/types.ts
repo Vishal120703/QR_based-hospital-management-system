@@ -122,6 +122,7 @@ export interface QrCode {
   status: 'ACTIVE' | 'REVOKED';
   version: number;
   issuedAt: string;
+  printable: boolean;
 }
 export interface QrIssue {
   qrCode: QrCode;

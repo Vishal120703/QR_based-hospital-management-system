@@ -114,6 +114,7 @@ Inventory sources: every `services/src/modules/*/*.routes.ts`, `services/src/htt
 | GET | `/admin/qr-codes` | STAFF | bed.read (any scope) | AREA + TENANT | QrController.list | QrCodeService |
 | POST | `/admin/qr-codes/batch` | STAFF | hospital.manage + qr.generate (+ qr.rotate when replacing) (HW) | HW + TENANT | QrController.generateBatch | QrCodeService |
 | POST | `/admin/beds/:id/qr` | STAFF | hospital.manage + qr.generate (HW) | HW + TENANT | QrController.generate | QrCodeService |
+| POST | `/admin/beds/:id/qr/print` | STAFF | hospital.manage + qr.generate (HW) | HW + TENANT | QrController.print | QrCodeService |
 | POST | `/admin/beds/:id/qr/rotate` | STAFF | hospital.manage + qr.rotate (HW) | HW + TENANT | QrController.rotate | QrCodeService |
 | POST | `/admin/beds/:id/qr/revoke` | STAFF | hospital.manage + qr.revoke (HW) | HW + TENANT | QrController.revoke | QrCodeService |
 | POST | `/public/qr/resolve` | PUBLIC | — | valid active hashed QR + stay; rate limited | QrController.resolve | QrCodeService |

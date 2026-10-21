@@ -15,8 +15,8 @@ The patient never creates an account. Everything a public endpoint knows about t
 
 ## QR codes
 
-- One `BedQrCode` per bed. Tokens are 256-bit random values (43 base64url characters). Only their SHA-256 hash is stored.
-- The raw token is returned once, by `generate` or `rotate`, with `Cache-Control: no-store`. To get a printable code again, rotate it.
+- One `BedQrCode` per bed. Tokens are 256-bit random values (43 base64url characters). Their SHA-256 hash resolves scans. An AES-256-GCM encrypted copy supports authorized reprinting and is never returned by list APIs.
+- `generate`, `rotate`, and `print` return the raw token with `Cache-Control: no-store`. **View / print QR** returns the same active code without changing its version or ending patient sessions. Codes created before the encrypted-copy migration must be replaced once before they can be reprinted.
 - **Rotate** replaces the hash and increments `version`; the old printed code stops working immediately. **Revoke** disables the code until it is generated again.
 - Rotating or revoking ends every guest session of that bed, in the same transaction, because the old code may have leaked.
 - Every resolution failure (unknown, revoked, rotated, inactive bed, no active BedSession, bed under maintenance, suspended hospital) returns the same `404 QR_UNAVAILABLE`, so a scan reveals nothing about why it failed.
@@ -51,6 +51,7 @@ The patient never creates an account. Everything a public endpoint knows about t
 |---|---|---|
 | `GET` | `/admin/qr-codes?bedId=` | `bed.read` |
 | `POST` | `/admin/beds/:id/qr` | `qr.generate` |
+| `POST` | `/admin/beds/:id/qr/print` | `hospital.manage` + `qr.generate` |
 | `POST` | `/admin/beds/:id/qr/rotate` | `qr.rotate` |
 | `POST` | `/admin/beds/:id/qr/revoke` | `qr.revoke` |
 | `GET` | `/admin/bed-sessions?bedId=&status=` (newest 100) | `bed.read` |
@@ -62,7 +63,7 @@ The patient never creates an account. Everything a public endpoint knows about t
 
 `bedSession.manage` is new in Phase 4. Its migration grants it to every existing role that holds `bed.manage`.
 
-All QR and BedSession changes are audited (`qr.generate`, `qr.rotate`, `qr.revoke`, `bedSession.start`, `bedSession.close`) without tokens or token hashes.
+All QR and BedSession changes and reprint access are audited (`qr.generate`, `qr.print`, `qr.rotate`, `qr.revoke`, `bedSession.start`, `bedSession.close`) without tokens, hashes, or encrypted values.
 
 ## Known limitations
 

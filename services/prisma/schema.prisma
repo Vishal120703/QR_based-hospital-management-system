@@ -549,23 +549,25 @@ model Bed {
   @@index([hospitalId, roomId])
 }
 
-// One QR code per bed. Only the SHA-256 hash of the token is stored. Rotation
-// replaces the hash and increments version, so the previous token stops
-// resolving immediately; history is kept in AuditLog.
+// One QR code per bed. The SHA-256 hash is used to resolve scans; an encrypted
+// copy lets an authorized manager reprint the same active label. Rotation
+// replaces both and increments version, so the previous token stops resolving
+// immediately; history is kept in AuditLog.
 model BedQrCode {
-  id         String       @id @default(uuid()) @db.Uuid
-  hospitalId String       @db.Uuid
-  bedId      String       @db.Uuid
-  tokenHash  String       @unique
-  status     QrCodeStatus @default(ACTIVE)
-  version    Int          @default(1)
-  issuedAt   DateTime     @default(now())
-  rotatedAt  DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  hospital   Hospital     @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
-  bed        Bed          @relation(fields: [hospitalId, bedId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
+  id              String       @id @default(uuid()) @db.Uuid
+  hospitalId      String       @db.Uuid
+  bedId           String       @db.Uuid
+  tokenHash       String       @unique
+  tokenCiphertext String?
+  status          QrCodeStatus @default(ACTIVE)
+  version         Int          @default(1)
+  issuedAt        DateTime     @default(now())
+  rotatedAt       DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  hospital        Hospital     @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  bed             Bed          @relation(fields: [hospitalId, bedId], references: [hospitalId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([hospitalId, id])
   @@unique([hospitalId, bedId])
