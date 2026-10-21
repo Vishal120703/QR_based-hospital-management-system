@@ -15,6 +15,7 @@ import {
   createNotificationRealtime,
   startNotificationWorker,
 } from './modules/notifications/index.js';
+import { RetentionService, startRetentionWorker } from './modules/retention/index.js';
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -41,6 +42,7 @@ async function main(): Promise<void> {
       publicAppUrl: config.publicAppUrl,
       qrTokenEncryptionKey: config.qrTokenEncryptionKey,
       guestSessionTtlMinutes: config.guestSessionTtlMinutes,
+      notificationRetentionDays: config.notificationRetentionDays,
       corsOrigins: config.corsOrigins,
       trustProxy: config.trustProxy,
       readinessProbes: [
@@ -61,6 +63,16 @@ async function main(): Promise<void> {
       notifications.deliver(notification),
     );
     cleanups.unshift({ name: 'notification worker', run: () => notificationWorker.stop() });
+    const retentionWorker = startRetentionWorker(
+      new RetentionService(prisma, {
+        sessionDays: config.sessionRetentionDays,
+        notificationDays: config.notificationRetentionDays,
+        auditDays: config.auditRetentionDays,
+      }),
+      logger,
+      config.retentionIntervalHours * 60 * 60 * 1_000,
+    );
+    cleanups.unshift({ name: 'retention worker', run: () => retentionWorker.stop() });
 
     // The SLA worker escalates overdue requests from this process.
     if (config.escalationIntervalSeconds > 0) {
@@ -94,6 +106,7 @@ async function main(): Promise<void> {
         corsOrigins: config.corsOrigins,
         redis: Boolean(redis),
         escalationIntervalSeconds: config.escalationIntervalSeconds,
+        retentionIntervalHours: config.retentionIntervalHours,
       },
       'CARE QR API listening',
     );

@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { credentials, platformApi, type PlatformClient, type PlatformHospital } from '../src/api';
 import { PlatformClientPage } from '../src/features/platform/PlatformClientPage';
 import { PlatformClientsPage } from '../src/features/platform/PlatformClientsPage';
@@ -57,6 +57,17 @@ function show(page: ReactNode, path = '/') {
   return context;
 }
 const showHospitals = () => show(<PlatformHospitalsPage />);
+
+beforeEach(() => {
+  vi.spyOn(platformApi, 'clientsPage').mockImplementation(async (token) => {
+    const items = await platformApi.clients(token);
+    return { items, page: 1, pageSize: 50, total: items.length };
+  });
+  vi.spyOn(platformApi, 'hospitalsPage').mockImplementation(async (token) => {
+    const items = await platformApi.hospitals(token);
+    return { items, page: 1, pageSize: 50, total: items.length };
+  });
+});
 
 describe('Platform administration', () => {
   it('lets the operator change their own password', async () => {

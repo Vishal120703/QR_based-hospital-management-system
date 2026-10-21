@@ -6,6 +6,7 @@ import {
   lineSchema,
   loginPasswordSchema,
   newPasswordSchema,
+  pageQueryShape,
   timezoneSchema,
 } from '../../common/validation.js';
 
@@ -37,6 +38,10 @@ export const platformLoginSchema = z
 
 export const platformChangePasswordSchema = z
   .object({ currentPassword: loginPasswordSchema, newPassword: newPasswordSchema })
+  .strict();
+
+export const platformListQuerySchema = z
+  .object({ search: z.string().trim().max(120).optional(), ...pageQueryShape })
   .strict();
 
 const newClientSchema = z
@@ -97,3 +102,4 @@ export type CreateHospitalInput = z.infer<typeof createHospitalSchema>;
 export type UpdateHospitalInput = z.infer<typeof updateHospitalSchema>;
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
 export type AddManagerInput = z.infer<typeof addManagerSchema>;
+export type PlatformListQuery = z.infer<typeof platformListQuerySchema>;

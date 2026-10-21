@@ -45,3 +45,6 @@ services:
       # visitor's own address.
       - key: TRUST_PROXY
         value: "3"
+      # Choose this with the hospital's records/governance owner (30-3650 days).
+      - key: AUDIT_RETENTION_DAYS
+        sync: false

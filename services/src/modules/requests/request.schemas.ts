@@ -53,7 +53,9 @@ export const requestQueueQuerySchema = z
       ])
       .optional(),
     overdue: booleanQuerySchema,
-    page: z.coerce.number().int().min(1).max(100_000).default(1),
+    // Keeps offset work bounded; the UI uses 25 rows, so this caps a query at
+    // 9,900 skipped records even when a caller asks for the maximum page size.
+    page: z.coerce.number().int().min(1).max(100).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
   })
   .strict()

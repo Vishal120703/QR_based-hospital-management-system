@@ -9,6 +9,7 @@ import {
   rangeInOrderMessage,
 } from '../../src/common/validation.js';
 import { describeValidationError } from '../../src/common/validation-errors.js';
+import { requestQueueQuerySchema } from '../../src/modules/requests/request.schemas.js';
 
 function messageFor(schema: z.ZodTypeAny, input: unknown) {
   const result = schema.safeParse(input);
@@ -88,5 +89,10 @@ describe('shared field rules', () => {
     expect(newPasswordSchema.safeParse('x'.repeat(11)).success).toBe(false);
     expect(newPasswordSchema.safeParse('x'.repeat(12)).success).toBe(true);
     expect(newPasswordSchema.safeParse('x'.repeat(201)).success).toBe(false);
+  });
+
+  it('bounds offset pagination work', () => {
+    expect(requestQueueQuerySchema.safeParse({ page: '100', pageSize: '100' }).success).toBe(true);
+    expect(requestQueueQuerySchema.safeParse({ page: '101', pageSize: '100' }).success).toBe(false);
   });
 });

@@ -57,6 +57,7 @@ describe('environment configuration', () => {
       ...validEnvironment,
       NODE_ENV: 'production',
       DATABASE_URL: productionDatabaseUrl,
+      AUDIT_RETENTION_DAYS: '2555',
       REDIS_URL: undefined,
     };
     expect(() => loadConfig(production)).toThrow('PUBLIC_APP_URL');
@@ -81,6 +82,7 @@ describe('environment configuration', () => {
         ...validEnvironment,
         NODE_ENV: 'production',
         DATABASE_URL: productionDatabaseUrl,
+        AUDIT_RETENTION_DAYS: '2555',
         PUBLIC_APP_URL: 'https://care-qr.example',
         QR_TOKEN_ENCRYPTION_KEY: '',
       }),
@@ -95,6 +97,7 @@ describe('environment configuration', () => {
       ...validEnvironment,
       NODE_ENV: 'production',
       QR_TOKEN_ENCRYPTION_KEY: validEnvironment.QR_TOKEN_ENCRYPTION_KEY,
+      AUDIT_RETENTION_DAYS: '2555',
     };
     expect(() =>
       loadConfig({
@@ -118,6 +121,17 @@ describe('environment configuration', () => {
         DATABASE_URL: 'postgresql://careqr:careqr@database.example:5432/careqr',
       }),
     ).toThrow('sslmode=require');
+  });
+
+  it('requires an explicit audit retention decision in production', () => {
+    expect(() =>
+      loadConfig({
+        ...validEnvironment,
+        NODE_ENV: 'production',
+        DATABASE_URL: productionDatabaseUrl,
+        PUBLIC_APP_URL: 'https://care-qr.example',
+      }),
+    ).toThrow('AUDIT_RETENTION_DAYS');
   });
 
   it('names a malformed address instead of crashing', () => {

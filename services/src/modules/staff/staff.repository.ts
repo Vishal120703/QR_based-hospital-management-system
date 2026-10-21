@@ -31,9 +31,49 @@ export class StaffRepository {
       status?: MembershipStatus | undefined;
       dutyStatus?: DutyStatus | undefined;
       departmentId?: string | undefined;
+      search?: string | undefined;
+      page: number;
+      pageSize: number;
     },
   ) {
+    const where = {
+      hospitalId,
+      ...(filter.status !== undefined ? { status: filter.status } : {}),
+      ...(filter.dutyStatus !== undefined ? { dutyStatus: filter.dutyStatus } : {}),
+      ...(filter.departmentId !== undefined
+        ? { departments: { some: { departmentId: filter.departmentId } } }
+        : {}),
+      ...(filter.search
+        ? {
+            user: {
+              OR: [
+                { displayName: { contains: filter.search, mode: 'insensitive' as const } },
+                { email: { contains: filter.search, mode: 'insensitive' as const } },
+              ],
+            },
+          }
+        : {}),
+    } satisfies Prisma.HospitalMembershipWhereInput;
     return db.hospitalMembership.findMany({
+      where,
+      select: staffSelect,
+      orderBy: [{ user: { displayName: 'asc' } }, { id: 'asc' }],
+      skip: (filter.page - 1) * filter.pageSize,
+      take: filter.pageSize,
+    });
+  }
+
+  public count(
+    db: Db,
+    hospitalId: string,
+    filter: {
+      status?: MembershipStatus | undefined;
+      dutyStatus?: DutyStatus | undefined;
+      departmentId?: string | undefined;
+      search?: string | undefined;
+    },
+  ) {
+    return db.hospitalMembership.count({
       where: {
         hospitalId,
         ...(filter.status !== undefined ? { status: filter.status } : {}),
@@ -41,9 +81,17 @@ export class StaffRepository {
         ...(filter.departmentId !== undefined
           ? { departments: { some: { departmentId: filter.departmentId } } }
           : {}),
+        ...(filter.search
+          ? {
+              user: {
+                OR: [
+                  { displayName: { contains: filter.search, mode: 'insensitive' } },
+                  { email: { contains: filter.search, mode: 'insensitive' } },
+                ],
+              },
+            }
+          : {}),
       },
-      select: staffSelect,
-      orderBy: { user: { displayName: 'asc' } },
     });
   }
 

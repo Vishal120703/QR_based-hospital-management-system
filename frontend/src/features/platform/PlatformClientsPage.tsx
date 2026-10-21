@@ -11,23 +11,21 @@ import { usePlatform } from './PlatformLayout';
 export function PlatformClientsPage() {
   const { token, reportError } = usePlatform();
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
-  const {
-    data: clients,
-    error,
-    reload,
-  } = useLoad(
-    useCallback(() => platformApi.clients(token), [token]),
+  const { data, error, reload } = useLoad(
+    useCallback(
+      () => platformApi.clientsPage(token, { page, search: query }),
+      [token, page, query],
+    ),
     { failure: 'Could not load clients.', onUnauthorized: reportError },
   );
 
-  const visible = (clients ?? []).filter((client) =>
-    `${client.name} ${client.code} ${client.contactName ?? ''}`
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
+  const clients = data?.items ?? [];
+  const visible = clients;
   const total = (pick: (client: PlatformClient) => number) =>
-    (clients ?? []).reduce((sum, client) => sum + pick(client), 0);
+    clients.reduce((sum, client) => sum + pick(client), 0);
+  const pages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.pageSize ?? 50)));
 
   return (
     <>
@@ -39,13 +37,13 @@ export function PlatformClientsPage() {
           Add client
         </button>
       </PageHeading>
-      {!clients ? (
+      {!data ? (
         <LoadState loading={!error} error={error} label="Loading clients…" onRetry={reload} />
       ) : (
         <>
           <dl className="stat-row">
             {[
-              ['Clients', clients.length],
+              ['Clients', data?.total ?? clients.length],
               ['Active', clients.filter((client) => client.status === 'ACTIVE').length],
               ['Suspended', clients.filter((client) => client.status !== 'ACTIVE').length],
               ['Hospitals', total((client) => client.hospitalCount)],
@@ -64,7 +62,10 @@ export function PlatformClientsPage() {
               type="search"
               placeholder="Search by name, code, or contact…"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
             />
           </label>
           {visible.length === 0 ? (
@@ -100,10 +101,37 @@ export function PlatformClientsPage() {
               ))}
             </div>
           )}
+          {data.total > data.pageSize && (
+            <nav className="pager" aria-label="Client pages">
+              <span className="muted small">
+                Showing {(data.page - 1) * data.pageSize + 1}–
+                {Math.min(data.page * data.pageSize, data.total)} of {data.total}
+              </span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={data.page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </button>
+              <span className="small">
+                Page {data.page} of {pages}
+              </span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={data.page >= pages}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </>
       )}
       {adding && (
-        <NewHospitalDialog clients={clients ?? []} newClientOnly onClose={() => setAdding(false)} />
+        <NewHospitalDialog clients={clients} newClientOnly onClose={() => setAdding(false)} />
       )}
     </>
   );

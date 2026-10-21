@@ -185,6 +185,25 @@ describe('Phase 5 departments', () => {
 });
 
 describe('Phase 5 staff', () => {
+  it('bounds and paginates the staff directory', async () => {
+    const member = await createStaff(hospitalA, 'Paged');
+    const response = await as(hospitalA.adminToken).get(
+      `/admin/staff?page=1&pageSize=1&search=${encodeURIComponent(member.email)}`,
+    );
+    expect(response.status).toBe(200);
+    const page = z
+      .object({
+        staff: z.array(staffSchema),
+        page: z.number(),
+        pageSize: z.number(),
+        total: z.number(),
+      })
+      .parse(response.body);
+    expect(page).toMatchObject({ page: 1, pageSize: 1, total: 1 });
+    expect(page.staff[0]?.id).toBe(member.id);
+    expect((await as(hospitalA.adminToken).get('/admin/staff?page=1001')).status).toBe(400);
+  });
+
   it('creates staff who can work once they hold a role', async () => {
     const admin = as(hospitalA.adminToken);
     const member = await createStaff(hospitalA, 'Asha');

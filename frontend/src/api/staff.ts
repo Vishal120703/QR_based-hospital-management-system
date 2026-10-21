@@ -54,6 +54,11 @@ type ListKind = keyof typeof listKeys;
 
 export type LocationKind = 'buildings' | 'floors' | 'wards' | 'rooms' | 'beds';
 type StaffResponse = { staff: StaffMember };
+export type PagedArray<T> = T[] & {
+  page?: number;
+  pageSize?: number;
+  total?: number;
+};
 
 export const staffApi = {
   login: (input: { hospitalCode: string; email: string; password: string }) =>
@@ -82,8 +87,14 @@ export const staffApi = {
     }),
 
   async list<T>(token: string, kind: ListKind, query = '') {
-    const body = await call<Record<string, T[]>>('GET', `/admin/${kind}${query}`, token);
-    return body[listKeys[kind]] ?? [];
+    const body = await call<
+      Record<string, T[]> & { page?: number; pageSize?: number; total?: number }
+    >('GET', `/admin/${kind}${query}`, token);
+    const items = (body[listKeys[kind]] ?? []) as PagedArray<T>;
+    if (body.page !== undefined) items.page = body.page;
+    if (body.pageSize !== undefined) items.pageSize = body.pageSize;
+    if (body.total !== undefined) items.total = body.total;
+    return items;
   },
   create: (token: string, kind: LocationKind | 'departments', input: object) =>
     call<unknown>('POST', `/admin/${kind}`, token, input),

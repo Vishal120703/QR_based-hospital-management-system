@@ -1,11 +1,19 @@
 import { z } from 'zod';
-import { emailSchema, lineSchema, newPasswordSchema, uuidSchema } from '../../common/validation.js';
+import {
+  emailSchema,
+  lineSchema,
+  newPasswordSchema,
+  pageQueryShape,
+  uuidSchema,
+} from '../../common/validation.js';
 
 export const staffListQuerySchema = z
   .object({
     status: z.enum(['ACTIVE', 'SUSPENDED', 'INACTIVE']).optional(),
     dutyStatus: z.enum(['ON_DUTY', 'OFF_DUTY']).optional(),
     departmentId: uuidSchema.optional(),
+    search: z.string().trim().max(120).optional(),
+    ...pageQueryShape,
   })
   .strict();
 

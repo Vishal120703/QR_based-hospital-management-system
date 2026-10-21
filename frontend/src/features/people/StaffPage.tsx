@@ -2,10 +2,12 @@ import { useCallback, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   ApiError,
+  query,
   staffApi,
   type Department,
   type Floor,
   type Role,
+  type PagedArray,
   type StaffMember,
   type Ward,
 } from '../../api';
@@ -19,9 +21,11 @@ async function loadDirectory(
   token: string,
   canReadRoles: boolean,
   canReadLocations: boolean,
+  page: number,
+  search: string,
 ): Promise<Directory> {
   const [staff, departments, roles, floors, wards] = await Promise.all([
-    staffApi.list<StaffMember>(token, 'staff'),
+    staffApi.list<StaffMember>(token, 'staff', query({ page, pageSize: 50, search })),
     staffApi.list<Department>(token, 'departments'),
     canReadRoles ? staffApi.list<Role>(token, 'roles') : Promise.resolve([]),
     canReadLocations ? staffApi.list<Floor>(token, 'floors') : Promise.resolve([]),
@@ -37,6 +41,7 @@ export function StaffPage() {
   // Other screens link here with ?search=Name to show one person.
   const [params] = useSearchParams();
   const [search, setSearch] = useState(() => params.get('search') ?? '');
+  const [page, setPage] = useState(1);
   const pending = useRef(false);
   const canManage = can('staff.manage');
   const canReadRoles = can('role.read');
@@ -50,8 +55,8 @@ export function StaffPage() {
     reload,
   } = useLoad(
     useCallback(
-      () => loadDirectory(token, canReadRoles, canReadLocations),
-      [token, canReadRoles, canReadLocations],
+      () => loadDirectory(token, canReadRoles, canReadLocations, page, search),
+      [token, canReadRoles, canReadLocations, page, search],
     ),
     { failure: 'Unable to load staff.', onUnauthorized: reportError },
   );
@@ -85,10 +90,15 @@ export function StaffPage() {
   }
 
   const managed = directory.staff.find((member) => member.id === managing);
-  const query = search.trim().toLowerCase();
+  const normalizedSearch = search.trim().toLowerCase();
   const staff = directory.staff.filter((member) =>
-    `${member.displayName} ${member.email}`.toLowerCase().includes(query),
+    `${member.displayName} ${member.email}`.toLowerCase().includes(normalizedSearch),
   );
+  const staffPage = directory.staff as PagedArray<StaffMember>;
+  const total = staffPage.total ?? staff.length;
+  const pageSize = staffPage.pageSize ?? Math.max(staff.length, 1);
+  const currentPage = staffPage.page ?? page;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <>
@@ -103,7 +113,10 @@ export function StaffPage() {
           type="search"
           placeholder="Search name or email"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
         />
       </label>
 
@@ -222,6 +235,34 @@ export function StaffPage() {
           </tbody>
         </table>
       </div>
+
+      {total > pageSize && (
+        <nav className="pager" aria-label="Staff pages">
+          <span className="muted small">
+            Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, total)} of{' '}
+            {total}
+          </span>
+          <button
+            type="button"
+            className="secondary"
+            disabled={currentPage <= 1}
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+          >
+            Previous
+          </button>
+          <span className="small">
+            Page {currentPage} of {pages}
+          </span>
+          <button
+            type="button"
+            className="secondary"
+            disabled={currentPage >= pages}
+            onClick={() => setPage((value) => value + 1)}
+          >
+            Next
+          </button>
+        </nav>
+      )}
 
       {canManage && (
         <section className="card add-staff">

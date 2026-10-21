@@ -21,7 +21,8 @@ export class StaffController {
 
   public readonly list: RequestHandler = async (request, response) => {
     const filter = staffListQuerySchema.parse(request.query);
-    response.status(200).json({ staff: await this.staff.list(getStaffContext(request), filter) });
+    const { items, ...page } = await this.staff.list(getStaffContext(request), filter);
+    response.status(200).json({ staff: items, ...page });
   };
 
   public readonly eligible: RequestHandler = async (request, response) => {

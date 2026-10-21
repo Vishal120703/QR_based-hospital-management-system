@@ -79,6 +79,13 @@ const environmentSchema = z
     // before their connections are closed. Keep it under the host's own
     // limit (Render waits 30 seconds).
     SHUTDOWN_TIMEOUT_SECONDS: optional(z.coerce.number().int().min(1).max(120)),
+    // Operational records are removed by the in-process retention worker.
+    SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(180),
+    // Audit retention is a governance decision, so production must choose it
+    // explicitly instead of silently inheriting a legally arbitrary default.
+    AUDIT_RETENTION_DAYS: optional(z.coerce.number().int().min(30).max(3650)),
+    RETENTION_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   })
   .superRefine((value, context) => {
     if (value.NODE_ENV === 'production' && !value.PUBLIC_APP_URL) {
@@ -127,6 +134,13 @@ const environmentSchema = z
         }
       }
     }
+    if (value.NODE_ENV === 'production' && !value.AUDIT_RETENTION_DAYS) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUDIT_RETENTION_DAYS'],
+        message: 'AUDIT_RETENTION_DAYS must be chosen explicitly in production.',
+      });
+    }
   });
 
 export interface AppConfig {
@@ -143,6 +157,10 @@ export interface AppConfig {
   readonly guestSessionTtlMinutes: number;
   readonly escalationIntervalSeconds: number;
   readonly shutdownTimeoutSeconds: number;
+  readonly sessionRetentionDays: number;
+  readonly notificationRetentionDays: number;
+  readonly auditRetentionDays: number | null;
+  readonly retentionIntervalHours: number;
 }
 
 // "https://app.example.com/" → "https://app.example.com" (what browsers send).
@@ -186,5 +204,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     // A blank value means the default, never "off".
     escalationIntervalSeconds: parsed.ESCALATION_INTERVAL_SECONDS ?? 60,
     shutdownTimeoutSeconds: parsed.SHUTDOWN_TIMEOUT_SECONDS ?? 10,
+    sessionRetentionDays: parsed.SESSION_RETENTION_DAYS,
+    notificationRetentionDays: parsed.NOTIFICATION_RETENTION_DAYS,
+    auditRetentionDays: parsed.AUDIT_RETENTION_DAYS ?? null,
+    retentionIntervalHours: parsed.RETENTION_INTERVAL_HOURS,
   };
 }

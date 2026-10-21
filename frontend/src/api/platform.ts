@@ -52,6 +52,21 @@ export interface NewHospitalInput {
   clientId?: string;
   client?: NewClientInput;
 }
+export interface PlatformPage<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+const pageQuery = (input: { page?: number; pageSize?: number; search?: string } = {}) => {
+  const value = new URLSearchParams();
+  if (input.page) value.set('page', String(input.page));
+  if (input.pageSize) value.set('pageSize', String(input.pageSize));
+  if (input.search?.trim()) value.set('search', input.search.trim());
+  const encoded = value.toString();
+  return encoded ? `?${encoded}` : '';
+};
 
 export const platformApi = {
   login: (input: { email: string; password: string }) =>
@@ -65,8 +80,24 @@ export const platformApi = {
   logout: (token: string) => call<null>('POST', '/auth/platform/logout', token),
   changePassword: (token: string, input: { currentPassword: string; newPassword: string }) =>
     call<null>('POST', '/auth/platform/password', token, input),
-  clients: async (token: string) =>
-    (await call<{ clients: PlatformClient[] }>('GET', '/platform/clients', token)).clients,
+  clientsPage: async (
+    token: string,
+    input: { page?: number; pageSize?: number; search?: string } = {},
+  ): Promise<PlatformPage<PlatformClient>> => {
+    const result = await call<{
+      clients: PlatformClient[];
+      page: number;
+      pageSize: number;
+      total: number;
+    }>('GET', `/platform/clients${pageQuery(input)}`, token);
+    return {
+      items: result.clients,
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+    };
+  },
+  clients: async (token: string) => (await platformApi.clientsPage(token, { pageSize: 100 })).items,
   client: async (token: string, id: string) =>
     (await call<{ client: PlatformClient }>('GET', `/platform/clients/${id}`, token)).client,
   updateClient: async (
@@ -82,8 +113,25 @@ export const platformApi = {
   ) =>
     (await call<{ client: PlatformClient }>('PATCH', `/platform/clients/${id}`, token, input))
       .client,
+  hospitalsPage: async (
+    token: string,
+    input: { page?: number; pageSize?: number; search?: string } = {},
+  ): Promise<PlatformPage<PlatformHospital>> => {
+    const result = await call<{
+      hospitals: PlatformHospital[];
+      page: number;
+      pageSize: number;
+      total: number;
+    }>('GET', `/platform/hospitals${pageQuery(input)}`, token);
+    return {
+      items: result.hospitals,
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+    };
+  },
   hospitals: async (token: string) =>
-    (await call<{ hospitals: PlatformHospital[] }>('GET', '/platform/hospitals', token)).hospitals,
+    (await platformApi.hospitalsPage(token, { pageSize: 100 })).items,
   hospital: async (token: string, id: string) =>
     (await call<{ hospital: PlatformHospital }>('GET', `/platform/hospitals/${id}`, token))
       .hospital,

@@ -52,7 +52,16 @@ export class StaffService {
   ) {}
 
   public async list(context: StaffContext, filter: StaffFilter) {
-    return (await this.staff.list(this.database, context.tenant.hospitalId, filter)).map(toView);
+    const [rows, total] = await Promise.all([
+      this.staff.list(this.database, context.tenant.hospitalId, filter),
+      this.staff.count(this.database, context.tenant.hospitalId, filter),
+    ]);
+    return {
+      items: rows.map(toView),
+      page: filter.page,
+      pageSize: filter.pageSize,
+      total,
+    };
   }
 
   public async get(context: StaffContext, id: string) {

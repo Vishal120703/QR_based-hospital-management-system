@@ -40,6 +40,7 @@ export interface ContainerSettings {
   readonly publicAppUrl: string;
   readonly qrTokenEncryptionKey: Buffer;
   readonly guestSessionTtlMinutes: number;
+  readonly notificationRetentionDays: number;
 }
 
 export type Container = ReturnType<typeof createContainer>;
@@ -85,7 +86,14 @@ export function createContainer(database: PrismaClient, settings: ContainerSetti
       requests: new RequestController(requests),
       reports: new ReportController(new ReportService(database)),
       audit: new AuditController(new AuditService(database)),
-      notifications: new NotificationController(new NotificationService(database, settings.logger)),
+      notifications: new NotificationController(
+        new NotificationService(
+          database,
+          settings.logger,
+          undefined,
+          settings.notificationRetentionDays,
+        ),
+      ),
       guestSessions: new GuestSessionController(guestSessions),
       patientRequests: new PatientRequestController(requests),
     },

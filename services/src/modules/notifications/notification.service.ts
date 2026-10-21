@@ -47,6 +47,7 @@ export class NotificationService {
     private readonly database: PrismaClient,
     private readonly logger: Logger,
     private readonly repository = new NotificationRepository(),
+    private readonly sourceRetentionDays = 180,
   ) {}
 
   // Only trusted membership/role records are used. Existing permission scope
@@ -218,7 +219,8 @@ export class NotificationService {
   }
 
   public async run(limit = 100): Promise<void> {
-    for (const source of await this.repository.pendingSources(this.database, limit)) {
+    const notBefore = new Date(Date.now() - this.sourceRetentionDays * 86_400_000);
+    for (const source of await this.repository.pendingSources(this.database, limit, notBefore)) {
       try {
         await this.process(source);
       } catch {

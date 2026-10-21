@@ -12,6 +12,7 @@ import {
   type CreateHospitalInput,
   type UpdateClientInput,
   type UpdateHospitalInput,
+  type PlatformListQuery,
 } from './platform.schemas.js';
 
 type Transaction = Prisma.TransactionClient;
@@ -58,8 +59,11 @@ export class PlatformService {
   }
 
   // Hospitals with their client and simple size counts, never clinical data.
-  private async hospitalSummaries(where: Prisma.HospitalWhereInput = {}) {
-    const hospitals = await this.platform.listHospitals(this.database, where);
+  private async hospitalSummaries(
+    where: Prisma.HospitalWhereInput = {},
+    page = { skip: 0, take: 100 },
+  ) {
+    const hospitals = await this.platform.listHospitals(this.database, where, page);
     const [beds, staff, openRequests] = await this.platform.countByHospital(
       this.database,
       hospitals.map((hospital) => hospital.id),
@@ -75,28 +79,61 @@ export class PlatformService {
     }));
   }
 
-  public async listHospitals() {
-    return this.hospitalSummaries();
+  public async listHospitals(query: PlatformListQuery) {
+    const where: Prisma.HospitalWhereInput = query.search
+      ? {
+          OR: [
+            { name: { contains: query.search, mode: 'insensitive' } },
+            { code: { contains: query.search, mode: 'insensitive' } },
+            { client: { name: { contains: query.search, mode: 'insensitive' } } },
+          ],
+        }
+      : {};
+    const [items, total] = await Promise.all([
+      this.hospitalSummaries(where, {
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.platform.countHospitals(this.database, where),
+    ]);
+    return { items, page: query.page, pageSize: query.pageSize, total };
   }
 
   // Clients with how many hospitals, beds, staff, and open requests they have.
-  public async listClients() {
-    const [clients, hospitals] = await Promise.all([
-      this.platform.listClients(this.database),
-      this.hospitalSummaries(),
+  public async listClients(query: PlatformListQuery) {
+    const where: Prisma.ClientWhereInput = query.search
+      ? {
+          OR: [
+            { name: { contains: query.search, mode: 'insensitive' } },
+            { code: { contains: query.search, mode: 'insensitive' } },
+            { contactName: { contains: query.search, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+    const [clients, total] = await Promise.all([
+      this.platform.listClients(this.database, where, {
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.platform.countClients(this.database, where),
     ]);
-    return clients.map((client) =>
+    const hospitals = await this.hospitalSummaries(
+      { clientId: { in: clients.map((client) => client.id) } },
+      { skip: 0, take: 1_000 },
+    );
+    const items = clients.map((client) =>
       withTotals(
         client,
         hospitals.filter((hospital) => hospital.client.id === client.id),
       ),
     );
+    return { items, page: query.page, pageSize: query.pageSize, total };
   }
 
   public async getClient(id: string) {
     const client = await this.platform.findClient(this.database, id);
     if (!client) throw new NotFoundError();
-    const hospitals = await this.hospitalSummaries({ clientId: id });
+    const hospitals = await this.hospitalSummaries({ clientId: id }, { skip: 0, take: 1_000 });
     return { ...withTotals(client, hospitals), hospitals };
   }
 

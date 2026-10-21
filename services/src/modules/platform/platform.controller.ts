@@ -8,6 +8,7 @@ import {
   createHospitalSchema,
   platformChangePasswordSchema,
   platformLoginSchema,
+  platformListQuerySchema,
   updateClientSchema,
   updateHospitalSchema,
 } from './platform.schemas.js';
@@ -48,8 +49,10 @@ export class PlatformController {
   public constructor(private readonly platform: PlatformService) {}
 
   public readonly listClients: RequestHandler = async (request, response) => {
-    emptySchema.parse(request.query);
-    response.status(200).json({ clients: await this.platform.listClients() });
+    const { items, ...page } = await this.platform.listClients(
+      platformListQuerySchema.parse(request.query),
+    );
+    response.status(200).json({ clients: items, ...page });
   };
 
   public readonly getClient: RequestHandler = async (request, response) => {
@@ -70,8 +73,10 @@ export class PlatformController {
   };
 
   public readonly listHospitals: RequestHandler = async (request, response) => {
-    emptySchema.parse(request.query);
-    response.status(200).json({ hospitals: await this.platform.listHospitals() });
+    const { items, ...page } = await this.platform.listHospitals(
+      platformListQuerySchema.parse(request.query),
+    );
+    response.status(200).json({ hospitals: items, ...page });
   };
 
   public readonly createHospital: RequestHandler = async (request, response) => {

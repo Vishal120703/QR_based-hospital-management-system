@@ -18,12 +18,21 @@ const hospitalSummary = {
 // What the super admin sees: clients, hospitals, and simple counts. Nothing
 // clinical (no patients, requests, or staff records) is ever read here.
 export class PlatformRepository {
-  public listHospitals(db: Db, where: Prisma.HospitalWhereInput) {
+  public listHospitals(
+    db: Db,
+    where: Prisma.HospitalWhereInput,
+    page: { skip: number; take: number },
+  ) {
     return db.hospital.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       select: hospitalSummary,
+      ...page,
     });
+  }
+
+  public countHospitals(db: Db, where: Prisma.HospitalWhereInput) {
+    return db.hospital.count({ where });
   }
 
   // Active beds, active staff, and open requests per hospital.
@@ -83,8 +92,12 @@ export class PlatformRepository {
     return db.role.findUnique({ where: { hospitalId_systemKey: { hospitalId, systemKey } } });
   }
 
-  public listClients(db: Db) {
-    return db.client.findMany({ orderBy: { createdAt: 'desc' } });
+  public listClients(db: Db, where: Prisma.ClientWhereInput, page: { skip: number; take: number }) {
+    return db.client.findMany({ where, orderBy: { createdAt: 'desc' }, ...page });
+  }
+
+  public countClients(db: Db, where: Prisma.ClientWhereInput) {
+    return db.client.count({ where });
   }
 
   public findClient(db: Db, id: string) {

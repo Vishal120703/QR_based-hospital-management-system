@@ -4,6 +4,10 @@ import { isCalendarDay } from './time-zone.js';
 export const uuidSchema = z.string().uuid();
 export const idParamsSchema = z.object({ id: uuidSchema }).strict();
 export const emptySchema = z.object({}).strict();
+export const pageQueryShape = {
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+};
 
 // Codes are case-insensitive identifiers printed on signage, stored uppercase.
 export const codeSchema = z

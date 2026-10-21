@@ -74,6 +74,23 @@ afterAll(async () => {
 });
 
 describe('SaaS platform administration', () => {
+  it('bounds and paginates platform lists', async () => {
+    const clients = await as(operator).get('/platform/clients?page=1&pageSize=1');
+    expect(clients.status).toBe(200);
+    const page = z
+      .object({
+        clients: z.array(z.unknown()).max(1),
+        page: z.number(),
+        pageSize: z.number(),
+        total: z.number(),
+      })
+      .parse(clients.body);
+    expect(page).toMatchObject({ page: 1, pageSize: 1 });
+    expect(page.total).toBeGreaterThan(0);
+    expect(page.clients).toHaveLength(1);
+    expect((await as(operator).get('/platform/hospitals?page=1001')).status).toBe(400);
+  });
+
   it('lets an operator change their password and ends their other sessions', async () => {
     const account = await createPlatformToken(database, application);
     const secondLogin = await request(application)

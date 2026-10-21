@@ -107,16 +107,16 @@ export class NotificationRepository {
   }
   // Anti-join receipts instead of a timestamp watermark: no event is skipped
   // when a transaction commits late or the process dies after request commit.
-  public pendingSources(db: Db, limit: number) {
+  public pendingSources(db: Db, limit: number, notBefore: Date) {
     return db.$queryRaw<NotificationSource[]>(Prisma.sql`
       SELECT "sourceKey", "id", "kind" FROM (
         SELECT 'event:' || e."id" AS "sourceKey", e."id", 'event' AS "kind", e."occurredAt" AS "at"
-        FROM "RequestEvent" e WHERE NOT EXISTS (
+        FROM "RequestEvent" e WHERE e."occurredAt" >= ${notBefore} AND NOT EXISTS (
           SELECT 1 FROM "NotificationDispatch" d WHERE d."sourceKey" = 'event:' || e."id"
             AND (d."outcome" <> 'RETRY' OR d."nextAttemptAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')))
         UNION ALL
         SELECT 'escalation:' || e."id", e."id", 'escalation', e."createdAt"
-        FROM "RequestEscalation" e WHERE NOT EXISTS (
+        FROM "RequestEscalation" e WHERE e."createdAt" >= ${notBefore} AND NOT EXISTS (
           SELECT 1 FROM "NotificationDispatch" d WHERE d."sourceKey" = 'escalation:' || e."id"
             AND (d."outcome" <> 'RETRY' OR d."nextAttemptAt" > (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')))
       ) pending ORDER BY "at", "sourceKey" LIMIT ${limit}

@@ -42,6 +42,7 @@ Set these on the web service (**Settings** and **Environment**):
 | `QR_TOKEN_ENCRYPTION_KEY` | a stable 32-byte Base64 secret from `openssl rand -base64 32`; protects active QR codes when managers reopen them for printing |
 | `PUBLIC_APP_URL` | your Vercel address, e.g. `https://care-qr.vercel.app` (no trailing slash) |
 | `CORS_ORIGINS` | optional: other web addresses allowed to call the API, comma-separated |
+| `AUDIT_RETENTION_DAYS` | required: the audit-log retention chosen with the hospital's records/governance owner (30–3650 days) |
 | `TRUST_PROXY` | `3` (Cloudflare, Render's load balancer, and a local proxy sit in front of the API) |
 | `ESCALATION_INTERVAL_SECONDS` | optional, default `60`: how often the SLA worker escalates overdue requests; `0` turns it off in that instance |
 | `SHUTDOWN_TIMEOUT_SECONDS` | optional, default `10`: on a redeploy or stop, how long requests in progress may take to finish (keep under Render's 30 seconds) |

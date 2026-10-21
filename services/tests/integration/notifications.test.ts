@@ -303,7 +303,7 @@ describe('Persistent role-aware notifications', () => {
       await db.notificationDispatch.findUnique({ where: { sourceKey: source.sourceKey } }),
     ).toMatchObject({ outcome: 'RETRY', attempts: 1 });
     expect(
-      (await new NotificationRepository().pendingSources(db, 10000)).some(
+      (await new NotificationRepository().pendingSources(db, 10000, new Date(0))).some(
         (row) => row.sourceKey === source.sourceKey,
       ),
     ).toBe(false);
@@ -314,7 +314,7 @@ describe('Persistent role-aware notifications', () => {
       data: { nextAttemptAt: new Date(0) },
     });
     expect(
-      (await new NotificationRepository().pendingSources(db, 10000)).some(
+      (await new NotificationRepository().pendingSources(db, 10000, new Date(0))).some(
         (row) => row.sourceKey === source.sourceKey,
       ),
     ).toBe(true);

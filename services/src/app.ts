@@ -23,6 +23,7 @@ export interface CreateAppOptions {
   readonly publicAppUrl?: string;
   readonly qrTokenEncryptionKey?: Buffer;
   readonly guestSessionTtlMinutes?: number;
+  readonly notificationRetentionDays?: number;
   readonly qrResolveRateLimit?: RateLimitOptions;
   readonly platformLoginRateLimit?: RateLimitOptions;
   readonly platformAccountLoginRateLimit?: RateLimitOptions;
@@ -87,6 +88,7 @@ export function createApp(options: CreateAppOptions): Express {
       publicAppUrl: options.publicAppUrl ?? 'http://localhost:5173',
       qrTokenEncryptionKey: options.qrTokenEncryptionKey ?? developmentQrTokenEncryptionKey,
       guestSessionTtlMinutes: options.guestSessionTtlMinutes ?? 120,
+      notificationRetentionDays: options.notificationRetentionDays ?? 180,
     });
     application.use(
       createRoutes(container, {

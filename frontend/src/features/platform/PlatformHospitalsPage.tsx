@@ -10,29 +10,29 @@ import { usePlatform } from './PlatformLayout';
 export function PlatformHospitalsPage() {
   const { token, reportError } = usePlatform();
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
   const [adding, setAdding] = useState(false);
   const { data, error, reload } = useLoad(
     useCallback(
       () =>
-        Promise.all([platformApi.hospitals(token), platformApi.clients(token)]).then(
-          ([hospitals, clients]) => ({ hospitals, clients }),
-        ),
-      [token],
+        Promise.all([
+          platformApi.hospitalsPage(token, { page, search: query }),
+          platformApi.clients(token),
+        ]).then(([hospitals, clients]) => ({ hospitals, clients })),
+      [token, page, query],
     ),
     { failure: 'Could not load hospitals.', onUnauthorized: reportError },
   );
-  const hospitals = data?.hospitals ?? null;
+  const hospitalPage = data?.hospitals ?? null;
+  const hospitals = hospitalPage?.items ?? null;
   const clients = data?.clients ?? [];
 
-  const visible = (hospitals ?? []).filter((hospital) =>
-    `${hospital.name} ${hospital.code} ${hospital.client.name}`
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  );
+  const visible = hospitals ?? [];
   const open = (hospital: PlatformHospital) =>
     hospital.status === 'ACTIVE' && hospital.client.status === 'ACTIVE';
   const total = (pick: (hospital: PlatformHospital) => number) =>
     (hospitals ?? []).reduce((sum, hospital) => sum + pick(hospital), 0);
+  const pages = Math.max(1, Math.ceil((hospitalPage?.total ?? 0) / (hospitalPage?.pageSize ?? 50)));
 
   return (
     <>
@@ -50,7 +50,7 @@ export function PlatformHospitalsPage() {
         <>
           <dl className="stat-row">
             {[
-              ['Hospitals', hospitals.length],
+              ['Hospitals', hospitalPage?.total ?? hospitals.length],
               ['Open', hospitals.filter(open).length],
               ['Closed', hospitals.filter((hospital) => !open(hospital)).length],
               ['Beds', total((hospital) => hospital.activeBeds ?? 0)],
@@ -68,7 +68,10 @@ export function PlatformHospitalsPage() {
               type="search"
               placeholder="Search by hospital, code, or client…"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
             />
           </label>
           {visible.length === 0 ? (
@@ -105,6 +108,34 @@ export function PlatformHospitalsPage() {
                 </Link>
               ))}
             </div>
+          )}
+          {hospitalPage && hospitalPage.total > hospitalPage.pageSize && (
+            <nav className="pager" aria-label="Hospital pages">
+              <span className="muted small">
+                Showing {(hospitalPage.page - 1) * hospitalPage.pageSize + 1}–
+                {Math.min(hospitalPage.page * hospitalPage.pageSize, hospitalPage.total)} of{' '}
+                {hospitalPage.total}
+              </span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={hospitalPage.page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </button>
+              <span className="small">
+                Page {hospitalPage.page} of {pages}
+              </span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={hospitalPage.page >= pages}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </button>
+            </nav>
           )}
         </>
       )}
