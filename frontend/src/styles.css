@@ -4500,3 +4500,225 @@ button.danger-solid:hover:not(:disabled) {
 .occupancy-off .button {
   margin-top: 0.25rem;
 }
+
+/* Who can respond? */
+
+.eligibility-rules,
+.eligibility-picker,
+.eligibility-results {
+  margin-bottom: 1rem;
+}
+.eligibility-rules h2 {
+  font-size: 0.95rem;
+  margin: 0 0 0.75rem;
+}
+.eligibility-rules ol {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eligibility-rules li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  background: var(--primary-soft);
+}
+.eligibility-rules li svg {
+  flex: none;
+  color: var(--primary);
+  margin-top: 0.1rem;
+}
+.eligibility-rules li span {
+  display: grid;
+  gap: 0.1rem;
+}
+.eligibility-rules small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.eligibility-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.25rem;
+}
+.eligibility-field {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+.eligibility-field label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.eligibility-field select {
+  width: 100%;
+}
+.eligibility-field small {
+  font-size: 0.8rem;
+}
+.step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.eligibility-prompt {
+  margin: 1rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--border);
+}
+
+.eligibility-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+.eligibility-answer > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.eligibility-summary {
+  display: flex;
+  flex: 1 1 320px;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+}
+.eligibility-summary svg {
+  flex: none;
+}
+.eligibility-summary strong {
+  font-size: 1.1rem;
+}
+.eligibility-summary p {
+  margin: 0.15rem 0 0;
+}
+.eligibility-summary.is-ok {
+  background: #e3f5ec;
+  color: #11683f;
+}
+.eligibility-summary.is-none {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+.eligibility-list-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  margin: 1.5rem 0 0.5rem;
+}
+.eligibility-list-title .badge {
+  margin: 0;
+}
+.eligibility-footnote {
+  margin: 0.85rem 0 0;
+}
+
+.person-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.person-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+}
+.person-row + .person-row {
+  border-top: 1px solid var(--border);
+}
+.person-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: #eef1f4;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.person-avatar.is-ok {
+  background: #e3f5ec;
+  color: #11683f;
+}
+.person-info {
+  display: grid;
+  flex: 1;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.person-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+/* Reasons can wrap onto two lines on a phone; a pill would bulge. */
+.person-reasons .badge {
+  margin: 0;
+  border-radius: 6px;
+}
+.person-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+.person-actions .button.compact {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .eligibility-rules ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .eligibility-fields {
+    grid-template-columns: 1fr;
+  }
+  .person-row {
+    flex-wrap: wrap;
+  }
+  .person-actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 3rem;
+  }
+}
+/* Two columns even on a phone, so the rules do not push the choices off screen. */
+@media (max-width: 420px) {
+  .eligibility-rules ol {
+    gap: 0.5rem;
+  }
+  .eligibility-rules li {
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.6rem 0.65rem;
+  }
+}

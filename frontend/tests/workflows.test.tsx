@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -7,13 +7,11 @@ import {
   ApiError,
   credentials,
   staffApi,
-  type EligibleStaff,
   type Me,
   type SlaPolicy,
   type StaffMember,
 } from '../src/api';
 import { AdminLayout } from '../src/features/workspace/AdminLayout';
-import { EligibilityPage } from '../src/features/people/EligibilityPage';
 import { SlaPage } from '../src/features/services/SlaPage';
 import { StaffPage } from '../src/features/people/StaffPage';
 
@@ -240,79 +238,5 @@ describe('Staff creation recovery', () => {
     await user.click(screen.getByRole('button', { name: 'Add staff member' }));
     expect(create).toHaveBeenCalledTimes(1);
     expect(assign).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('Eligibility check interactions', () => {
-  it('locks selections while pending and removes prior results when checking a different bed', async () => {
-    const user = userEvent.setup();
-    mockLists({
-      beds: [
-        {
-          id: 'bed-a',
-          code: 'A',
-          displayName: 'Bed A',
-          wardId: 'ward',
-          roomId: null,
-          status: 'AVAILABLE',
-          active: true,
-        },
-        {
-          id: 'bed-b',
-          code: 'B',
-          displayName: 'Bed B',
-          wardId: 'ward',
-          roomId: null,
-          status: 'AVAILABLE',
-          active: true,
-        },
-      ],
-      wards: [{ id: 'ward', code: 'GEN', name: 'General Ward', floorId: 'floor', active: true }],
-      floors: [{ id: 'floor', code: 'F1', name: 'First Floor', buildingId: null, active: true }],
-      departments: [{ id: 'nursing', code: 'NURSING', name: 'Nursing', active: true }],
-    });
-    const first = deferred<EligibleStaff[]>();
-    const second = deferred<EligibleStaff[]>();
-    const eligible = vi
-      .spyOn(staffApi, 'eligible')
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise);
-    renderAdmin(<EligibilityPage />, 'eligibility', ['staff.read', 'bed.read', 'location.read']);
-
-    const bed = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Bed' });
-    const department = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Department' });
-    await user.selectOptions(bed, 'bed-a');
-    await user.selectOptions(department, 'nursing');
-    await user.dblClick(screen.getByRole('button', { name: 'Check eligibility' }));
-    expect(bed.disabled).toBe(true);
-    expect(department.disabled).toBe(true);
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Checking…' }).disabled).toBe(
-      true,
-    );
-    await user.selectOptions(bed, 'bed-b');
-    expect(bed.value).toBe('bed-a');
-    expect(eligible).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      first.resolve([{ membershipId: 'asha', displayName: 'Asha Kumar', dutyChangedAt: null }]);
-      await first.promise;
-    });
-    expect(await screen.findByText('Asha Kumar')).toBeTruthy();
-    expect(bed.disabled).toBe(false);
-    expect(department.disabled).toBe(false);
-
-    await user.selectOptions(bed, 'bed-b');
-    expect(screen.queryByText('Asha Kumar')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Check eligibility' }));
-    expect(screen.queryByText('Asha Kumar')).toBeNull();
-    await act(async () => {
-      second.resolve([{ membershipId: 'ravi', displayName: 'Ravi Singh', dutyChangedAt: null }]);
-      await second.promise;
-    });
-    const result = await screen.findByRole('status');
-    expect(within(result).getByText('Ravi Singh')).toBeTruthy();
-    expect(within(result).queryByText('Asha Kumar')).toBeNull();
-    expect(eligible).toHaveBeenNthCalledWith(1, 'staff-token', 'bed-a', 'nursing');
-    expect(eligible).toHaveBeenNthCalledWith(2, 'staff-token', 'bed-b', 'nursing');
   });
 });

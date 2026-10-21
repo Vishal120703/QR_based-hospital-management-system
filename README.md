@@ -67,7 +67,7 @@ If you change `services/.env` (especially `DATABASE_URL`), stop and restart the 
 5. **Discharge** (Bed management), **Replace QR**, or **Disable QR** (QR codes) ends existing patient access. The patient page rechecks access every 30 seconds and when the tab becomes visible.
 6. **Staff:** add a staff member, then **Manage** them: add a department (for example Housekeeping) and coverage (a ward). Turn them **On duty**.
 7. **Services** and **SLA:** hide a service and it disappears from the patient view. Change an SLA's minutes and it saves a new version; the history keeps every earlier version.
-8. **Who can respond?:** pick a bed and a department. Only staff who are active, on duty, in that department, and covering that bed's ward, floor, or the whole hospital are listed.
+8. **Who can respond?:** pick a bed and a department and the answer appears straight away: who can respond (active, on duty, in that department, and covering that bed's ward, floor, or the whole hospital) and, for everyone else in the department, why not, with **Put on duty** and **Open in Staff** shortcuts.
 
 To open a printed QR with a real phone on the same Wi-Fi, start the frontend with `npm run dev -- --host`, and set `PUBLIC_APP_URL=http://<your-computer-ip>:5173` in `services/.env` **before issuing the QR**. A phone's built-in Camera app can open the printed link directly. In-app live camera scanning requires a secure browser context (HTTPS, or `localhost` on the device running the browser); on an HTTP LAN address, use **Take / choose a QR photo**, the phone's Camera app, or a pasted link instead. QR photos are decoded locally and not uploaded.
 

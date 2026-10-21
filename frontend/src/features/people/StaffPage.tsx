@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   ApiError,
   staffApi,
@@ -33,7 +34,9 @@ export function StaffPage() {
   const { token, me, reportError, reportSuccess, can } = useAdmin();
   const [managing, setManaging] = useState<string | null>(null);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  // Other screens link here with ?search=Name to show one person.
+  const [params] = useSearchParams();
+  const [search, setSearch] = useState(() => params.get('search') ?? '');
   const pending = useRef(false);
   const canManage = can('staff.manage');
   const canReadRoles = can('role.read');
