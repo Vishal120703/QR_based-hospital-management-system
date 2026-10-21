@@ -106,7 +106,7 @@ async function guestContext() {
 }
 
 async function submitted() {
-  return service.submit(await guestContext(), serviceId, randomUUID());
+  return service.patients.submit(await guestContext(), serviceId, randomUUID());
 }
 
 async function command(id: string, name: string, body: object, token = staffToken) {
@@ -146,7 +146,7 @@ afterAll(async () => {
 describe('Phase 7 request state machine', () => {
   it('snapshots the service, deadlines, and initial immutable event; blocks duplicate active submission', async () => {
     const guest = await guestContext();
-    const created = await service.submit(guest, serviceId, randomUUID());
+    const created = await service.patients.submit(guest, serviceId, randomUUID());
     expect(created.status).toBe('SUBMITTED');
     expect(created.version).toBe(1);
     expect(created.publicId).toMatch(/^CR-[A-F0-9]{16}$/);
@@ -166,7 +166,9 @@ describe('Phase 7 request state machine', () => {
         actorType: 'GUEST',
       },
     ]);
-    await expect(service.submit(guest, serviceId)).rejects.toMatchObject({ code: 'CONFLICT' });
+    await expect(service.patients.submit(guest, serviceId)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
 
     const sla = await database.slaPolicy.findUniqueOrThrow({ where: { id: created.slaPolicyId } });
     await database.slaPolicyVersion.create({
@@ -201,7 +203,9 @@ describe('Phase 7 request state machine', () => {
       {},
     );
     expect(closed.status).toBe(200);
-    await expect(service.submit(guest, serviceId)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    await expect(service.patients.submit(guest, serviceId)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
   });
 
   it('rejects a service from another hospital and an expired guest session', async () => {
@@ -209,19 +213,21 @@ describe('Phase 7 request state machine', () => {
     const foreignService = await database.serviceItem.findFirstOrThrow({
       where: { hospitalId: otherHospital.hospitalId },
     });
-    await expect(service.submit(guest, foreignService.id)).rejects.toMatchObject({
+    await expect(service.patients.submit(guest, foreignService.id)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
     await database.guestSession.update({
       where: { id: guest.guestSessionId },
       data: { expiresAt: new Date(Date.now() - 1000) },
     });
-    await expect(service.submit(guest, serviceId)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    await expect(service.patients.submit(guest, serviceId)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
   });
 
   it('performs the complete happy path and records one event per version', async () => {
     const guest = await guestContext();
-    const created = await service.submit(guest, serviceId);
+    const created = await service.patients.submit(guest, serviceId);
     const assigned = await expectCommand(
       created.id,
       'assign',
@@ -252,7 +258,7 @@ describe('Phase 7 request state machine', () => {
     expect(
       (await command(created.id, 'accept', { expectedVersion: completed.version })).status,
     ).toBe(409);
-    const another = await service.submit(guest, serviceId);
+    const another = await service.patients.submit(guest, serviceId);
     expect(another.id).not.toBe(created.id);
     const closed = await expectCommand(
       created.id,

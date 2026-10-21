@@ -8,7 +8,7 @@ import { type Logger } from 'pino';
 import { recordSystemAudit } from '../audit/index.js';
 import { findEscalationLevels } from '../sla/index.js';
 import { EscalationRepository } from './escalation.repository.js';
-import { overdueWhere } from './request.service.js';
+import { overdueWhere } from './request-transitions.js';
 
 // The SLA worker: carries out each request's escalation policy once its
 // current deadline (accept, then complete) is missed. A level fires when the

@@ -17,16 +17,16 @@ import { type RequestService } from './request.service.js';
 export class RequestController {
   public constructor(private readonly requests: RequestService) {}
 
-  // One page of open, completed, or finished work (see RequestService.list).
+  // One page of open, completed, or finished work (see RequestQueryService.list).
   public readonly list: RequestHandler = async (request, response) => {
     const query = requestQueueQuerySchema.parse(request.query);
-    response.status(200).json(await this.requests.list(getStaffContext(request), query));
+    response.status(200).json(await this.requests.queries.list(getStaffContext(request), query));
   };
 
   // What needs this person's attention: new, overdue, and escalated work.
   public readonly alerts: RequestHandler = async (request, response) => {
     emptySchema.parse(request.query);
-    response.status(200).json(await this.requests.alerts(getStaffContext(request)));
+    response.status(200).json(await this.requests.queries.alerts(getStaffContext(request)));
   };
 
   public readonly get: RequestHandler = async (request, response) => {
@@ -34,13 +34,15 @@ export class RequestController {
     emptySchema.parse(request.query);
     response
       .status(200)
-      .json({ serviceRequest: await this.requests.get(getStaffContext(request), id) });
+      .json({ serviceRequest: await this.requests.queries.get(getStaffContext(request), id) });
   };
 
   public readonly events: RequestHandler = async (request, response) => {
     const { id } = idParamsSchema.parse(request.params);
     emptySchema.parse(request.query);
-    response.status(200).json({ events: await this.requests.events(getStaffContext(request), id) });
+    response
+      .status(200)
+      .json({ events: await this.requests.queries.events(getStaffContext(request), id) });
   };
 
   // One handler per command (assign, accept, …), each with its own body schema.
@@ -49,9 +51,10 @@ export class RequestController {
     return async (request, response) => {
       const { id } = idParamsSchema.parse(request.params);
       const input = definition.schema.parse(request.body);
-      const serviceRequest = await this.requests[name](
+      const serviceRequest = await this.requests.commands.run(
         getStaffContext(request),
         id,
+        name,
         input,
         getRequestId(response),
       );
@@ -66,13 +69,13 @@ export class PatientRequestController {
 
   public readonly list: RequestHandler = async (request, response) => {
     emptySchema.parse(request.query);
-    const serviceRequests = await this.requests.listForGuest(getGuestContext(request));
+    const serviceRequests = await this.requests.patients.listForGuest(getGuestContext(request));
     response.status(200).json({ serviceRequests });
   };
 
   public readonly submit: RequestHandler = async (request, response) => {
     const { serviceId } = submitRequestSchema.parse(request.body);
-    const result = await this.requests.submitForGuest(
+    const result = await this.requests.patients.submitForGuest(
       getGuestContext(request),
       serviceId,
       getRequestId(response),
@@ -83,7 +86,7 @@ export class PatientRequestController {
   public readonly cancel: RequestHandler = async (request, response) => {
     const { publicId } = publicIdParamsSchema.parse(request.params);
     const { reason } = guestCancelSchema.parse(request.body);
-    const serviceRequest = await this.requests.cancelForGuest(
+    const serviceRequest = await this.requests.patients.cancelForGuest(
       getGuestContext(request),
       publicId,
       reason,
