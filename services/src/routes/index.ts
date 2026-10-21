@@ -21,6 +21,7 @@ import { createStaffRoutes } from '../modules/staff/index.js';
 export interface RouteSettings {
   readonly qrResolveRateLimit: RateLimitOptions;
   readonly platformLoginRateLimit: RateLimitOptions;
+  readonly platformAccountLoginRateLimit?: RateLimitOptions | undefined;
   readonly staffLoginRateLimits?: LoginRateLimits | undefined;
 }
 
@@ -40,6 +41,7 @@ export function createRoutes(container: Container, settings: RouteSettings): Rou
       controllers.platform,
       platformAuth,
       settings.platformLoginRateLimit,
+      settings.platformAccountLoginRateLimit,
     ),
   );
 

@@ -1,4 +1,4 @@
-import express, { Router } from 'express';
+import express, { Router, type Request } from 'express';
 import { requirePlatformAuth } from '../../middleware/platform-auth.js';
 import { rateLimit, type RateLimitOptions } from '../../middleware/rate-limit.js';
 import { maxLogoBytes } from '../hospitals/index.js';
@@ -12,12 +12,18 @@ export function createPlatformRoutes(
   authController: PlatformAuthController,
   controller: PlatformController,
   auth: PlatformAuthService,
-  loginLimit: RateLimitOptions,
+  addressLoginLimit: RateLimitOptions,
+  accountLoginLimit: RateLimitOptions = { windowMs: 15 * 60_000, max: 10 },
 ): Router {
   const signedIn = requirePlatformAuth(auth);
 
   const session = Router();
-  session.post('/login', rateLimit(loginLimit), authController.login);
+  session.post(
+    '/login',
+    rateLimit(addressLoginLimit),
+    rateLimit({ ...accountLoginLimit, key: platformAccountKey }),
+    authController.login,
+  );
   session.get('/me', signedIn, authController.me);
   session.post('/logout', signedIn, authController.logout);
 
@@ -42,4 +48,12 @@ export function createPlatformRoutes(
   router.use('/auth/platform', session);
   router.use('/platform', operator);
   return router;
+}
+
+export function platformAccountKey(request: Request): string {
+  const body: unknown = request.body;
+  if (!body || typeof body !== 'object' || !('email' in body)) return '';
+  return String((body as Record<string, unknown>).email)
+    .trim()
+    .toLowerCase();
 }

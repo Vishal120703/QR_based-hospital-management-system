@@ -5,7 +5,7 @@ import { type AuthController } from './auth.controller.js';
 import { type StaffAuthService } from './auth.service.js';
 
 export interface LoginRateLimits {
-  // Guesses against one account (hospital code + email), from one address.
+  // Guesses against one account (hospital code + email), across all addresses.
   readonly perAccount: RateLimitOptions;
   // All sign-ins from one address; generous, since a ward shares one network.
   readonly perAddress: RateLimitOptions;
@@ -19,7 +19,7 @@ const defaultLoginRateLimits: LoginRateLimits = {
   passwordChange: { windowMs: 15 * 60_000, max: 10 },
 };
 
-function accountKey(request: Request): string {
+export function staffAccountKey(request: Request): string {
   const body: unknown = request.body;
   const field = (name: string) =>
     body && typeof body === 'object' && name in body
@@ -27,7 +27,7 @@ function accountKey(request: Request): string {
           .trim()
           .toLowerCase()
       : '';
-  return `${request.ip ?? 'unknown'}|${field('hospitalCode')}|${field('email')}`;
+  return `${field('hospitalCode')}|${field('email')}`;
 }
 
 // Mounted at the application root: staff sign-in, current session, sign-out.
@@ -42,7 +42,7 @@ export function createAuthRoutes(
   router.post(
     '/auth/staff/login',
     rateLimit(limits.perAddress),
-    rateLimit({ ...limits.perAccount, key: accountKey }),
+    rateLimit({ ...limits.perAccount, key: staffAccountKey }),
     controller.login,
   );
   router.get('/auth/staff/me', signedIn, controller.me);

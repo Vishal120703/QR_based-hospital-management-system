@@ -25,6 +25,7 @@ export interface CreateAppOptions {
   readonly guestSessionTtlMinutes?: number;
   readonly qrResolveRateLimit?: RateLimitOptions;
   readonly platformLoginRateLimit?: RateLimitOptions;
+  readonly platformAccountLoginRateLimit?: RateLimitOptions;
   readonly staffLoginRateLimits?: LoginRateLimits;
   readonly configureRoutes?: (application: Express) => void;
   // Web origins (other than the API's own) allowed to call it.
@@ -90,6 +91,7 @@ export function createApp(options: CreateAppOptions): Express {
       createRoutes(container, {
         qrResolveRateLimit: options.qrResolveRateLimit ?? { windowMs: 60_000, max: 30 },
         platformLoginRateLimit: options.platformLoginRateLimit ?? { windowMs: 60_000, max: 10 },
+        platformAccountLoginRateLimit: options.platformAccountLoginRateLimit,
         staffLoginRateLimits: options.staffLoginRateLimits,
       }),
     );
