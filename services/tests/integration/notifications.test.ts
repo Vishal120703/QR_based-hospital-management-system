@@ -397,8 +397,14 @@ describe('Persistent role-aware notifications', () => {
       .mockRejectedValueOnce(new Error('Transient write'));
     await expect(service.process(source)).rejects.toThrow('Transient write');
     expect(await db.staffNotification.count({ where: { sourceKey: source.sourceKey } })).toBe(0);
+    // The rollback left no receipt, so the worker still sees this source as pending.
+    expect(
+      await db.notificationDispatch.findUnique({ where: { sourceKey: source.sourceKey } }),
+    ).toBeNull();
     failing.mockRestore();
-    await service.run();
+    // Retry this source itself: run() takes the oldest pending sources across the
+    // shared test database, which need not include it.
+    await service.process(source);
     expect(await db.staffNotification.count({ where: { sourceKey: source.sourceKey } })).toBe(1);
     const deliver = vi.fn().mockRejectedValue(new Error('Socket unavailable'));
     const workerRun = startNotificationWorker(db, logger, deliver, 60000);
