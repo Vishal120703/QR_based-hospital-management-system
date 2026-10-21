@@ -32,6 +32,14 @@ export function requireNoChildren(count: number, label: string): void {
   }
 }
 
+export function requireNoRoleScopes(count: number, label: string): void {
+  if (count > 0) {
+    throw new ConflictError(
+      `This ${label} is still used by a role assignment. Remove that assignment first.`,
+    );
+  }
+}
+
 // The code, name, and active fields every level can change.
 export function locationChanges(input: {
   code?: string | undefined;

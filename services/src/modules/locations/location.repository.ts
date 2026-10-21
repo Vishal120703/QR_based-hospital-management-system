@@ -3,6 +3,7 @@ import {
   type BedType,
   type Prisma,
   type RoomType,
+  type ScopeType,
   type WardType,
 } from '@prisma/client';
 import { type Db } from '../../database/client.js';
@@ -14,6 +15,10 @@ const activeWhere = (active: boolean | undefined) => (active === undefined ? {} 
 // The location hierarchy: Building → Floor → Ward (unit) → Room → Bed.
 // `area` filters limit floor- and ward-level staff to their own part.
 export class LocationRepository {
+  public countRoleScopes(db: Db, hospitalId: string, scopeType: ScopeType, scopeId: string) {
+    return db.scopeAssignment.count({ where: { hospitalId, scopeType, scopeId } });
+  }
+
   // Buildings
 
   public listBuildings(

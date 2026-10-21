@@ -8,6 +8,7 @@ import {
   requireActiveParent,
   requireNoActiveChildren,
   requireNoChildren,
+  requireNoRoleScopes,
   writeSerializable,
 } from './location-rules.js';
 import { type LocationRepository } from './location.repository.js';
@@ -113,6 +114,10 @@ export class FloorService {
       const before = found(await this.locations.findFloor(transaction, hospitalId, id));
       requireNoChildren(
         await this.locations.countWardsOnFloor(transaction, hospitalId, id, false),
+        'floor',
+      );
+      requireNoRoleScopes(
+        await this.locations.countRoleScopes(transaction, hospitalId, 'FLOOR', id),
         'floor',
       );
       await this.locations.deleteFloor(transaction, hospitalId, id);

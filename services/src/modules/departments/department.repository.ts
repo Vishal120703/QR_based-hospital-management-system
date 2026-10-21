@@ -36,14 +36,17 @@ export class DepartmentRepository {
     await db.department.delete({ where: { hospitalId_id: { hospitalId, id } } });
   }
 
-  // How many staff, shifts, and services still use the department.
+  // How many staff, shifts, services, and authorization scopes still use it.
   public async countUses(db: Db, hospitalId: string, id: string): Promise<number> {
     const where = { hospitalId, departmentId: id };
-    const [staff, shifts, services] = await Promise.all([
+    const [staff, shifts, services, roleScopes] = await Promise.all([
       db.staffDepartment.count({ where }),
       db.shift.count({ where }),
       db.serviceItem.count({ where }),
+      db.scopeAssignment.count({
+        where: { hospitalId, scopeType: 'DEPARTMENT', scopeId: id },
+      }),
     ]);
-    return staff + shifts + services;
+    return staff + shifts + services + roleScopes;
   }
 }

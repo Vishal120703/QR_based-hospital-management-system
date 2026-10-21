@@ -248,6 +248,45 @@ describe('Role hierarchy and scoped access', () => {
     expect(after.map((scope) => scope.scopeId)).toEqual([layout.floorA]);
   });
 
+  it('does not delete places that are still authorization scopes', async () => {
+    const admin = as(hospital.adminToken);
+    const person = await staffMember('ScopeKeeper');
+    const floor = await database.floor.create({
+      data: { hospitalId: hospital.hospitalId, code: 'SCOPE-F', name: 'Scoped Floor' },
+    });
+    const ward = await database.ward.create({
+      data: {
+        hospitalId: hospital.hospitalId,
+        floorId: floor.id,
+        code: 'SCOPE-W',
+        name: 'Scoped Ward',
+      },
+    });
+    const department = await database.department.create({
+      data: {
+        hospitalId: hospital.hospitalId,
+        code: 'SCOPE-D',
+        name: 'Scoped Department',
+      },
+    });
+
+    expect((await give(person.id, 'FLOOR_MANAGER', floor.id)).status).toBe(201);
+    expect((await give(person.id, 'WARD_MANAGER', ward.id)).status).toBe(201);
+    expect((await give(person.id, 'DEPARTMENT_SUPERVISOR', department.id)).status).toBe(201);
+
+    expect((await admin.delete(`/admin/wards/${ward.id}`)).status).toBe(409);
+    expect((await admin.delete(`/admin/floors/${floor.id}`)).status).toBe(409);
+    expect((await admin.delete(`/admin/departments/${department.id}`)).status).toBe(409);
+    expect(
+      await database.scopeAssignment.count({
+        where: {
+          hospitalId: hospital.hospitalId,
+          scopeId: { in: [floor.id, ward.id, department.id] },
+        },
+      }),
+    ).toBe(3);
+  });
+
   it('shows a floor manager only their floor and lets them admit patients there', async () => {
     const person = await staffMember('Meera');
     expect((await give(person.id, 'FLOOR_MANAGER', layout.floorA)).status).toBe(201);

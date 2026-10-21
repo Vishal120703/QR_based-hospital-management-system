@@ -117,7 +117,7 @@ export class DepartmentService {
       }
       if ((await this.departments.countUses(transaction, hospitalId, id)) > 0) {
         throw new ConflictError(
-          'This department has staff, shifts, or services. Deactivate it instead.',
+          'This department has staff, shifts, services, or role assignments. Deactivate it instead.',
         );
       }
       await this.departments.delete(transaction, hospitalId, id);

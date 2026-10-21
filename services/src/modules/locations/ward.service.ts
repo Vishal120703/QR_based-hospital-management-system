@@ -8,6 +8,7 @@ import {
   requireActiveParent,
   requireNoActiveChildren,
   requireNoChildren,
+  requireNoRoleScopes,
   writeSerializable,
 } from './location-rules.js';
 import { type LocationRepository } from './location.repository.js';
@@ -112,6 +113,10 @@ export class WardService {
       const rooms = await this.locations.countRoomsInWard(transaction, hospitalId, id, false);
       const beds = await this.locations.countBedsInWard(transaction, hospitalId, id, false);
       requireNoChildren(rooms + beds, 'ward');
+      requireNoRoleScopes(
+        await this.locations.countRoleScopes(transaction, hospitalId, 'WARD', id),
+        'ward',
+      );
       await this.locations.deleteWard(transaction, hospitalId, id);
       await recordStaffAudit(transaction, context, requestId, {
         action: 'ward.delete',
