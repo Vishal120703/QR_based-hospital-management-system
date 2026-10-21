@@ -6,6 +6,7 @@ const screens = [
   'overview',
   'requests',
   'hospital',
+  'bed-management',
   'beds',
   'locations',
   'departments',

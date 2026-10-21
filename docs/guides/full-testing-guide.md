@@ -188,10 +188,10 @@ Rules that always apply:
 
 | Person | Menu |
 |---|---|
-| Meera (Hospital Manager) | Overview, Requests, Reports, Profile & logo, Audit log, Beds & QR, Location setup, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog, Response targets (SLA) |
-| Arjun (Operations Manager) | Overview, Requests, Reports, Audit log, Beds & QR, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog |
-| Kavita (Admission Desk) | Overview, Beds & QR |
-| Ravi, Sunita (Floor Managers); Priya (Ward Manager) | Overview, Requests, Reports, Beds & QR |
+| Meera (Hospital Manager) | Overview, Requests, Reports, Profile & logo, Audit log, Bed management, QR codes, Location setup, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog, Response targets (SLA) |
+| Arjun (Operations Manager) | Overview, Requests, Reports, Audit log, Bed management, QR codes, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog |
+| Kavita (Admission Desk) | Overview, Bed management, QR codes |
+| Ravi, Sunita (Floor Managers); Priya (Ward Manager) | Overview, Requests, Reports, Bed management, QR codes |
 | Imran, Lakshmi (Department Supervisors) | Overview, Requests, Reports |
 | Care staff (Anjali, Pavan, Neha, …) | Overview, Requests |
 
@@ -257,8 +257,10 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 | H02 | Open **Location setup**. Expand the tree. | Main Block (Ground, First, Second Floor) and Day Care Block (Ground Floor) exactly as in [section 2](#2-the-test-hospitals). Both blocks have a floor coded `G`. **Whole hospital** shows bed totals by unit type. |
 | H03 | Open **General Ward A**. Check Bed A 08. Then **Add beds**: 2 beds. | Bed A 08's status is **maintenance**. The preview lists the next codes. After saving, a green bar offers **Print QR labels (2)**. |
 | H04 | Click **Print QR labels**, choose **Medium**, then **Download PDF**. | A PDF with 2 labels, each showing the CityCare logo, the bed name, the full location, and the emergency warning. |
-| H05 | Open **Beds & QR**. Set the sessions filter to **Active sessions**, then back to **All beds** and search `Surgical`. | 14 beds with an active session; the search shows Bed S 01–06. Trolley 03's QR shows **Revoked**, and Bed A 01's shows **Active · version 2** (it was replaced). |
-| H06 | On **Bed A 07** (no patient now) click **Start session**. Then **Close session**. | The bed becomes occupied, then available again. Both appear in the audit log (H15). |
+| H05 | Open **Bed management**. Click **Occupied**, then **All beds**, and search `Surgical`. Then open **QR codes**. | About 14 occupied beds with their length of stay (long stays marked); the search shows Bed S 01–06. In QR codes, Trolley 03's QR shows **Revoked** and Bed A 01's **Active · version 2** (it was replaced). |
+| H05b | In **Bed management**, check the occupancy tile and **Occupancy by floor and ward**; click **Long stays** and **Overdue requests**; **Download**. | Occupancy counts only usable beds (maintenance and out-of-service beds are left out). The filters narrow the board; the CSV lists each shown bed with its state, admission time, length of stay, and open/overdue requests. |
+| H05c | On a free bed click **Maintenance**, confirm; then **Back in service**. | The bed shows **Under maintenance** (no **Admit** button), then **Available** again. Both changes appear in the audit log. |
+| H06 | In **Bed management**, on **Bed A 07** (no patient now) click **Admit**. Then **Discharge**. | The bed becomes occupied, then available again. Both appear in the audit log (H15). |
 | H07 | Open **Departments**. | 8 departments, including the custom **Laboratory**. (Billing and Laboratory have nobody in them; you can see this in **Staff & coverage**.) |
 | H08 | Open **Staff & coverage**. | 19 people. Karan Malhotra's status is **suspended**, Rahul Verma is **Off duty**, and each person's roles show where they apply (for example "Floor Manager · First Floor"). |
 | H09 | Open **Roles & access**. | Five built-in roles plus **Operations Manager** and **Admission Desk**. Hospital Manager has every permission and no **Edit** button. |
@@ -277,7 +279,7 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 | ID | Do this | ✔ Expected |
 |---|---|---|
 | O01 | Sign in. Check the menu. | As in [section 4](#what-each-person-sees-in-the-menu). There is no **Profile & logo**, **Location setup**, or **Response targets** page. |
-| O02 | Open **Beds & QR**. | **Start session** and **Close session** are available, but no Generate, Replace, or Print QR buttons. |
+| O02 | Open **Bed management**, then **QR codes**. | **Admit** and **Discharge** are available in Bed management; QR codes has no Generate, Replace, or Print QR buttons. |
 | O03 | Open **Roles & access**. | Roles are visible but cannot be created, edited, or deleted. |
 | O04 | In **Staff & coverage**, try to **suspend Dr. Meera Iyer**. | Refused: "You do not have permission to perform this action." Meera stays active. |
 | O05 | Suspend **Ravi Shankar**, then make him active again. | Both work, because Ravi has less access than Arjun. While suspended, Ravi is signed out everywhere. |
@@ -288,10 +290,10 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 
 | ID | Do this | ✔ Expected |
 |---|---|---|
-| K01 | Sign in. | Menu: **Overview** and **Beds & QR** only. No requests are visible. |
+| K01 | Sign in. | Menu: **Overview**, **Bed management**, and **QR codes** only. No requests are visible. |
 | K02 | Open `http://localhost:5173/admin/requests` directly. | **Access restricted**. |
-| K03 | In **Beds & QR**, on **Bed A 06** (discharged, has a QR) click **Start session**. Then **Replace QR** → **Open patient view**. | The bed is now occupied. The patient page opens for Bed A 06 with no old requests (it is a new stay). Keep this tab for the patient tests. |
-| K04 | **Close session** on Bed A 06 and refresh the patient tab. | The patient sees "Your session has ended". |
+| K03 | In **Bed management**, on **Bed A 06** (discharged, has a QR) click **Admit**. Then in **QR codes**, **Replace QR** → **Open patient view**. | The bed is now occupied. The patient page opens for Bed A 06 with no old requests (it is a new stay). Keep this tab for the patient tests. |
+| K04 | **Discharge** Bed A 06 in Bed management and refresh the patient tab. | The patient sees "Your session has ended". |
 
 ### 6.5 Floor Manager: Ravi Shankar (First Floor)
 
@@ -304,7 +306,7 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 | F05 | **Ready to close** → close **Bed 101 · Meal / Diet Query**. | It moves to **History**. |
 | F06 | Open **Reports** → **Last 30 days**. | Totals and staff work for the **First Floor only** (smaller than Meera's numbers). |
 | F07 | Open `/admin/audit` and `/admin/staff` directly. | **Access restricted** on both. |
-| F08 | Open **Beds & QR**. | Only First Floor beds. **Start session** is available but no QR printing. |
+| F08 | Open **Bed management**, then **QR codes**. | Only First Floor beds. **Admit** and **Discharge** work there, but no **Maintenance** and no QR printing. |
 
 ### 6.6 Ward Manager: Priya Nair (Surgical Ward)
 
@@ -323,7 +325,7 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 | D02 | **Ready to close** → close **Bed 102 · Drinking Water**. | It moves to **History**. |
 | D03 | Open **Reports** → **Last 30 days**. | Only Pantry work: Pavan, Neha, and the managers who assigned it. Neha's row shows "Turned down: Diet chart not yet updated by the dietician". |
 | D04 | Sign in as **Lakshmi**. On **Bed 201-A · Extra Blanket / Linen** (in progress with Geeta) click **Hand over…**. | **Suresh Yadav** is preselected. Hand over with the reason **Busy with another patient**. The card shows "Assigned to Suresh Yadav". |
-| D05 | Open **Beds & QR** directly (`/admin/beds`). | **Access restricted**: supervisors manage work, not beds. |
+| D05 | Open **Bed management** (`/admin/bed-management`) and **QR codes** (`/admin/beds`) directly. | **Access restricted** on both: supervisors manage work, not beds. |
 
 ### 6.8 Care staff
 
@@ -340,7 +342,7 @@ The super admin manages **clients** (customers) and their **hospitals**. They ne
 
 ### 6.9 Patient (QR scan, no login)
 
-Get a patient link first: as **Meera** or **Kavita**, open **Beds & QR** → **Bed A 01** → **Replace QR**. In the QR window click **Copy patient link** and paste it into a private note (you need it again in PT07), then click **Open patient view**. Keep the link private. Replacing a QR stops the old printed one.
+Get a patient link first: as **Meera** or **Kavita**, open **QR codes** → **Bed A 01** → **Replace QR**. In the QR window click **Copy patient link** and paste it into a private note (you need it again in PT07), then click **Open patient view**. Keep the link private. Replacing a QR stops the old printed one.
 
 | ID | Do this | ✔ Expected |
 |---|---|---|

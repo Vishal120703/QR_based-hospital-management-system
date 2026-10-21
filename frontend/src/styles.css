@@ -4312,3 +4312,176 @@ button.danger-solid:hover:not(:disabled) {
   box-shadow: 0 8px 28px #0002;
   flex-wrap: wrap;
 }
+
+/* Bed management: occupancy tiles, by-area table, and the bed board. */
+.bed-stats button.stat {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-top: 4px solid var(--border);
+}
+.bed-stats button.stat span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.bed-stats button.stat strong {
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+.bed-stats button.stat[aria-pressed='true'] {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.bed-stat-available {
+  border-top-color: #2f9e62 !important;
+}
+.bed-stat-occupied {
+  border-top-color: #2563b0 !important;
+}
+.bed-stat-maintenance {
+  border-top-color: #e3a008 !important;
+}
+.bed-stat-out_of_service {
+  border-top-color: #9aa9b5 !important;
+}
+.bed-areas,
+.bed-board {
+  margin-bottom: 1rem;
+}
+.bed-areas h2,
+.bed-board h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+.area-ward-name {
+  padding-left: 1rem;
+}
+.meter > .occupancy {
+  background: #2563b0;
+}
+.input-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.input-with-icon > svg {
+  color: var(--muted);
+  flex: none;
+}
+.input-with-icon > input {
+  flex: 1;
+  min-width: 0;
+}
+.bed-floor {
+  margin-top: 1.25rem;
+}
+.bed-floor h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+.bed-ward h4 {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 0.92rem;
+}
+.bed-tiles {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr));
+  gap: 0.6rem;
+}
+.bed-tile {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+}
+.bed-tile p {
+  margin: 0;
+}
+.bed-tile-available {
+  border-left-color: #2f9e62;
+}
+.bed-tile-occupied {
+  border-left-color: #2563b0;
+}
+.bed-tile-maintenance {
+  border-left-color: #e3a008;
+}
+.bed-tile-out_of_service {
+  border-left-color: #9aa9b5;
+  opacity: 0.75;
+}
+.bed-tile-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+.bed-tile-head > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.bed-tile-icon {
+  color: var(--muted);
+  padding-top: 0.15rem;
+}
+.bed-state {
+  justify-self: start;
+  font-size: 0.75rem;
+  font-weight: 650;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+.bed-state-available {
+  background: #e3f5ec;
+  color: #11683f;
+}
+.bed-state-occupied {
+  background: #e4effd;
+  color: #1d4f91;
+}
+.bed-state-maintenance {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+.bed-state-out_of_service {
+  background: #eef1f4;
+  color: #4b5866;
+}
+.bed-stay {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+.bed-tile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.bed-tile-actions:empty {
+  display: none;
+}
+.bed-tile-actions button {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}
+@media (max-width: 700px) {
+  .stat-grid.bed-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+  .bed-stats .stat strong {
+    font-size: 1.5rem;
+  }
+}

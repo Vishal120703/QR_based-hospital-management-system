@@ -66,7 +66,10 @@ describe('Permission-aware workspace', () => {
     renderPage(<BedsPage />, ['bed.read', 'hospital.manage']);
 
     const guide = await screen.findByRole('list', { name: 'Patient request setup' });
-    expect(guide.textContent).toContain('Start a bed session');
+    expect(guide.textContent).toContain('Admit the patient');
+    expect(within(guide).getByRole('link', { name: 'Bed management' }).getAttribute('href')).toBe(
+      '/admin/bed-management',
+    );
     expect(guide.textContent).toContain('Print the bedside QR');
     expect(guide.textContent).toContain('Replace QR');
     expect(guide.textContent).toContain('Patient sends a request');
@@ -189,7 +192,7 @@ describe('Permission-aware workspace', () => {
     expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe(
       'page',
     );
-    expect(screen.queryByRole('link', { name: 'Beds & QR' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'QR codes' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Service catalog' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Response targets (SLA)' })).toBeNull();
   });

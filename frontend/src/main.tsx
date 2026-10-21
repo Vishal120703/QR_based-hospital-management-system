@@ -34,6 +34,10 @@ const HospitalProfilePage = page(
   'HospitalProfilePage',
 );
 const BedsPage = page(() => import('./features/locations/BedsPage'), 'BedsPage');
+const BedManagementPage = page(
+  () => import('./features/locations/BedManagementPage'),
+  'BedManagementPage',
+);
 const LocationsPage = page(() => import('./features/locations/LocationsPage'), 'LocationsPage');
 const DepartmentsPage = page(() => import('./features/people/DepartmentsPage'), 'DepartmentsPage');
 const StaffPage = page(() => import('./features/people/StaffPage'), 'StaffPage');
@@ -99,6 +103,7 @@ root.render(
               <Route path="reports/people/:membershipId" element={<PersonReportPage />} />
               <Route path="audit" element={<AuditLogPage />} />
               <Route path="beds" element={<BedsPage />} />
+              <Route path="bed-management" element={<BedManagementPage />} />
               <Route path="locations" element={<LocationsPage />} />
               <Route path="departments" element={<DepartmentsPage />} />
               <Route path="staff" element={<StaffPage />} />

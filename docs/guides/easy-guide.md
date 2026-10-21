@@ -48,6 +48,13 @@ Every hospital starts with these five built-in roles. A Hospital Manager can add
 
 Floor and ward managers and department supervisors see reports only for their own area; care staff see neither.
 
+### Beds (who is admitted where)
+
+- **Bed management** shows every bed's state: **Available**, **Occupied**, **Under maintenance**, or **Out of service**, with the occupancy share of usable beds, and occupancy per floor and ward.
+- Each bed tile shows how long the patient has stayed (stays over 7 days are marked **Long stay**) and how many of its requests are open or overdue. Filter by state, floor, or ward, search, or **Download** the list for Excel.
+- **Admit** an available bed when a patient arrives (their bedside QR starts working); **Discharge** when they leave. Hospital managers can also take a free bed out of use with **Maintenance** and bring it **Back in service**. Floor and ward managers admit and discharge only in their own area.
+- QR labels (issue, print, replace, disable) are on the separate **QR codes** screen.
+
 ### Alerts, overdue work, and passwords
 
 - **Requests** shows one page at a time (25), overdue work first, then the oldest, so nothing waiting is hidden behind new requests; **Next** shows the rest, and **Overdue** / **Waiting for assignment** narrow the list.
@@ -152,7 +159,7 @@ The app is a **modular monolith**: one backend process and one frontend, with se
 | `/admin/reports`, `/admin/audit` | Request reports and hospital audit log (permission-controlled) |
 | `/q/<secret>`, `/patient` | QR exchange and patient request screen |
 
-Patients and attendants do not have a login account or staff role. An authorized staff member starts the bed session. Staff with the appropriate QR permission (for example, a Hospital Manager or Admission Desk user) can issue and print bed-wise QR labels in **Beds & QR**; replacing or disabling a QR requires its own permission. Scanning that QR creates a short-lived guest session tied to the bed stay. The patient then chooses a published service, sends a request, and tracks it under **Your requests**. The raw QR link is shown only when issued. If a demo bed already has an active QR but you do not have its printed copy or link, use **Replace QR** to get a new one; this invalidates the old QR and connected patient sessions.
+Patients and attendants do not have a login account or staff role. An authorized staff member admits the patient in **Bed management**. Staff with the appropriate QR permission (for example, a Hospital Manager or Admission Desk user) can issue and print bed-wise QR labels in **QR codes**; replacing or disabling a QR requires its own permission. Scanning that QR creates a short-lived guest session tied to the bed stay. The patient then chooses a published service, sends a request, and tracks it under **Your requests**. The raw QR link is shown only when issued. If a demo bed already has an active QR but you do not have its printed copy or link, use **Replace QR** to get a new one; this invalidates the old QR and connected patient sessions.
 
 The backend exposes `/health` and `/ready` for checks; `/auth/staff/*` for staff sessions; `/admin/*` for permission-checked administration and request commands; and `/public/*` for QR/guest-session services. The frontend sends its API calls through the `/api` proxy during local development. **Requests** is the manual manager/staff work screen.
 
@@ -268,7 +275,7 @@ PLATFORM_ADMIN_EMAIL=you@yourcompany.com PLATFORM_ADMIN_NAME="Your Name" PLATFOR
 
 A fresh demo seed can also create `platform.demo@careqr.example` if you set `DEMO_PLATFORM_PASSWORD` before `npm run seed:demo`.
 
-**Try the SaaS flow:** sign in at `http://localhost:5173/platform/login` → **Clients** → **Add client** (the customer, then its first hospital: name, code, time zone, optional logo, first manager). A client's page has **Add hospital** for more branches → sign in as that manager at the staff sign-in page with the new hospital code → **Departments**: add a department → **Roles & access**: create a role → **Staff & coverage**: add a person and give them **Floor Manager** for one floor → sign in as them: they see only Overview, Requests, and Beds & QR for their floor. Back in the super admin, **Suspend hospital** signs everyone in that hospital out and stops its QR codes; **Suspend client** does the same for every hospital of that client at once. **Reactivate** restores access. No data is deleted.
+**Try the SaaS flow:** sign in at `http://localhost:5173/platform/login` → **Clients** → **Add client** (the customer, then its first hospital: name, code, time zone, optional logo, first manager). A client's page has **Add hospital** for more branches → sign in as that manager at the staff sign-in page with the new hospital code → **Departments**: add a department → **Roles & access**: create a role → **Staff & coverage**: add a person and give them **Floor Manager** for one floor → sign in as them: they see only Overview, Requests, Reports, Bed management, and QR codes for their floor. Back in the super admin, **Suspend hospital** signs everyone in that hospital out and stops its QR codes; **Suspend client** does the same for every hospital of that client at once. **Reactivate** restores access. No data is deleted.
 
 ---
 
@@ -292,14 +299,14 @@ Do these in order. ✔ = what you should see.
 
 **Your hospital's logo.** Each hospital (each client) has its own logo. Open **Hospital → Profile & logo**, choose **Upload logo** (PNG, JPEG, WebP, or SVG), check the preview, then **Save logo**. It appears in the top bar for staff, at the top of the patient page, and on every QR label printed after that. When onboarding a new client from the command line, set `HOSPITAL_LOGO_PATH` before `npm run bootstrap:hospital`.
 
-**Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Location screens also have QR-label actions. In **Beds & QR → Print QR labels**, choose a floor, then optionally a unit or room. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”). Each new QR is shown only once: download the PDF straight away, keep it private, and delete it after printing. To reprint a lost active label, choose **Also reprint the existing labels**; the old label stops working.
+**Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Location screens also have QR-label actions. In **QR codes → Print QR labels**, choose a floor, then optionally a unit or room. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”). Each new QR is shown only once: download the PDF straight away, keep it private, and delete it after printing. To reprint a lost active label, choose **Also reprint the existing labels**; the old label stops working.
 
 **C. Make a QR code and test it like a patient**
-6. Click **Beds & QR**. On **Bed 02**, click **Generate QR**.
+6. Click **QR codes**. On **Bed 02**, click **Generate QR**.
    ✔ A QR label preview appears with **Download PDF**, **Open PDF to print**, and **Open patient view**.
 7. Click **Open patient view** (opens a new tab).
    ✔ "We couldn't connect" — because no patient is admitted yet. Correct!
-8. Go back, click **Done**, then **Start session** on Bed 02.
+8. Go back, click **Done**, then open **Bed management** and click **Admit** on Bed 02.
 9. Open the **privately saved** Bed 02 patient link again, or paste it into the **Scan QR** screen at `http://localhost:5173`. If you did not save it, use **Replace QR** and open that new link. An old link stops working after replacement.
    ✔ "You are connected to Bed 02" with service buttons and a red "Not for emergencies" box.
 
@@ -344,7 +351,7 @@ On an older demo database without the floor-manager account, the Hospital Admin 
     ✔ History keeps the earlier version as well as the new one. On a fresh seed, those are v1 (3/10) and v2 (4/12).
 
 **H. Discharge**
-25. **Beds & QR** → **Close session** on Bed 02. Reload the patient tab.
+25. **Bed management** → **Discharge** on Bed 02. Reload the patient tab.
     ✔ "Your session has ended." The QR no longer works.
 
 If all ✔ appeared, this **browser tour** passed; the API/security/concurrency tests in the full plan still need to run before Phase 9.

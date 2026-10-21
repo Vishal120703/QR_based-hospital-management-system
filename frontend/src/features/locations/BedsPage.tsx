@@ -3,34 +3,20 @@ import { Link } from 'react-router';
 import {
   staffApi,
   type Bed,
-  type BedSession,
-  type Building,
-  type Floor,
   type QrBatch,
   type QrBatchScope,
   type QrCode,
   type QrIssue,
-  type Room,
-  type Ward,
 } from '../../api';
 import { type ConfirmQuestion, LoadState, PageHeading, useConfirm } from '../../components';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
+import { loadPlaces, placeOfBed, type BedPlace } from './bed-places';
 import { labelFromIssue, labelsFromBatch, QrLabelsDialog, type LabelItem } from './QrLabelsDialog';
 
-interface BedRow {
+interface BedRow extends BedPlace {
   bed: Bed;
-  location: string;
-  buildingId: string | undefined;
-  buildingName: string | undefined;
-  floorId: string | undefined;
-  floorName: string | undefined;
-  wardId: string;
-  wardName: string | undefined;
-  roomId: string | null;
-  roomName: string | undefined;
   qrCode: QrCode | undefined;
-  session: BedSession | undefined;
 }
 
 interface Issued {
@@ -41,38 +27,20 @@ interface Issued {
 }
 
 async function loadRows(token: string, canReadLocations: boolean): Promise<BedRow[]> {
-  const [beds, wards, floors, rooms, buildings, qrCodes, sessions] = await Promise.all([
+  const [beds, places, qrCodes] = await Promise.all([
     staffApi.list<Bed>(token, 'beds'),
-    canReadLocations ? staffApi.list<Ward>(token, 'wards') : Promise.resolve([]),
-    canReadLocations ? staffApi.list<Floor>(token, 'floors') : Promise.resolve([]),
-    canReadLocations ? staffApi.list<Room>(token, 'rooms') : Promise.resolve([]),
-    canReadLocations ? staffApi.list<Building>(token, 'buildings') : Promise.resolve([]),
+    loadPlaces(token, canReadLocations),
     staffApi.list<QrCode>(token, 'qr-codes'),
-    staffApi.list<BedSession>(token, 'bed-sessions', '?status=ACTIVE'),
   ]);
-  return beds.map((bed) => {
-    const ward = wards.find((item) => item.id === bed.wardId);
-    const floor = floors.find((item) => item.id === ward?.floorId);
-    const room = rooms.find((item) => item.id === bed.roomId);
-    // Floor names repeat across buildings ("Ground Floor"), so name both.
-    const building = buildings.find((item) => item.id === floor?.buildingId);
-    return {
-      bed,
-      location: [building?.name, floor?.name, ward?.name, room?.name].filter(Boolean).join(' · '),
-      buildingId: building?.id,
-      buildingName: building?.name,
-      floorId: floor?.id,
-      floorName: floor && [building?.name, floor.name].filter(Boolean).join(' · '),
-      wardId: bed.wardId,
-      wardName: ward?.name,
-      roomId: bed.roomId,
-      roomName: room?.name,
-      qrCode: qrCodes.find((item) => item.bedId === bed.id),
-      session: sessions.find((item) => item.bedId === bed.id),
-    };
-  });
+  return beds.map((bed) => ({
+    bed,
+    ...placeOfBed(bed, places),
+    qrCode: qrCodes.find((item) => item.bedId === bed.id),
+  }));
 }
 
+// Bedside QR codes: issue, print, replace, and disable them. Admitting and
+// discharging patients is on the Bed management screen.
 export function BedsPage() {
   const { token, me, reportError, reportSuccess, canAnywhere } = useAdmin();
   const confirm = useConfirm();
@@ -98,7 +66,6 @@ export function BedsPage() {
 
   const can = (permission: string) => me.permissions.includes(permission);
   const canManageQr = can('hospital.manage');
-  const canManageSessions = canAnywhere('bedSession.manage');
 
   async function act(row: BedRow, action: () => Promise<unknown>, question?: ConfirmQuestion) {
     if (pending.current) return;
@@ -162,13 +129,18 @@ export function BedsPage() {
       `${row.bed.displayName} ${row.bed.code} ${row.location}`
         .toLowerCase()
         .includes(search.trim().toLowerCase()) &&
-      (filter === 'ALL' || (filter === 'ACTIVE' ? Boolean(row.session) : !row.session)),
+      (filter === 'ALL' ||
+        (filter === 'ACTIVE'
+          ? row.qrCode?.status === 'ACTIVE'
+          : filter === 'NONE'
+            ? !row.qrCode
+            : row.qrCode?.status === 'REVOKED')),
   );
   return (
     <>
       <PageHeading
-        title="Beds & QR codes"
-        description="Patients and attendants use the bedside QR to request services; they do not need a staff login."
+        title="QR codes"
+        description="Patients and attendants use the bedside QR to request services; they do not need a staff login. Admit and discharge patients in Bed management."
       >
         <button
           type="button"
@@ -180,12 +152,15 @@ export function BedsPage() {
         </button>
       </PageHeading>
       <LoadState loading={false} error={loadError} onRetry={reload} />
-      {(canManageQr || canManageSessions) && (
+      {(canManageQr || canAnywhere('bedSession.manage')) && (
         <ol className="setup-steps" aria-label="Patient request setup">
           <li>
             <span>1</span>
-            Start a bed session
-            <small>Do this when a patient is admitted to an available bed.</small>
+            Admit the patient
+            <small>
+              In <Link to="/admin/bed-management">Bed management</Link>, admit the patient to an
+              available bed.
+            </small>
           </li>
           <li>
             <span>2</span>
@@ -208,12 +183,14 @@ export function BedsPage() {
           <strong>{rows.length}</strong>
         </div>
         <div className="card">
-          <span>Active admissions</span>
-          <strong>{rows.filter((row) => row.session).length}</strong>
-        </div>
-        <div className="card">
           <span>Active QR codes</span>
           <strong>{rows.filter((row) => row.qrCode?.status === 'ACTIVE').length}</strong>
+        </div>
+        <div className="card">
+          <span>Beds without a working QR</span>
+          <strong>
+            {rows.filter((row) => row.bed.active && row.qrCode?.status !== 'ACTIVE').length}
+          </strong>
         </div>
       </div>
       {canManageQr && can('qr.generate') && canReadLocations && rows.length > 0 && (
@@ -235,11 +212,12 @@ export function BedsPage() {
           />
         </label>
         <label>
-          <span>Sessions</span>
+          <span>QR code</span>
           <select value={filter} onChange={(event) => setFilter(event.target.value)}>
             <option value="ALL">All beds</option>
-            <option value="ACTIVE">Active sessions</option>
-            <option value="NONE">No active session</option>
+            <option value="ACTIVE">Active QR</option>
+            <option value="NONE">No QR yet</option>
+            <option value="REVOKED">Disabled QR</option>
           </select>
         </label>
         <span className="muted small" role="status">
@@ -265,21 +243,19 @@ export function BedsPage() {
               <tr>
                 <th>Bed</th>
                 <th>Location</th>
-                <th>Status</th>
-                <th>Bed session</th>
                 <th>QR code</th>
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="empty-state">
+                  <td colSpan={3} className="empty-state">
                     No beds match your filters. Try another search or choose all beds.
                   </td>
                 </tr>
               )}
               {visible.map((row) => {
-                const { bed, qrCode, session } = row;
+                const { bed, qrCode } = row;
                 const busy = busyBedId !== null;
                 return (
                   <tr key={bed.id}>
@@ -287,54 +263,9 @@ export function BedsPage() {
                       <strong>{bed.displayName}</strong>
                       <div className="muted code">{bed.code}</div>
                     </td>
-                    <td data-label="Location">{row.location || 'Location details unavailable'}</td>
-                    <td data-label="Status">
-                      <span className={`badge badge-${bed.status.toLowerCase()}`}>
-                        {bed.status.charAt(0) + bed.status.slice(1).toLowerCase()}
-                      </span>
-                      {!bed.active && <span className="badge badge-muted">inactive</span>}
-                    </td>
-                    <td data-label="Admission session">
-                      {session ? (
-                        <>
-                          <div className="muted">
-                            Since {new Date(session.startedAt).toLocaleString()}
-                          </div>
-                          {canManageSessions && (
-                            <button
-                              type="button"
-                              className="secondary"
-                              disabled={busy}
-                              onClick={() =>
-                                void act(row, () => staffApi.closeSession(token, session.id), {
-                                  title: `Close the session for ${bed.displayName}?`,
-                                  message: 'Patients connected to this bed will be signed out.',
-                                  confirmLabel: 'Close session',
-                                })
-                              }
-                            >
-                              Close session
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        canManageSessions && (
-                          <button
-                            type="button"
-                            disabled={busy || !bed.active || bed.status !== 'AVAILABLE'}
-                            title={
-                              bed.status === 'AVAILABLE'
-                                ? undefined
-                                : 'Only an active, available bed can start a session'
-                            }
-                            onClick={() =>
-                              void act(row, () => staffApi.startSession(token, bed.id))
-                            }
-                          >
-                            Start session
-                          </button>
-                        )
-                      )}
+                    <td data-label="Location">
+                      {row.location || 'Location details unavailable'}
+                      {!bed.active && <div className="muted small">Out of service</div>}
                     </td>
                     <td data-label="QR code">
                       {qrCode?.status === 'ACTIVE' ? (

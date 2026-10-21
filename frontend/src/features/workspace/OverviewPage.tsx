@@ -194,7 +194,7 @@ function Stats({ data, manager }: { data: Snapshot; manager: boolean }) {
       label: 'Occupied beds',
       value: data.sessions?.length ?? 0,
       hint: `of ${active.length} active beds`,
-      to: '/admin/beds',
+      to: '/admin/bed-management',
     });
   }
   if (data.staff) {
