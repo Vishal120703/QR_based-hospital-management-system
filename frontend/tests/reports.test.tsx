@@ -16,13 +16,12 @@ import { PersonReportPage } from '../src/features/reports/PersonReportPage';
 import { ReportsPage } from '../src/features/reports/ReportsPage';
 import {
   auditCsv,
-  personBreakdown,
-  personCsv,
   reportCsv,
   requestLogCsv,
   periodLabel,
   toCsv,
 } from '../src/features/reports/report-format';
+import { personBreakdown, personCsv } from '../src/features/reports/person-report-format';
 import { datesProblem, rangeFor } from '../src/features/reports/report-period';
 
 // Where the app is now, so a test can see where a link or a choice went.
