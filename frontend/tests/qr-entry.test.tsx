@@ -60,6 +60,8 @@ describe('Patient QR entry', () => {
       location: {
         hospitalName: 'Test Hospital',
         hospitalLogoUrl: null,
+        requestsPaused: false,
+        languages: ['en', 'hi'],
         bed: { code: '101', displayName: 'Bed 101' },
         room: null,
         ward: 'General',
@@ -109,6 +111,8 @@ describe('Patient QR entry', () => {
       location: {
         hospitalName: 'Test Hospital',
         hospitalLogoUrl: null,
+        requestsPaused: false,
+        languages: ['en', 'hi'],
         bed: { code: '101', displayName: 'Bed 101' },
         room: null,
         ward: 'General',
@@ -160,6 +164,8 @@ describe('Patient QR entry', () => {
       location: {
         hospitalName: 'Test Hospital',
         hospitalLogoUrl: null,
+        requestsPaused: false,
+        languages: ['en', 'hi'],
         bed: { code: '101', displayName: 'Bed 101' },
         room: null,
         ward: 'General',

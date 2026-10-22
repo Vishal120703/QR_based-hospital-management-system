@@ -13,6 +13,7 @@ import {
   MapPinned,
   Menu,
   QrCode,
+  Settings,
   ShieldCheck,
   Timer,
   UserRoundCheck,
@@ -20,7 +21,7 @@ import {
   UsersRound,
   X,
 } from 'lucide-react';
-import { Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
+import { Link, Navigate, NavLink, Outlet, useLocation, useOutletContext } from 'react-router';
 import { ApiError, assetUrl, credentials, staffApi, type Me } from '../../api';
 import { NotificationBell } from '../notifications/NotificationBell';
 import { BrandMark, LoadState, NoticeStack, PoweredBy, RouteLoading } from '../../components';
@@ -51,10 +52,17 @@ export const adminPages = [
   },
   {
     path: 'hospital',
-    label: 'Profile & settings',
+    label: 'Profile & logo',
     group: 'Hospital',
     permissions: ['hospital.manage'],
     icon: Hospital,
+  },
+  {
+    path: 'settings',
+    label: 'Settings',
+    group: 'Hospital',
+    permissions: ['hospital.manage'],
+    icon: Settings,
   },
   {
     path: 'audit',
@@ -431,6 +439,18 @@ export function AdminLayout() {
             onDismissError={() => setError(null)}
             onDismissSuccess={() => setSuccess(null)}
           />
+          {/* Patients cannot send requests: everyone handling requests should know. */}
+          {me?.tenant.patientRequestsPaused &&
+            !mustChangePassword &&
+            (canAnywhere('request.read') || can('hospital.manage')) && (
+              <p className="notice notice-warning notice-paused" role="status">
+                <strong>Patient requests are paused.</strong>
+                <span>Patients cannot send new requests from their bedside QR.</span>
+                {can('hospital.manage') && (
+                  <Link to="/admin/settings">Turn them back on in Settings</Link>
+                )}
+              </p>
+            )}
           {!context ? (
             <LoadState
               loading={!error}

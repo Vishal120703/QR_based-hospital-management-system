@@ -93,6 +93,10 @@ erDiagram
     string timezone
     HospitalStatus status
     boolean bedOccupancyEnabled
+    boolean patientRequestsPaused
+    boolean escalationsPaused
+    string_list mutedNotificationTypes
+    string_list patientLanguages
     datetime createdAt
     datetime updatedAt
   }
@@ -652,6 +656,10 @@ erDiagram
     string timezone
     HospitalStatus status
     boolean bedOccupancyEnabled
+    boolean patientRequestsPaused
+    boolean escalationsPaused
+    string_list mutedNotificationTypes
+    string_list patientLanguages
     datetime createdAt
     datetime updatedAt
   }

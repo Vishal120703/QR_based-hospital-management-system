@@ -36,7 +36,12 @@ export class GuestSessionRepository {
     return Promise.all([
       db.hospital.findUniqueOrThrow({
         where: { id: hospitalId },
-        select: { name: true, logo: { select: { publicId: true } } },
+        select: {
+          name: true,
+          logo: { select: { publicId: true } },
+          patientRequestsPaused: true,
+          patientLanguages: true,
+        },
       }),
       db.bed.findUniqueOrThrow({
         where: { hospitalId_id: { hospitalId, id: bedId } },

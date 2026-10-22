@@ -58,6 +58,7 @@ function show(path: string, permissions: string[], buildings: Building[] = [buil
         logoUrl: null,
         timezone: 'Asia/Kolkata',
         bedOccupancyEnabled: true,
+        patientRequestsPaused: false,
       },
       mustChangePassword: false,
       permissions,

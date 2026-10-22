@@ -31,10 +31,10 @@ test('a bedside QR works without admission when the hospital uses QR codes only'
     manager.locator('article.request-card', { hasText: 'Drinking Water' }),
   ).toBeVisible();
 
-  await menu.getByRole('link', { name: 'Profile & settings' }).click();
+  await menu.getByRole('link', { name: 'Settings' }).click();
   await expect(manager.getByRole('radio', { name: /QR codes only/ })).toBeChecked();
   await manager
-    .getByRole('region', { name: 'Bed occupancy management' })
+    .getByRole('region', { name: 'Bed management' })
     .screenshot({ path: testInfo.outputPath('qr-only-settings.png') });
 
   // Opening Bed management by its address explains that it is off.

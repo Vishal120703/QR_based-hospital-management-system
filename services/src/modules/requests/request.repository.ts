@@ -132,7 +132,13 @@ export class RequestRepository {
     return db.guestSession.findUnique({
       where: { id: guestSessionId },
       include: {
-        hospital: { select: { ...hospitalAccessSelect, bedOccupancyEnabled: true } },
+        hospital: {
+          select: {
+            ...hospitalAccessSelect,
+            bedOccupancyEnabled: true,
+            patientRequestsPaused: true,
+          },
+        },
         bedSession: { include: { bed: { select: { active: true, status: true } } } },
       },
     });

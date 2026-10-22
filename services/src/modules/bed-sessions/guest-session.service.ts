@@ -1,7 +1,12 @@
 import { type BedSession, type Prisma, type PrismaClient } from '@prisma/client';
 import { UnauthorizedError } from '../../common/errors/app-error.js';
 import { createOpaqueToken, hashOpaqueToken } from '../../common/opaque-token.js';
-import { hospitalIsOpen, logoUrl } from '../hospitals/index.js';
+import {
+  hospitalIsOpen,
+  logoUrl,
+  offeredLanguages,
+  type PatientLanguage,
+} from '../hospitals/index.js';
 import { BedSessionRepository } from './bed-session.repository.js';
 import { GuestSessionRepository } from './guest-session.repository.js';
 import { bedTakesPatients } from './patient-access.js';
@@ -21,6 +26,10 @@ export interface GuestContext {
 export interface GuestLocation {
   readonly hospitalName: string;
   readonly hospitalLogoUrl: string | null;
+  // The hospital paused new requests; existing ones can still be followed.
+  readonly requestsPaused: boolean;
+  // The languages the page may offer, English first.
+  readonly languages: readonly PatientLanguage[];
   readonly bed: { readonly code: string; readonly displayName: string };
   readonly room: string | null;
   readonly ward: string;
@@ -98,6 +107,8 @@ export class GuestSessionService {
     return {
       hospitalName: hospital.name,
       hospitalLogoUrl: logoUrl(hospital.logo?.publicId),
+      requestsPaused: hospital.patientRequestsPaused,
+      languages: offeredLanguages(hospital.patientLanguages),
       bed: { code: bed.code, displayName: bed.displayName },
       room: bed.room?.name ?? null,
       ward: bed.ward.name,

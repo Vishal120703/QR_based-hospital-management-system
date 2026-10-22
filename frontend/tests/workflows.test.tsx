@@ -25,6 +25,7 @@ const me: Me = {
     logoUrl: null,
     timezone: 'Asia/Kolkata',
     bedOccupancyEnabled: true,
+    patientRequestsPaused: false,
   },
   mustChangePassword: false,
   permissions: [],

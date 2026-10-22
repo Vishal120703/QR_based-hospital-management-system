@@ -9,6 +9,7 @@ export function createHospitalRoutes(controller: HospitalController): Router {
   const canManage = requirePermission('hospital.manage');
   router.get('/hospital', requirePermission('hospital.read'), controller.get);
   router.patch('/hospital', canManage, controller.update);
+  router.patch('/hospital/settings', canManage, controller.updateSettings);
   router.put(
     '/hospital/logo',
     canManage,

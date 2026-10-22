@@ -3,11 +3,14 @@ import { type Logger } from 'pino';
 import { NotFoundError } from '../../common/errors/app-error.js';
 import { type Db } from '../../database/client.js';
 import { canAccessLocation, type StaffContext } from '../auth/index.js';
+import { type StaffNotificationType } from '../hospitals/index.js';
 import { visibleRequestsWhere } from '../requests/index.js';
 import { findEligibleStaff } from '../staff/index.js';
 import { NotificationRepository, type NotificationSource } from './notification.repository.js';
 
-const messages: Record<string, { title: string; message: string }> = {
+// One message per kind of notification; the kinds are those a hospital can
+// turn off in Settings.
+const messageByType = {
   SUBMITTED: {
     title: 'New request needs assignment',
     message: 'New work is waiting in your authorized request queue.',
@@ -36,7 +39,8 @@ const messages: Record<string, { title: string; message: string }> = {
     title: 'Overdue request escalated',
     message: 'A configured SLA escalation needs your attention.',
   },
-};
+} satisfies Record<StaffNotificationType, { title: string; message: string }>;
+const messages: Partial<Record<string, { title: string; message: string }>> = messageByType;
 const metadataId = (metadata: Prisma.JsonValue, key: string) => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
   return typeof metadata[key] === 'string' ? metadata[key] : null;
@@ -163,8 +167,11 @@ export class NotificationService {
         ? metadataId(event.metadata, 'assigneeId')
         : (request?.assigneeId ?? null);
       const supported = Boolean(messages[type]);
+      // A kind the hospital turned off in Settings reaches nobody.
+      const muted = request?.hospital.mutedNotificationTypes.includes(type) ?? false;
       const actionable =
         supported &&
+        !muted &&
         currentEscalation &&
         (type !== 'SUBMITTED' || request?.status === 'SUBMITTED') &&
         (!['ASSIGNED', 'TRANSFERRED'].includes(type) ||

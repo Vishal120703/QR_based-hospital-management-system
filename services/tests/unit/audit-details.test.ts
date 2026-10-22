@@ -50,6 +50,30 @@ describe('audit entry descriptions', () => {
     });
   });
 
+  it('describes a change of hospital settings in plain words', () => {
+    expect(
+      lines(
+        describeAuditEntry(
+          'hospital.settings.update',
+          {
+            before: { patientRequestsPaused: false, mutedNotificationTypes: [] },
+            after: {
+              patientRequestsPaused: true,
+              mutedNotificationTypes: ['CANCELLED', 'ESCALATED'],
+            },
+          },
+          nameOf,
+        ),
+      ),
+    ).toEqual({
+      details: [],
+      changes: [
+        'New patient requests paused: no → yes',
+        'Notifications turned off: — → cancelled, escalated',
+      ],
+    });
+  });
+
   it('lists only the fields that changed, keeping codes as typed', () => {
     const result = describeAuditEntry(
       'ward.update',

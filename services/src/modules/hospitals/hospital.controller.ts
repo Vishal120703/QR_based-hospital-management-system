@@ -3,7 +3,11 @@ import { NotFoundError } from '../../common/errors/app-error.js';
 import { emptySchema } from '../../common/validation.js';
 import { getRequestId } from '../../middleware/request-id.js';
 import { getStaffContext } from '../../middleware/staff-auth.js';
-import { logoParamsSchema, updateHospitalSchema } from './hospital.schemas.js';
+import {
+  logoParamsSchema,
+  updateHospitalSchema,
+  updateSettingsSchema,
+} from './hospital.schemas.js';
 import { type HospitalService } from './hospital.service.js';
 
 export class HospitalController {
@@ -24,6 +28,16 @@ export class HospitalController {
       getRequestId(response),
     );
     response.status(200).json({ hospital });
+  };
+
+  public readonly updateSettings: RequestHandler = async (request, response) => {
+    const input = updateSettingsSchema.parse(request.body);
+    const settings = await this.hospitals.updateSettings(
+      getStaffContext(request),
+      input,
+      getRequestId(response),
+    );
+    response.status(200).json({ settings });
   };
 
   // The image is the raw request body; its type is checked from the bytes.

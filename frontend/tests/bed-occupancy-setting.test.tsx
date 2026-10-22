@@ -4,7 +4,7 @@ import { type ReactNode } from 'react';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { credentials, staffApi, type Hospital, type Me } from '../src/api';
-import { HospitalProfilePage } from '../src/features/hospital/HospitalProfilePage';
+import { SettingsPage } from '../src/features/hospital/SettingsPage';
 import { BedManagementPage } from '../src/features/locations/BedManagementPage';
 import { BedsPage } from '../src/features/locations/BedsPage';
 import { AdminLayout, type AdminContext } from '../src/features/workspace/AdminLayout';
@@ -23,6 +23,7 @@ function me(bedOccupancyEnabled: boolean, permissions = manager): Me {
       logoUrl: null,
       timezone: 'Asia/Kolkata',
       bedOccupancyEnabled,
+      patientRequestsPaused: false,
     },
     mustChangePassword: false,
     permissions,
@@ -58,6 +59,10 @@ const hospital: Hospital = {
   code: 'SUNRISE',
   timezone: 'Asia/Kolkata',
   bedOccupancyEnabled: true,
+  patientRequestsPaused: false,
+  escalationsPaused: false,
+  mutedNotificationTypes: [],
+  patientLanguages: ['en', 'hi'],
   logoUrl: null,
   logoUpdatedAt: null,
 };
@@ -75,7 +80,7 @@ describe('Choosing whether the hospital admits patients', () => {
       revokedGuestSessions: 0,
     });
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
-    const context = show(<HospitalProfilePage />, me(true));
+    const context = show(<SettingsPage />, me(true));
 
     const choices = await screen.findByRole('group', { name: 'How patients use the bedside QR' });
     const admissions = within(choices).getByRole('radio', { name: /Admit and discharge/ });
@@ -109,7 +114,7 @@ describe('Choosing whether the hospital admits patients', () => {
       revokedGuestSessions: 1,
     });
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const context = show(<HospitalProfilePage />, me(false));
+    const context = show(<SettingsPage />, me(false));
 
     await user.click(await screen.findByRole('radio', { name: /Admit and discharge/ }));
     expect(confirm.mock.calls[0]?.[0]).toContain('disconnected until they are admitted');
@@ -137,15 +142,16 @@ describe('Choosing whether the hospital admits patients', () => {
     const navigation = screen.getByRole('navigation', { name: 'Hospital administration' });
     expect(within(navigation).queryByRole('link', { name: 'Bed management' })).toBeNull();
     expect(within(navigation).getByRole('link', { name: 'QR codes' })).toBeTruthy();
-    expect(within(navigation).getByRole('link', { name: 'Profile & settings' })).toBeTruthy();
+    expect(within(navigation).getByRole('link', { name: 'Profile & logo' })).toBeTruthy();
+    expect(within(navigation).getByRole('link', { name: 'Settings' })).toBeTruthy();
   });
 
   it('explains on Bed management that it is turned off, without loading beds', () => {
     const list = vi.spyOn(staffApi, 'list').mockResolvedValue([]);
     show(<BedManagementPage />, me(false));
     expect(screen.getByRole('heading', { name: 'Bed management is turned off' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Profile & settings' }).getAttribute('href')).toBe(
-      '/admin/hospital',
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe(
+      '/admin/settings',
     );
     expect(screen.getByRole('link', { name: 'Go to QR codes' }).getAttribute('href')).toBe(
       '/admin/beds',

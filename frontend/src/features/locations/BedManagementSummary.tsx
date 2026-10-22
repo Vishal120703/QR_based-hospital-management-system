@@ -25,7 +25,7 @@ export function BedManagementOff() {
           {can('hospital.manage') ? (
             <>
               To admit and discharge patients and see occupancy, turn it on in{' '}
-              <Link to="/admin/hospital">Profile &amp; settings</Link>.
+              <Link to="/admin/settings">Settings</Link>.
             </>
           ) : (
             'A hospital manager can turn it on.'

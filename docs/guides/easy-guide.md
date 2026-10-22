@@ -54,7 +54,19 @@ Floor and ward managers and department supervisors see reports only for their ow
 - Each bed tile shows how long the patient has stayed (stays over 7 days are marked **Long stay**) and how many of its requests are open or overdue. Filter by state, floor, or ward, search, or **Download** the list for Excel.
 - **Admit** an available bed when a patient arrives (their bedside QR starts working); **Discharge** when they leave. Hospital managers can also take a free bed out of use with **Maintenance** and bring it **Back in service**. Floor and ward managers admit and discharge only in their own area.
 - QR labels (issue, print, replace, disable) are on the separate **QR codes** screen.
-- **Don't admit patients?** Some hospitals only want the bedside QR. A Hospital Manager opens **Hospital → Profile & settings** and chooses **QR codes only**. Then a bed's QR works as soon as it is on the bed, no bed shows as occupied, and **Bed management** leaves the menu. Whoever scans a bed's QR sees that bed's open requests; once nothing is open and nobody has used the QR for 2 hours, the next scan starts a fresh list, so a new patient never sees the last one's requests. Patients admitted at the moment you switch stay connected. Choosing **Admit and discharge patients** again disconnects patients until they are admitted. Both changes are in the audit log.
+- **Don't admit patients?** Some hospitals only want the bedside QR. A Hospital Manager opens **Hospital → Settings** and chooses **QR codes only**. Then a bed's QR works as soon as it is on the bed, no bed shows as occupied, and **Bed management** leaves the menu. Whoever scans a bed's QR sees that bed's open requests; once nothing is open and nobody has used the QR for 2 hours, the next scan starts a fresh list, so a new patient never sees the last one's requests. Patients admitted at the moment you switch stay connected. Choosing **Admit and discharge patients** again disconnects patients until they are admitted. Both changes are in the audit log.
+
+### Settings (Hospital Manager)
+
+**Hospital → Settings** holds the switches for the whole hospital. Each change applies at once, is checked by the server (not only hidden on screen), and is listed in the **Audit log** as "Changed hospital settings" with what it was before.
+
+- **Bed management:** admit and discharge patients, or **QR codes only** (see above).
+- **Patient requests:** **Pause new requests** for a while, for example during maintenance or a drill. Patients can still open their page and follow or cancel their requests, but they cannot send new ones; they are asked to tell a member of staff. While paused, every staff member who handles requests sees "Patient requests are paused" at the top of the screen.
+- **Escalations:** **Pause escalations** stops overdue requests being escalated, without editing each escalation policy. When you turn escalations back on, requests that are still overdue escalate then.
+- **Staff notifications:** untick a kind of notification (for example **Request cancelled**) and **Save notifications**, and nobody in the hospital receives that kind in the bell. The Requests badge, sound, and desktop alerts are separate, and each person sets them on the Requests screen.
+- **Patient page languages:** English is always offered; untick Hindi to show the patient page in English only.
+
+The hospital name and logo are on **Hospital → Profile & logo**.
 
 ### Alerts, overdue work, and passwords
 
@@ -298,7 +310,7 @@ Do these in order. ✔ = what you should see.
 5. (Optional) Click **First Floor**, choose **Maternity / postnatal** in **Add a unit or ward** and click **Add unit**.
    ✔ The new Maternity Ward opens straight away with standard beds suggested. Try **Rooms with beds** to see how rooms 1–10 with 2 beds each would be numbered.
 
-**Your hospital's logo.** Each hospital (each client) has its own logo. Open **Hospital → Profile & settings**, choose **Upload logo** (PNG, JPEG, WebP, or SVG), check the preview, then **Save logo**. It appears in the top bar for staff, at the top of the patient page, and on every QR label printed after that. When onboarding a new client from the command line, set `HOSPITAL_LOGO_PATH` before `npm run bootstrap:hospital`.
+**Your hospital's logo.** Each hospital (each client) has its own logo. Open **Hospital → Profile & logo**, choose **Upload logo** (PNG, JPEG, WebP, or SVG), check the preview, then **Save logo**. It appears in the top bar for staff, at the top of the patient page, and on every QR label printed after that. When onboarding a new client from the command line, set `HOSPITAL_LOGO_PATH` before `npm run bootstrap:hospital`.
 
 **Printing QR labels for many beds at once.** After **Add beds**, a green bar offers **Print QR labels** for exactly the beds you just added. Location screens also have QR-label actions. In **QR codes → Print QR labels**, choose a floor, then optionally a unit or room. You get one PDF, sorted bed by bed, in three sizes: **Large** (1 per A4 page, for the wall), **Medium** (4 per page, for the bed rail), or **Small** (12 stickers per page). Print at 100% scale (“Actual size”) and keep copies private. For one bed, use **View / print QR** to print the same active code again without disconnecting anyone. A QR created before reprinting was added must be replaced once first; after that it can be reopened normally.
 

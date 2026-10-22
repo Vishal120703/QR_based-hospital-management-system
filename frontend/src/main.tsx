@@ -33,6 +33,7 @@ const HospitalProfilePage = page(
   () => import('./features/hospital/HospitalProfilePage'),
   'HospitalProfilePage',
 );
+const SettingsPage = page(() => import('./features/hospital/SettingsPage'), 'SettingsPage');
 const BedsPage = page(() => import('./features/locations/BedsPage'), 'BedsPage');
 const BedManagementPage = page(
   () => import('./features/locations/BedManagementPage'),
@@ -103,6 +104,7 @@ root.render(
               <Route path="overview" element={<OverviewPage />} />
               <Route path="requests" element={<RequestsPage />} />
               <Route path="hospital" element={<HospitalProfilePage />} />
+              <Route path="settings" element={<SettingsPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="password" element={<ChangePasswordPage />} />
               <Route path="reports/people/:membershipId" element={<PersonReportPage />} />

@@ -3,7 +3,8 @@ import { NotFoundError } from '../../common/errors/app-error.js';
 import { recordStaffAudit } from '../audit/index.js';
 import { type StaffContext } from '../auth/index.js';
 import { HospitalRepository } from './hospital.repository.js';
-import { type UpdateHospitalInput } from './hospital.schemas.js';
+import { type UpdateHospitalInput, type UpdateSettingsInput } from './hospital.schemas.js';
+import { type HospitalSettings } from './hospital-settings.js';
 import { logoUrl, storeLogo } from './logo.js';
 
 // The signed-in staff member's own hospital: its profile and logo.
@@ -58,6 +59,52 @@ export class HospitalService {
   // Public read by the unguessable per-upload id; no tenant context needed.
   public readLogo(publicId: string) {
     return this.hospitals.findLogo(this.database, publicId);
+  }
+
+  // Changes the Settings switches given; only those are audited, with their
+  // values before and after.
+  public updateSettings(
+    context: StaffContext,
+    input: UpdateSettingsInput,
+    requestId: string,
+  ): Promise<HospitalSettings> {
+    const hospitalId = context.tenant.hospitalId;
+    return this.database.$transaction(
+      async (transaction) => {
+        const before = await this.hospitals.findSettings(transaction, hospitalId);
+        if (!before) throw new NotFoundError();
+        const after = await this.hospitals.updateSettings(transaction, hospitalId, {
+          ...(input.patientRequestsPaused !== undefined
+            ? { patientRequestsPaused: input.patientRequestsPaused }
+            : {}),
+          ...(input.escalationsPaused !== undefined
+            ? { escalationsPaused: input.escalationsPaused }
+            : {}),
+          ...(input.mutedNotificationTypes !== undefined
+            ? { mutedNotificationTypes: input.mutedNotificationTypes }
+            : {}),
+          ...(input.patientLanguages !== undefined
+            ? { patientLanguages: input.patientLanguages }
+            : {}),
+        });
+        const changed = (Object.keys(input) as (keyof UpdateSettingsInput)[]).filter(
+          (key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+        );
+        if (changed.length > 0) {
+          await recordStaffAudit(transaction, context, requestId, {
+            action: 'hospital.settings.update',
+            targetType: 'Hospital',
+            targetId: hospitalId,
+            metadata: {
+              before: Object.fromEntries(changed.map((key) => [key, before[key]])),
+              after: Object.fromEntries(changed.map((key) => [key, after[key]])),
+            },
+          });
+        }
+        return after;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   }
 
   public async updateCurrent(context: StaffContext, input: UpdateHospitalInput, requestId: string) {

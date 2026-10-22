@@ -28,6 +28,8 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'ended' };
 
+const languageNames: Record<Language, string> = { en: 'English', hi: 'हिन्दी' };
+
 function upsertRequest(requests: PublicRequest[], updated: PublicRequest): PublicRequest[] {
   return [updated, ...requests.filter((request) => request.publicId !== updated.publicId)].sort(
     (left, right) => Date.parse(right.submittedAt) - Date.parse(left.submittedAt),
@@ -36,7 +38,7 @@ function upsertRequest(requests: PublicRequest[], updated: PublicRequest): Publi
 
 export function PatientPage() {
   const [guestToken] = useState(() => credentials.guest());
-  const [language, setLanguage] = useState<Language>(() => {
+  const [chosenLanguage, setLanguage] = useState<Language>(() => {
     try {
       return sessionStorage.getItem(languageKey) === 'hi' ? 'hi' : 'en';
     } catch {
@@ -60,7 +62,12 @@ export function PatientPage() {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const pending = useRef(false);
   const refreshGeneration = useRef(0);
+  // The hospital chooses the languages patients may use; English is always one.
+  const offered: Language[] = state.kind === 'ready' ? state.location.languages : ['en', 'hi'];
+  const language: Language = offered.includes(chosenLanguage) ? chosenLanguage : 'en';
   const t = copy[language];
+  // The hospital paused new requests; existing ones can still be followed.
+  const paused = state.kind === 'ready' && state.location.requestsPaused;
 
   const endSession = useCallback(() => {
     refreshGeneration.current += 1;
@@ -148,6 +155,14 @@ export function PatientPage() {
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
         endSession();
+      } else if (cause instanceof ApiError && cause.code === 'PATIENT_REQUESTS_PAUSED') {
+        // Paused since the page opened: say so and stop offering requests.
+        setState((current) =>
+          current.kind === 'ready'
+            ? { ...current, location: { ...current.location, requestsPaused: true } }
+            : current,
+        );
+        setFeedback({ kind: 'error', message: `${t.paused} ${t.pausedHelp}` });
       } else {
         shouldRefresh = true;
         setFeedback({
@@ -245,17 +260,22 @@ export function PatientPage() {
             <strong>{connected?.location.hospitalName ?? 'CARE QR'}</strong>
           </span>
         )}
-        <label className="pp-language">
-          <Globe size={20} aria-hidden="true" />
-          <span>{t.language}</span>
-          <select
-            value={language}
-            onChange={(event) => changeLanguage(event.target.value as Language)}
-          >
-            <option value="en">English</option>
-            <option value="hi">हिन्दी</option>
-          </select>
-        </label>
+        {offered.length > 1 && (
+          <label className="pp-language">
+            <Globe size={20} aria-hidden="true" />
+            <span>{t.language}</span>
+            <select
+              value={language}
+              onChange={(event) => changeLanguage(event.target.value as Language)}
+            >
+              {offered.map((option) => (
+                <option key={option} value={option}>
+                  {languageNames[option]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </header>
 
       {state.kind === 'loading' && (
@@ -344,6 +364,12 @@ export function PatientPage() {
                 {feedback.message}
               </p>
             ))}
+          {paused && (
+            <section className="card pp-card notice-warning" role="status">
+              <h2>{t.paused}</h2>
+              <p>{t.pausedHelp}</p>
+            </section>
+          )}
           {state.categories.length === 0 && (
             <section className="card pp-card">
               <h2>{t.noServices}</h2>
@@ -359,7 +385,7 @@ export function PatientPage() {
               requests={state.requests}
               isOpen={!folded.has(category.id)}
               busyServiceId={busyServiceId}
-              busy={busyServiceId !== null || busyCancelId !== null}
+              busy={paused || busyServiceId !== null || busyCancelId !== null}
               onToggle={() => setFolded((current) => toggle(current, category.id))}
               onRequest={(serviceId) => void submit(serviceId)}
               onViewRequest={(publicId) => setOpened((current) => toggle(current, publicId, true))}

@@ -1,5 +1,6 @@
 import { type Prisma } from '@prisma/client';
 import { type Db } from '../../database/client.js';
+import { hospitalSettingsSelect } from './hospital-settings.js';
 
 // Hospitals, their clients (customers), and their logos.
 export class HospitalRepository {
@@ -12,7 +13,7 @@ export class HospitalRepository {
         code: true,
         timezone: true,
         status: true,
-        bedOccupancyEnabled: true,
+        ...hospitalSettingsSelect,
         createdAt: true,
         updatedAt: true,
         logo: { select: { publicId: true, byteSize: true, updatedAt: true } },
@@ -34,6 +35,17 @@ export class HospitalRepository {
 
   public updateProfile(db: Db, hospitalId: string, data: { name?: string; timezone?: string }) {
     return db.hospital.update({ where: { id: hospitalId }, data });
+  }
+
+  public findSettings(db: Db, hospitalId: string) {
+    return db.hospital.findFirst({
+      where: { id: hospitalId, status: 'ACTIVE' },
+      select: hospitalSettingsSelect,
+    });
+  }
+
+  public updateSettings(db: Db, hospitalId: string, data: Prisma.HospitalUpdateInput) {
+    return db.hospital.update({ where: { id: hospitalId }, data, select: hospitalSettingsSelect });
   }
 
   public findClient(db: Db, id: string) {

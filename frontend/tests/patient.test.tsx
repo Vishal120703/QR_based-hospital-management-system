@@ -23,6 +23,8 @@ const location: GuestLocation = {
   ward: 'General',
   floor: 'First floor',
   expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  requestsPaused: false,
+  languages: ['en', 'hi'],
 };
 
 const categories: PublicCategory[] = [

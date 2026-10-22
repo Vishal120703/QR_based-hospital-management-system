@@ -46,6 +46,7 @@ function show(page: ReactNode, permissions: string[]) {
         logoUrl: null,
         timezone: 'Asia/Kolkata',
         bedOccupancyEnabled: true,
+        patientRequestsPaused: false,
       },
       mustChangePassword: false,
       permissions,

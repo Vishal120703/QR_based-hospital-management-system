@@ -2,6 +2,8 @@ import { call, query } from './client';
 import {
   type Bed,
   type BedOccupancyChange,
+  type HospitalSettings,
+  type HospitalSettingsChange,
   type BedSession,
   type BulkStaffRow,
   type BulkBedsInput,
@@ -72,6 +74,9 @@ export const staffApi = {
   uploadLogo: (token: string, image: Blob) =>
     call<{ logoUrl: string }>('PUT', '/admin/hospital/logo', token, image),
   removeLogo: (token: string) => call<null>('DELETE', '/admin/hospital/logo', token),
+  updateSettings: async (token: string, change: HospitalSettingsChange) =>
+    (await call<{ settings: HospitalSettings }>('PATCH', '/admin/hospital/settings', token, change))
+      .settings,
   setBedOccupancy: async (token: string, enabled: boolean) =>
     (
       await call<{ bedOccupancy: BedOccupancyChange }>('PUT', '/admin/bed-occupancy', token, {

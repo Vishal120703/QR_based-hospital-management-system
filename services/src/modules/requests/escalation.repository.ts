@@ -34,7 +34,9 @@ export class EscalationRepository {
     return db.serviceRequest.findMany({
       where: {
         AND: [overdue, { escalationPolicyId: { not: null } }],
-        hospital: { status: 'ACTIVE', client: { status: 'ACTIVE' } },
+        // A hospital can pause escalations in Settings; its overdue requests
+        // escalate once it turns them back on.
+        hospital: { status: 'ACTIVE', escalationsPaused: false, client: { status: 'ACTIVE' } },
         ...(after ? { id: { gt: after } } : {}),
       },
       orderBy: { id: 'asc' },

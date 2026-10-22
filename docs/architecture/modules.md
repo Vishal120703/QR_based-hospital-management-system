@@ -6,7 +6,7 @@ Every module lives in `services/src/modules/<name>/` and follows the [five layer
 |---|---|---|---|
 | [auth](#auth) | Staff sign-in, sessions, password change, and the staff context used for every access check | `StaffSession` | `/auth/staff/*` |
 | [platform](#platform) | Super admin: sign-in, clients, hospitals, managers | `Client`, `Hospital` (status, client), `PlatformSession` | `/auth/platform/*`, `/platform/*` |
-| [hospitals](#hospitals) | Hospital onboarding, profile, logo, "is this hospital open" | `Client`, `Hospital`, `HospitalLogo` | `/admin/hospital*`, `/public/logos/:id` |
+| [hospitals](#hospitals) | Hospital onboarding, profile, logo, settings, "is this hospital open" | `Client`, `Hospital`, `HospitalLogo` | `/admin/hospital*`, `/public/logos/:id` |
 | [roles](#roles) | Permissions, built-in and custom roles, who holds which role where | `Permission`, `Role`, `RolePermission`, `UserRole`, `ScopeAssignment` | `/admin/roles*`, `/admin/memberships/:id/roles*` |
 | [departments](#departments) | Teams such as Nursing or Pantry | `Department` | `/admin/departments*` |
 | [staff](#staff) | Staff accounts, status, duty, departments, coverage, shifts, eligibility | `User`, `HospitalMembership`, `StaffDepartment`, `StaffLocationScope`, `Shift` | `/admin/staff*`, `/admin/shifts*` |
@@ -40,8 +40,9 @@ The super admin (CARE QR / Healio team). Manages clients and their hospitals; ne
 
 ## hospitals
 
-- **Public interface:** `bootstrapHospital` (creates client or uses an existing one, the hospital, its first Hospital Manager, built-in roles, example departments and services), `hospitalIsOpen` / `hospitalAccessSelect` (a hospital is open only while it **and its client** are active), logo helpers (`storeLogo`, `removeLogo`, `logoUrl`, `detectLogoType`, `maxLogoBytes`), `HospitalService`, `HospitalController`, routes.
-- **Files:** `hospital.*` layers, `onboarding.service.ts`, `hospital-access.ts`, `logo.ts`.
+- **Public interface:** `bootstrapHospital` (creates client or uses an existing one, the hospital, its first Hospital Manager, built-in roles, example departments and services), `hospitalIsOpen` / `hospitalAccessSelect` (a hospital is open only while it **and its client** are active), logo helpers (`storeLogo`, `removeLogo`, `logoUrl`, `detectLogoType`, `maxLogoBytes`), the settings rules (`staffNotificationTypes`, `patientLanguages`, `offeredLanguages`), `HospitalService`, `HospitalController`, routes.
+- **Settings** (`PATCH /admin/hospital/settings`, `hospital.manage`): `patientRequestsPaused` (the patient request service refuses new requests with `409 PATIENT_REQUESTS_PAUSED`), `escalationsPaused` (the escalation worker skips the hospital), `mutedNotificationTypes` (the notification service settles those kinds without recipients), and `patientLanguages` (sent to the patient page with `requestsPaused` in its location). Only changed values are audited as `hospital.settings.update`. Bed occupancy has its own endpoint in bed-sessions because switching it changes stays.
+- **Files:** `hospital.*` layers, `hospital-settings.ts`, `onboarding.service.ts`, `hospital-access.ts`, `logo.ts`.
 
 ## roles
 

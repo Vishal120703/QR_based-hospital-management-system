@@ -12,6 +12,8 @@ export interface Me {
     timezone: string;
     // Off: patients use bedside QR codes without being admitted.
     bedOccupancyEnabled: boolean;
+    // Settings paused new patient requests (staff screens say so).
+    patientRequestsPaused: boolean;
   };
   // An administrator reset the password: the person must choose a new one.
   mustChangePassword: boolean;
@@ -20,15 +22,41 @@ export interface Me {
   // Also includes permissions held only for some floors or wards.
   scopedPermissions: string[];
 }
-export interface Hospital {
+// The hospital profile, with its Settings.
+export interface Hospital extends HospitalSettings {
   id: string;
   name: string;
   code: string;
   timezone: string;
-  bedOccupancyEnabled: boolean;
   logoUrl: string | null;
   logoUpdatedAt: string | null;
 }
+
+// The kinds of staff inbox notification a hospital can turn off.
+export const staffNotificationTypes = [
+  'SUBMITTED',
+  'ASSIGNED',
+  'TRANSFERRED',
+  'COMPLETED',
+  'CANCELLED',
+  'REJECTED',
+  'ESCALATED',
+] as const;
+export type StaffNotificationType = (typeof staffNotificationTypes)[number];
+
+// What the hospital manager sets in Settings.
+export interface HospitalSettings {
+  // Off: patients use bedside QR codes without being admitted.
+  bedOccupancyEnabled: boolean;
+  // Patients cannot send new requests (the bedside QR still opens).
+  patientRequestsPaused: boolean;
+  // Overdue requests are not escalated.
+  escalationsPaused: boolean;
+  mutedNotificationTypes: StaffNotificationType[];
+  patientLanguages: PatientLanguage[];
+}
+
+export type HospitalSettingsChange = Partial<Omit<HospitalSettings, 'bedOccupancyEnabled'>>;
 
 // What turning bed occupancy management on or off changed.
 export interface BedOccupancyChange {
@@ -148,9 +176,15 @@ export interface BedSession {
   startedAt: string;
   endedAt: string | null;
 }
+export type PatientLanguage = 'en' | 'hi';
+
 export interface GuestLocation {
   hospitalName: string;
   hospitalLogoUrl: string | null;
+  // The hospital paused new requests; existing ones can still be followed.
+  requestsPaused: boolean;
+  // The languages the page may offer, English first.
+  languages: PatientLanguage[];
   bed: { code: string; displayName: string };
   room: string | null;
   ward: string;

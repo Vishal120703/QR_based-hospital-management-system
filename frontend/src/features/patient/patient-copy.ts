@@ -51,6 +51,9 @@ export const copy = {
     uncertainSubmit:
       'We could not confirm whether your request was sent. Check your requests below before trying again.',
     submitFailed: 'We could not send the request. Please try again.',
+    paused: 'New requests are paused right now.',
+    pausedHelp:
+      'Please tell a member of staff what you need. You can still follow and cancel your requests below.',
     cancel: 'Cancel request',
     cancelQuestion: 'Cancel this request?',
     cancelWarning:
@@ -122,6 +125,9 @@ export const copy = {
     uncertainSubmit:
       'अनुरोध भेजा गया या नहीं, इसकी पुष्टि नहीं हो सकी। दोबारा कोशिश करने से पहले नीचे अपने अनुरोध देखें।',
     submitFailed: 'अनुरोध नहीं भेजा जा सका। कृपया फिर कोशिश करें।',
+    paused: 'अभी नए अनुरोध रोके गए हैं।',
+    pausedHelp:
+      'कृपया किसी स्टाफ सदस्य को बताएं कि आपको क्या चाहिए। आप नीचे अपने अनुरोध देख और रद्द कर सकते हैं।',
     cancel: 'अनुरोध रद्द करें',
     cancelQuestion: 'क्या यह अनुरोध रद्द करना है?',
     cancelWarning:

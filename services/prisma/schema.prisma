@@ -188,34 +188,43 @@ model Client {
 }
 
 model Hospital {
-  id                  String               @id @default(uuid()) @db.Uuid
-  clientId            String               @db.Uuid
-  name                String
-  code                String               @unique
-  timezone            String
-  status              HospitalStatus       @default(ACTIVE)
+  id                     String               @id @default(uuid()) @db.Uuid
+  clientId               String               @db.Uuid
+  name                   String
+  code                   String               @unique
+  timezone               String
+  status                 HospitalStatus       @default(ACTIVE)
   // Off: the hospital uses bedside QR codes without admitting patients; a
   // scan opens the bed's stay itself and beds never show as occupied.
-  bedOccupancyEnabled Boolean              @default(true)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  settings            HospitalSetting[]
-  memberships         HospitalMembership[]
-  roles               Role[]
-  auditLogs           AuditLog[]
-  sessions            StaffSession[]
-  buildings           Building[]
-  floors              Floor[]
-  qrCodes             BedQrCode[]
-  bedSessions         BedSession[]
-  guestSessions       GuestSession[]
-  departments         Department[]
-  serviceCategories   ServiceCategory[]
-  slaPolicies         SlaPolicy[]
-  escalationPolicies  EscalationPolicy[]
-  serviceRequests     ServiceRequest[]
-  logo                HospitalLogo?
-  client              Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  bedOccupancyEnabled    Boolean              @default(true)
+  // The rest of the hospital manager's Settings. While paused, patients
+  // cannot send new requests (the bedside QR still opens).
+  patientRequestsPaused  Boolean              @default(false)
+  // While paused, overdue requests are not escalated.
+  escalationsPaused      Boolean              @default(false)
+  // Inbox notification types turned off for the whole hospital (SUBMITTED…).
+  mutedNotificationTypes String[]             @default([])
+  // Languages patients may choose on the bedside page; English is always one.
+  patientLanguages       String[]             @default(["en", "hi"])
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  settings               HospitalSetting[]
+  memberships            HospitalMembership[]
+  roles                  Role[]
+  auditLogs              AuditLog[]
+  sessions               StaffSession[]
+  buildings              Building[]
+  floors                 Floor[]
+  qrCodes                BedQrCode[]
+  bedSessions            BedSession[]
+  guestSessions          GuestSession[]
+  departments            Department[]
+  serviceCategories      ServiceCategory[]
+  slaPolicies            SlaPolicy[]
+  escalationPolicies     EscalationPolicy[]
+  serviceRequests        ServiceRequest[]
+  logo                   HospitalLogo?
+  client                 Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
 
   @@index([clientId])
 }

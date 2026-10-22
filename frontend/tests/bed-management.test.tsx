@@ -146,6 +146,7 @@ function show(
         logoUrl: null,
         timezone: 'Asia/Kolkata',
         bedOccupancyEnabled: true,
+        patientRequestsPaused: false,
       },
       mustChangePassword: false,
       permissions: hospitalWide,

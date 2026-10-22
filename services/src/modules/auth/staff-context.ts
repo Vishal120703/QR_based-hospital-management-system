@@ -17,6 +17,8 @@ export interface StaffContext {
     readonly timezone: string;
     // Off: patients use bedside QR codes without being admitted.
     readonly bedOccupancyEnabled: boolean;
+    // Settings paused new patient requests (staff screens say so).
+    readonly patientRequestsPaused: boolean;
   };
   readonly membershipId: string;
   readonly sessionId: string;

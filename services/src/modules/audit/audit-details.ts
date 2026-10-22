@@ -98,6 +98,12 @@ const labels: Readonly<Record<string, string>> = {
   bedCodes: 'Beds',
   roomCodes: 'Rooms',
   revokedGuestSessions: 'Patient sessions ended',
+  releasedBeds: 'Beds no longer occupied',
+  closedStays: 'Stays ended',
+  patientRequestsPaused: 'New patient requests paused',
+  escalationsPaused: 'Escalations paused',
+  mutedNotificationTypes: 'Notifications turned off',
+  patientLanguages: 'Patient page languages',
   revokedSessions: 'Staff sessions ended',
   dataset: 'Data set',
   assigneeId: 'Assigned to',
@@ -126,6 +132,9 @@ const enumKeys = new Set([
   'priority',
   'scopeLevel',
 ]);
+
+// Lists of stored codes (CANCELLED, ESCALATED), shown as "cancelled".
+const enumListKeys = new Set(['mutedNotificationTypes']);
 
 // Never shown: internal ids and bookkeeping.
 const hiddenKeys = new Set([
@@ -208,7 +217,9 @@ function show(key: string, value: unknown, nameOf: NameLookup): string | null {
   }
   if (Array.isArray(value)) {
     if (key === 'permissionKeys') return `${value.length}`;
-    const texts = value.filter((item): item is string => typeof item === 'string');
+    const texts = value
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => (enumListKeys.has(key) ? item.toLowerCase().replace(/_/g, ' ') : item));
     if (texts.length !== value.length) return `${value.length}`;
     return texts.length <= 4
       ? texts.join(', ') || '—'

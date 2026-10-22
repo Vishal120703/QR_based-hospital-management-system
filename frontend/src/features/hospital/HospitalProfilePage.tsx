@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { assetUrl, staffApi, type BedOccupancyChange, type Hospital } from '../../api';
-import { type ConfirmQuestion, LoadState, PageHeading, useConfirm } from '../../components';
+import { assetUrl, staffApi, type Hospital } from '../../api';
+import { LoadState, PageHeading, useConfirm } from '../../components';
 import { acceptedLogoTypes, prepareLogo } from '../../lib/logo-image';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
@@ -69,12 +69,6 @@ export function HospitalProfilePage() {
     }
   }
 
-  async function chooseOccupancy(enabled: boolean) {
-    if (!hospital || enabled === hospital.bedOccupancyEnabled) return;
-    if (!(await confirm(enabled ? turnOnQuestion : turnOffQuestion))) return;
-    await run(() => staffApi.setBedOccupancy(token, enabled), occupancyMessage);
-  }
-
   function saveName(event: FormEvent) {
     event.preventDefault();
     if (!hospital || name.trim() === hospital.name) return;
@@ -102,8 +96,8 @@ export function HospitalProfilePage() {
   return (
     <>
       <PageHeading
-        title="Profile & settings"
-        description="Your hospital's name and logo appear in the staff app, on the patient page, and on every printed QR label. Here you also choose whether staff admit patients to beds."
+        title="Hospital profile"
+        description="Your hospital's name and logo appear in the staff app, on the patient page, and on every printed QR label. Switches such as bed management and patient requests are in Settings."
       />
       <LoadState loading={false} error={loadError} onRetry={reload} />
       <div className="profile-grid">
@@ -210,73 +204,7 @@ export function HospitalProfilePage() {
             Staff enter the hospital code when they sign in. It cannot be changed here.
           </p>
         </section>
-
-        <section className="card occupancy-setting" aria-labelledby="occupancy-title">
-          <h2 id="occupancy-title">Bed occupancy management</h2>
-          <p className="small muted">
-            Choose whether staff admit and discharge patients, or patients simply scan the QR on
-            their bed. You can change this later.
-          </p>
-          <fieldset className="size-picker" disabled={busy}>
-            <legend className="visually-hidden">How patients use the bedside QR</legend>
-            {occupancyModes.map((mode) => (
-              <label
-                key={mode.title}
-                className={hospital.bedOccupancyEnabled === mode.enabled ? 'active' : ''}
-              >
-                <input
-                  type="radio"
-                  name="bed-occupancy"
-                  checked={hospital.bedOccupancyEnabled === mode.enabled}
-                  onChange={() => void chooseOccupancy(mode.enabled)}
-                />
-                <strong>{mode.title}</strong>
-                <span className="muted small">{mode.help}</span>
-              </label>
-            ))}
-          </fieldset>
-        </section>
       </div>
     </>
   );
-}
-
-const occupancyModes = [
-  {
-    enabled: true,
-    title: 'Admit and discharge patients',
-    help: 'Staff admit each patient in Bed management. A bed’s QR works only while a patient is admitted, and you see occupancy, free beds, and length of stay.',
-  },
-  {
-    enabled: false,
-    title: 'QR codes only',
-    help: 'No admissions: a bed’s QR works as soon as it is on the bed, and beds are not shown as occupied. Bed management leaves the menu.',
-  },
-];
-
-const turnOffQuestion: ConfirmQuestion = {
-  title: 'Use QR codes only?',
-  message:
-    'Patients will use a bed’s QR without being admitted, and beds will not show as occupied. Patients admitted now stay connected. Bed management leaves the menu.',
-  confirmLabel: 'Use QR codes only',
-};
-
-const turnOnQuestion: ConfirmQuestion = {
-  title: 'Turn on admissions?',
-  message:
-    'A bed’s QR will work only after the patient is admitted in Bed management. Anyone connected through a QR now is disconnected until they are admitted.',
-  confirmLabel: 'Turn on admissions',
-  danger: true,
-};
-
-function occupancyMessage(change: BedOccupancyChange): string {
-  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
-  if (!change.enabled) {
-    return change.releasedBeds > 0
-      ? `QR codes only. ${plural(change.releasedBeds, 'bed')} no longer show as occupied; those patients stay connected.`
-      : 'QR codes only. Patients can use a bed’s QR without being admitted.';
-  }
-  return change.revokedGuestSessions > 0
-    ? `Admissions are on. ${plural(change.revokedGuestSessions, 'patient connection')} ended; admit patients in Bed management so they can use their QR.`
-    : 'Admissions are on. Admit patients in Bed management so they can use their QR.';
 }

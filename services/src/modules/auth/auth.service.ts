@@ -124,6 +124,7 @@ export class StaffAuthService {
         logoUrl: logoUrl(session.hospital.logo?.publicId),
         timezone: session.hospital.timezone,
         bedOccupancyEnabled: session.hospital.bedOccupancyEnabled,
+        patientRequestsPaused: session.hospital.patientRequestsPaused,
       },
       membershipId: session.membershipId,
       sessionId: session.id,

@@ -82,6 +82,7 @@ Inventory sources: every `services/src/modules/*/*.routes.ts`, `services/src/htt
 | POST | `/admin/wards/:id/bulk-beds` | STAFF | bed.manage (HW); location.manage when creating rooms | HW + TENANT | LocationController.bulkBeds | LocationService |
 | GET | `/admin/hospital` | STAFF | hospital.read (HW) | session hospital | HospitalController.get | HospitalService |
 | PATCH | `/admin/hospital` | STAFF | hospital.manage (HW) | session hospital | HospitalController.update | HospitalService |
+| PATCH | `/admin/hospital/settings` | STAFF | hospital.manage (HW) | session hospital | HospitalController.updateSettings | HospitalService |
 | PUT | `/admin/hospital/logo` | STAFF | hospital.manage (HW) | session hospital | HospitalController.setLogo | HospitalService |
 | DELETE | `/admin/hospital/logo` | STAFF | hospital.manage (HW) | session hospital | HospitalController.removeLogo | HospitalService |
 | GET | `/public/logos/:publicId` | PUBLIC | — | opaque public branding ID | HospitalController.publicLogo | HospitalService |

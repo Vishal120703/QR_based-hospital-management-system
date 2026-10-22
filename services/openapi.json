@@ -1067,6 +1067,29 @@
         "x-access": "staff"
       }
     },
+    "/admin/hospital/settings": {
+      "patch": {
+        "operationId": "patch__admin_hospital_settings",
+        "summary": "PATCH /admin/hospital/settings",
+        "tags": [
+          "Hospital"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
     "/admin/memberships/{id}/roles": {
       "post": {
         "operationId": "post__admin_memberships_by_id_roles",
@@ -3853,7 +3876,7 @@
       }
     }
   },
-  "x-route-count": 136,
+  "x-route-count": 137,
   "x-source-files": [
     "src/app.ts",
     "src/http/crud.ts",
@@ -3891,5 +3914,5 @@
     "src/modules/staff/staff.schemas.ts",
     "src/routes/index.ts"
   ],
-  "x-source-sha256": "01c608ef29568799056aa6a1ec0d8264d96c18730a7f7913b86e12f5ad86d5a3"
+  "x-source-sha256": "f44dc406e954946c296857f037716327a46b116e01650a16d73cea29d4b77e52"
 }

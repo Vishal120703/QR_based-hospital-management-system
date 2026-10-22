@@ -12,7 +12,7 @@ class BedOccupancyOffError extends AppError {
     super(
       409,
       'BED_OCCUPANCY_OFF',
-      'Bed occupancy management is turned off for this hospital, so patients are not admitted or discharged. A hospital manager can turn it on in Profile & settings.',
+      'Bed occupancy management is turned off for this hospital, so patients are not admitted or discharged. A hospital manager can turn it on in Settings.',
     );
   }
 }

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Prisma, type PrismaClient, type ServiceRequest } from '@prisma/client';
 import {
+  AppError,
   ConflictError,
   InvalidInputError,
   NotFoundError,
@@ -40,6 +41,18 @@ function toPublicRequest(request: ServiceRequest) {
 // What a patient does with their own requests during their bed stay: submit,
 // list, and cancel. Every step first locks and rechecks the guest session, so
 // closing the stay or replacing the QR cannot race a patient's change.
+// The hospital has paused new patient requests in Settings. Existing requests
+// can still be tracked and cancelled.
+class PatientRequestsPausedError extends AppError {
+  public constructor() {
+    super(
+      409,
+      'PATIENT_REQUESTS_PAUSED',
+      'New requests are paused at this hospital right now. Please ask a member of staff for help.',
+    );
+  }
+}
+
 export class PatientRequestService {
   public constructor(
     private readonly database: PrismaClient,
@@ -52,7 +65,8 @@ export class PatientRequestService {
     try {
       return await this.database.$transaction(async (transaction) => {
         const now = new Date();
-        await this.assertActiveGuest(transaction, guest, now);
+        const hospital = await this.assertActiveGuest(transaction, guest, now);
+        if (hospital.patientRequestsPaused) throw new PatientRequestsPausedError();
         const snapshot = await snapshotService(transaction, guest.hospitalId, serviceId, now);
         if (!snapshot) throw new NotFoundError('The requested service is unavailable.');
         const created = await this.requests.create(transaction, {
@@ -189,11 +203,12 @@ export class PatientRequestService {
     });
   }
 
+  // Returns the hospital's settings that patient requests depend on.
   private async assertActiveGuest(
     transaction: Prisma.TransactionClient,
     guest: GuestContext,
     now: Date,
-  ): Promise<void> {
+  ): Promise<{ patientRequestsPaused: boolean }> {
     // A shared lock serializes request operations with BedSession.close.
     if (!(await this.requests.lockActiveBedSession(transaction, guest))) {
       throw new UnauthorizedError();
@@ -217,5 +232,6 @@ export class PatientRequestService {
     ) {
       throw new UnauthorizedError();
     }
+    return session.hospital;
   }
 }

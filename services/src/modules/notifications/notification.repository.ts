@@ -134,7 +134,13 @@ export class NotificationRepository {
       where: { hospitalId_id: { hospitalId, id } },
       include: {
         bed: { select: { wardId: true, ward: { select: { floorId: true } } } },
-        hospital: { select: { status: true, client: { select: { status: true } } } },
+        hospital: {
+          select: {
+            status: true,
+            mutedNotificationTypes: true,
+            client: { select: { status: true } },
+          },
+        },
       },
     });
   }

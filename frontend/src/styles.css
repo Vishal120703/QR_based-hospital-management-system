@@ -4486,16 +4486,60 @@ button.danger-solid:hover:not(:disabled) {
   }
 }
 
-/* Profile & settings: how the hospital uses the bedside QR. */
-.profile-grid > .occupancy-setting {
-  grid-column: 1 / -1;
+/* Settings: one card per switch, each choice explained. */
+.settings-list {
+  display: grid;
+  gap: 1rem;
+  max-width: 60rem;
 }
-.occupancy-setting .size-picker {
+.setting h2 {
+  margin-bottom: 0.25rem;
+}
+.setting .size-picker {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
 }
-.occupancy-setting .size-picker:disabled label {
+/* A shorter choice beside a longer one keeps its words together at the top. */
+.setting .size-picker label {
+  align-content: start;
+}
+.setting fieldset:disabled label {
   cursor: progress;
   opacity: 0.7;
+}
+.setting-checks {
+  border: none;
+  padding: 0;
+  margin: 0.75rem 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 0.5rem;
+}
+.setting-checks label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+.setting-checks label > span {
+  display: grid;
+  gap: 0.1rem;
+}
+.setting-checks input {
+  flex: none;
+  margin-top: 0.2rem;
+}
+.setting-checks input:disabled + span {
+  opacity: 0.75;
+}
+/* While patient requests are paused, staff screens say so. */
+.notice-paused {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
 }
 .occupancy-off .button {
   margin-top: 0.25rem;

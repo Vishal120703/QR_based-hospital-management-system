@@ -43,6 +43,7 @@ function show(page: ReactNode, { path = '/', url = '/' }: { path?: string; url?:
         logoUrl: null,
         timezone: 'Asia/Kolkata',
         bedOccupancyEnabled: true,
+        patientRequestsPaused: false,
       },
       mustChangePassword: false,
       permissions: ['analytics.read', 'audit.read'],
