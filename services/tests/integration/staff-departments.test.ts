@@ -261,6 +261,74 @@ describe('Phase 5 staff', () => {
     expect(JSON.stringify(stored)).not.toContain(staffPassword);
   });
 
+  it('imports configured staff atomically and identifies the failing spreadsheet row', async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const nursing = await departmentId(hospitalA, 'NURSING');
+    const role = await database.role.create({
+      data: { hospitalId: hospitalA.hospitalId, name: `Bulk role ${suffix}` },
+    });
+    const rows = [
+      {
+        displayName: 'Bulk Asha',
+        email: `bulk-asha-${suffix}@example.test`,
+        password: staffPassword,
+        roleId: role.id,
+        departmentIds: [nursing],
+        coverage: [{ scopeType: 'HOSPITAL' }],
+      },
+      {
+        displayName: 'Bulk Ravi',
+        email: `bulk-ravi-${suffix}@example.test`,
+        password: staffPassword,
+        roleId: role.id,
+        departmentIds: [nursing],
+        coverage: [{ scopeType: 'HOSPITAL' }],
+      },
+    ];
+    const imported = await as(hospitalA.adminToken).post('/admin/staff/bulk', { rows });
+    expect(imported.status, JSON.stringify(imported.body)).toBe(201);
+    const result = z
+      .object({ created: z.number(), staff: z.array(staffSchema) })
+      .parse(imported.body);
+    expect(result.created).toBe(2);
+    expect(
+      result.staff.map((member) => ({
+        email: member.email,
+        departments: member.departmentIds,
+        roles: member.roleIds,
+        coverage: member.coverage.map((scope) => scope.scopeType),
+      })),
+    ).toEqual(
+      rows.map((row) => ({
+        email: row.email,
+        departments: [nursing],
+        roles: [role.id],
+        coverage: ['HOSPITAL'],
+      })),
+    );
+    const audits = await database.auditLog.findMany({
+      where: {
+        hospitalId: hospitalA.hospitalId,
+        targetId: { in: result.staff.map((member) => member.id) },
+      },
+    });
+    expect(audits.filter((entry) => entry.action === 'staff.create')).toHaveLength(2);
+    expect(JSON.stringify(audits)).not.toContain(staffPassword);
+
+    const rollbackEmail = `must-rollback-${suffix}@example.test`;
+    const failed = await as(hospitalA.adminToken).post('/admin/staff/bulk', {
+      rows: [
+        { displayName: 'Must Roll Back', email: rollbackEmail, password: staffPassword },
+        { displayName: 'Duplicate Existing', email: rows[0]!.email, password: staffPassword },
+      ],
+    });
+    expect(failed.status).toBe(409);
+    expect(
+      z.object({ error: z.object({ message: z.string() }) }).parse(failed.body).error.message,
+    ).toContain('Row 3:');
+    expect(await database.user.findUnique({ where: { email: rollbackEmail } })).toBeNull();
+  });
+
   it('removes roles symmetrically with assignment and never from yourself', async () => {
     const admin = as(hospitalA.adminToken);
     const member = await createStaff(hospitalA, 'Ravi');
@@ -515,6 +583,13 @@ describe('Phase 5 staff', () => {
           email: 'x@example.test',
           displayName: 'X',
           password: staffPassword,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await reader.post('/admin/staff/bulk', {
+          rows: [{ email: 'bulk-x@example.test', displayName: 'Bulk X', password: staffPassword }],
         })
       ).status,
     ).toBe(403);

@@ -187,6 +187,73 @@ describe('SLA editing interactions', () => {
 });
 
 describe('Staff creation recovery', () => {
+  it('previews and imports a CSV staff file without displaying temporary passwords', async () => {
+    const user = userEvent.setup();
+    const member: StaffMember = {
+      id: 'bulk-asha-membership',
+      email: 'bulk-asha@example.test',
+      displayName: 'Bulk Asha',
+      status: 'ACTIVE',
+      dutyStatus: 'OFF_DUTY',
+      dutyChangedAt: null,
+      departmentIds: ['nursing-department'],
+      coverage: [],
+      roleIds: ['nurse-role'],
+    };
+    mockLists({
+      staff: [],
+      departments: [{ id: 'nursing-department', code: 'NURSING', name: 'Nursing', active: true }],
+      roles: [
+        {
+          id: 'nurse-role',
+          name: 'Nurse',
+          active: true,
+          scopeLevel: 'HOSPITAL',
+        },
+      ],
+      floors: [],
+      wards: [],
+    });
+    const bulkCreate = vi
+      .spyOn(staffApi, 'bulkCreateStaff')
+      .mockResolvedValue({ staff: [member], created: 1 });
+    renderAdmin(<StaffPage />, 'staff', [
+      'staff.read',
+      'staff.manage',
+      'role.read',
+      'role.manage',
+      'location.read',
+    ]);
+
+    await screen.findByRole('heading', { name: 'Staff' });
+    const file = new File(
+      [
+        'Full name,Email,Temporary password,Role,Role scope,Departments,Coverage\n' +
+          'Bulk Asha,bulk-asha@example.test,StrongPass123!,Nurse,,NURSING,\n',
+      ],
+      'staff.csv',
+      { type: 'text/csv' },
+    );
+    await user.upload(screen.getByLabelText('Staff spreadsheet'), file);
+
+    expect(await screen.findByRole('table', { name: 'Staff import preview' })).toBeTruthy();
+    expect(screen.queryByText('StrongPass123!')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Import 1 staff member' }));
+    await waitFor(() =>
+      expect(bulkCreate).toHaveBeenCalledWith('staff-token', [
+        {
+          displayName: 'Bulk Asha',
+          email: 'bulk-asha@example.test',
+          password: 'StrongPass123!',
+          roleId: 'nurse-role',
+          departmentIds: ['nursing-department'],
+          coverage: [],
+        },
+      ]),
+    );
+    expect(await screen.findByText('1 staff member was added.')).toBeTruthy();
+  });
+
   it('keeps the created person and explains a failed role assignment without creating a duplicate', async () => {
     const user = userEvent.setup();
     const member: StaffMember = {

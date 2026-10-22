@@ -15,6 +15,7 @@ export function createStaffRoutes(staff: StaffController, shifts: ShiftControlle
   router.get('/staff/eligible', requireScopedPermission('staff.read'), staff.eligible);
   router.get('/staff/:id', canRead, staff.get);
   router.post('/staff', canManage, staff.create);
+  router.post('/staff/bulk', canManage, staff.bulkCreate);
   router.post('/staff/:id/status', canManage, staff.setStatus);
   router.post('/staff/:id/password', canManage, staff.resetPassword);
   router.post('/staff/:id/duty', canManage, staff.setDuty);

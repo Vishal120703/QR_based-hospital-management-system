@@ -3,6 +3,7 @@ import {
   type Bed,
   type BedOccupancyChange,
   type BedSession,
+  type BulkStaffRow,
   type BulkBedsInput,
   type CoverageInput,
   type Department,
@@ -146,6 +147,8 @@ export const staffApi = {
 
   createStaff: (token: string, input: { email: string; displayName: string; password: string }) =>
     call<StaffResponse>('POST', '/admin/staff', token, input),
+  bulkCreateStaff: (token: string, rows: BulkStaffRow[]) =>
+    call<{ staff: StaffMember[]; created: number }>('POST', '/admin/staff/bulk', token, { rows }),
   setStaffStatus: (token: string, id: string, status: MembershipStatus) =>
     call<StaffResponse>('POST', `/admin/staff/${id}/status`, token, { status }),
   setDuty: (token: string, id: string, dutyStatus: DutyStatus) =>

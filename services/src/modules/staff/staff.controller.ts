@@ -3,6 +3,7 @@ import { emptySchema, idParamsSchema } from '../../common/validation.js';
 import { getRequestId } from '../../middleware/request-id.js';
 import { getStaffContext } from '../../middleware/staff-auth.js';
 import {
+  bulkCreateStaffSchema,
   coverageParamsSchema,
   coverageSchema,
   createStaffSchema,
@@ -46,6 +47,16 @@ export class StaffController {
       getRequestId(response),
     );
     response.status(201).json({ staff: created });
+  };
+
+  public readonly bulkCreate: RequestHandler = async (request, response) => {
+    const input = bulkCreateStaffSchema.parse(request.body);
+    const created = await this.staff.bulkCreate(
+      getStaffContext(request),
+      input,
+      getRequestId(response),
+    );
+    response.status(201).json({ staff: created, created: created.length });
   };
 
   public readonly setStatus: RequestHandler = async (request, response) => {

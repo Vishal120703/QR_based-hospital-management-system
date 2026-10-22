@@ -15,10 +15,16 @@ import {
   type StaffContext,
 } from '../auth/index.js';
 import { lockedRoleKey } from '../roles/index.js';
+import { createStaffInBulk } from './bulk-staff.js';
 import { findEligibleStaff } from './eligibility.js';
 import { createStaffAccount } from './staff-account.js';
 import { StaffRepository, type StaffRow } from './staff.repository.js';
-import { type CoverageInput, type CreateStaffInput, type StaffFilter } from './staff.schemas.js';
+import {
+  type BulkCreateStaffInput,
+  type CoverageInput,
+  type CreateStaffInput,
+  type StaffFilter,
+} from './staff.schemas.js';
 
 type Transaction = Prisma.TransactionClient;
 const repository = new StaffRepository();
@@ -108,6 +114,12 @@ export class StaffService {
       });
       return toView(await this.requireMember(transaction, context, created.membershipId));
     });
+  }
+
+  public async bulkCreate(context: StaffContext, input: BulkCreateStaffInput, requestId: string) {
+    return (await createStaffInBulk(this.database, this.staff, context, input, requestId)).map(
+      toView,
+    );
   }
 
   public setStatus(context: StaffContext, id: string, status: MembershipStatus, requestId: string) {

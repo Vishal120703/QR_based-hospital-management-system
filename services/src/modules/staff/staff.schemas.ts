@@ -46,6 +46,48 @@ export const coverageSchema = z.discriminatedUnion('scopeType', [
   z.object({ scopeType: z.literal('WARD'), wardId: uuidSchema }).strict(),
 ]);
 
+const bulkStaffRowSchema = createStaffSchema.extend({
+  roleId: uuidSchema.optional(),
+  roleScopeId: uuidSchema.optional(),
+  departmentIds: z.array(uuidSchema).max(20).default([]),
+  coverage: z.array(coverageSchema).max(20).default([]),
+});
+
+export const bulkCreateStaffSchema = z
+  .object({ rows: z.array(bulkStaffRowSchema).min(1).max(50) })
+  .strict()
+  .superRefine(({ rows }, context) => {
+    const emails = new Map<string, number>();
+    rows.forEach((row, index) => {
+      const email = row.email.trim().toLowerCase();
+      const first = emails.get(email);
+      if (first !== undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['rows', index, 'email'],
+          message: `Duplicates row ${first + 2}.`,
+        });
+      } else {
+        emails.set(email, index);
+      }
+      if (!row.roleId && row.roleScopeId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['rows', index, 'roleScopeId'],
+          message: 'A role scope requires a role.',
+        });
+      }
+      const departments = new Set(row.departmentIds);
+      if (departments.size !== row.departmentIds.length) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['rows', index, 'departmentIds'],
+          message: 'Department assignments must be unique.',
+        });
+      }
+    });
+  });
+
 export const staffDepartmentParamsSchema = z
   .object({ id: uuidSchema, departmentId: uuidSchema })
   .strict();
@@ -54,4 +96,5 @@ export const coverageParamsSchema = z.object({ id: uuidSchema, coverageId: uuidS
 
 export type StaffFilter = z.infer<typeof staffListQuerySchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
+export type BulkCreateStaffInput = z.infer<typeof bulkCreateStaffSchema>;
 export type CoverageInput = z.infer<typeof coverageSchema>;

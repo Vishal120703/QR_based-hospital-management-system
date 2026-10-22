@@ -189,6 +189,15 @@ export interface StaffMember {
   // Where each role applies: the hospital, or specific floors, wards, or departments.
   roleAssignments?: { roleId: string; scopes: { type: RoleScopeType; id: string }[] }[];
 }
+export interface BulkStaffRow {
+  displayName: string;
+  email: string;
+  password: string;
+  roleId?: string;
+  roleScopeId?: string;
+  departmentIds: string[];
+  coverage: CoverageInput[];
+}
 export type RoleScopeLevel = 'HOSPITAL' | 'FLOOR' | 'WARD' | 'DEPARTMENT';
 export type RoleScopeType = RoleScopeLevel;
 export interface Role {

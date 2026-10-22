@@ -15,6 +15,7 @@ import { CreateForm, LoadState, PageHeading } from '../../components';
 import { useLoad } from '../../lib/use-load';
 import { useAdmin } from '../workspace/AdminLayout';
 import { StaffDialog } from './StaffDialog';
+import { BulkStaffImport } from './BulkStaffImport';
 import { coverageLabel, nameOf, type Directory } from './staff-directory';
 
 async function loadDirectory(
@@ -265,69 +266,72 @@ export function StaffPage() {
       )}
 
       {canManage && (
-        <section className="card add-staff">
-          <h2>Add staff member</h2>
-          <CreateForm
-            submitLabel="Add staff member"
-            onError={reportError}
-            fields={() => [
-              { name: 'displayName', label: 'Full name', placeholder: 'Asha Kumar' },
-              { name: 'email', label: 'Email', type: 'email', placeholder: 'asha@hospital.org' },
-              {
-                name: 'password',
-                label: 'Temporary password (12+ characters)',
-                type: 'password',
-                minLength: 12,
-              },
-              ...(canManageRoles
-                ? [
-                    {
-                      name: 'roleId',
-                      label: 'Role',
-                      optional: true,
-                      options: directory.roles
-                        .filter((role) => role.active)
-                        .map((role) => ({ value: role.id, label: role.name })),
-                    },
-                  ]
-                : []),
-            ]}
-            onCreate={async (values) => {
-              const { staff } = await staffApi.createStaff(token, {
-                displayName: values.displayName ?? '',
-                email: values.email ?? '',
-                password: values.password ?? '',
-              });
-              if (values.roleId) {
-                try {
-                  await staffApi.assignRole(token, staff.id, values.roleId);
-                } catch (cause) {
-                  reload();
-                  setManaging(staff.id);
-                  if (cause instanceof ApiError && cause.status === 401) reportError(cause);
-                  else
-                    reportError(
-                      new Error(
-                        `${staff.displayName} was created, but their role was not assigned. Do not create them again; use Manage to finish setup. ${cause instanceof Error ? cause.message : ''}`,
-                      ),
-                    );
-                  return;
+        <>
+          <BulkStaffImport directory={directory} onImported={reload} />
+          <section className="card add-staff">
+            <h2>Add one staff member</h2>
+            <CreateForm
+              submitLabel="Add staff member"
+              onError={reportError}
+              fields={() => [
+                { name: 'displayName', label: 'Full name', placeholder: 'Asha Kumar' },
+                { name: 'email', label: 'Email', type: 'email', placeholder: 'asha@hospital.org' },
+                {
+                  name: 'password',
+                  label: 'Temporary password (12+ characters)',
+                  type: 'password',
+                  minLength: 12,
+                },
+                ...(canManageRoles
+                  ? [
+                      {
+                        name: 'roleId',
+                        label: 'Role',
+                        optional: true,
+                        options: directory.roles
+                          .filter((role) => role.active)
+                          .map((role) => ({ value: role.id, label: role.name })),
+                      },
+                    ]
+                  : []),
+              ]}
+              onCreate={async (values) => {
+                const { staff } = await staffApi.createStaff(token, {
+                  displayName: values.displayName ?? '',
+                  email: values.email ?? '',
+                  password: values.password ?? '',
+                });
+                if (values.roleId) {
+                  try {
+                    await staffApi.assignRole(token, staff.id, values.roleId);
+                  } catch (cause) {
+                    reload();
+                    setManaging(staff.id);
+                    if (cause instanceof ApiError && cause.status === 401) reportError(cause);
+                    else
+                      reportError(
+                        new Error(
+                          `${staff.displayName} was created, but their role was not assigned. Do not create them again; use Manage to finish setup. ${cause instanceof Error ? cause.message : ''}`,
+                        ),
+                      );
+                    return;
+                  }
                 }
-              }
-              reload();
-              setManaging(staff.id);
-              reportSuccess(
-                `${staff.displayName} was created. Add departments and coverage to finish setup.`,
-              );
-            }}
-          />
-          {!canManageRoles && (
-            <p className="muted small">
-              Role assignment needs role management access. A role administrator can finish sign-in
-              setup after you create this person.
-            </p>
-          )}
-        </section>
+                reload();
+                setManaging(staff.id);
+                reportSuccess(
+                  `${staff.displayName} was created. Add departments and coverage to finish setup.`,
+                );
+              }}
+            />
+            {!canManageRoles && (
+              <p className="muted small">
+                Role assignment needs role management access. A role administrator can finish
+                sign-in setup after you create this person.
+              </p>
+            )}
+          </section>
+        </>
       )}
 
       {managed && (
