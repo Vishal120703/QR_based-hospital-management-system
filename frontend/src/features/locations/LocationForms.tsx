@@ -62,6 +62,9 @@ export function AddFloorForm({ tools, buildingId }: { tools: PanelTools; buildin
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [touched, setTouched] = useState(false);
+  // BuildingPanel stays mounted while its selected building changes. Prefer the
+  // current prop so a form opened for building B cannot retain building A's id.
+  const targetBuildingId = buildingId ?? building;
 
   function changeLevel(value: string) {
     setLevel(value);
@@ -83,7 +86,7 @@ export function AddFloorForm({ tools, buildingId }: { tools: PanelTools; buildin
               staffApi.create(token, 'floors', {
                 code,
                 name,
-                ...(building ? { buildingId: building } : {}),
+                ...(targetBuildingId ? { buildingId: targetBuildingId } : {}),
                 ...(level.trim() !== '' ? { level: Number(level) } : {}),
               }),
             `${name} added.`,

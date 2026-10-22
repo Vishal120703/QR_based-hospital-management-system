@@ -8,6 +8,7 @@ import { type AdminContext } from '../src/features/workspace/AdminLayout';
 import { LocationsPage } from '../src/features/locations/LocationsPage';
 
 const building: Building = { id: 'b1', code: 'MB', name: 'Main Block', active: true };
+const secondBuilding: Building = { id: 'b2', code: 'SW', name: 'Second Wing', active: true };
 const floors: Floor[] = [
   { id: 'f1', code: 'F1', name: 'First Floor', level: 1, buildingId: 'b1', active: true },
   { id: 'f0', code: 'G', name: 'Ground Floor', level: 0, buildingId: 'b1', active: true },
@@ -31,12 +32,12 @@ const beds: Bed[] = [1, 2].map((number) => ({
   active: true,
 }));
 
-function show(path: string, permissions: string[]) {
+function show(path: string, permissions: string[], buildings: Building[] = [building]) {
   vi.spyOn(staffApi, 'list').mockImplementation((_token, kind) =>
     Promise.resolve(
       (
         {
-          buildings: [building],
+          buildings,
           floors,
           wards: [ward],
           rooms: [],
@@ -191,6 +192,25 @@ describe('Hospital layout screen', () => {
       unitType: 'MATERNITY',
       code: 'MAT',
       name: 'Maternity Ward',
+    });
+  });
+
+  it('adds a floor to the newly selected building, not the previously selected one', async () => {
+    const user = userEvent.setup();
+    const create = vi.spyOn(staffApi, 'create').mockResolvedValue({});
+    show('/?at=building:b1', manager, [building, secondBuilding]);
+
+    await screen.findByRole('heading', { name: /Main Block/ });
+    await user.click(screen.getByRole('button', { name: /Second Wing/ }));
+    await screen.findByRole('heading', { name: /Second Wing/ });
+    await user.type(screen.getByRole('spinbutton', { name: /Level/ }), '2');
+    await user.click(screen.getByRole('button', { name: 'Add floor' }));
+
+    expect(create).toHaveBeenCalledWith('token', 'floors', {
+      buildingId: 'b2',
+      code: 'F2',
+      level: 2,
+      name: 'Second Floor',
     });
   });
 
