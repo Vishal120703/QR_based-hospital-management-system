@@ -1,0 +1,3895 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CARE QR API",
+    "version": "0.1.0",
+    "description": "Generated route inventory. Zod schemas remain the runtime authority for request fields."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "get_",
+        "summary": "GET /",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "public"
+      }
+    },
+    "/admin/audit-log": {
+      "get": {
+        "operationId": "get__admin_audit_log",
+        "summary": "GET /admin/audit-log",
+        "tags": [
+          "Audit Log"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/bed-occupancy": {
+      "put": {
+        "operationId": "put__admin_bed_occupancy",
+        "summary": "PUT /admin/bed-occupancy",
+        "tags": [
+          "Bed Occupancy"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/bed-sessions": {
+      "get": {
+        "operationId": "get__admin_bed_sessions",
+        "summary": "GET /admin/bed-sessions",
+        "tags": [
+          "Bed Sessions"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_bed_sessions",
+        "summary": "POST /admin/bed-sessions",
+        "tags": [
+          "Bed Sessions"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/bed-sessions/{id}/close": {
+      "post": {
+        "operationId": "post__admin_bed_sessions_by_id_close",
+        "summary": "POST /admin/bed-sessions/{id}/close",
+        "tags": [
+          "Bed Sessions"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/beds": {
+      "get": {
+        "operationId": "get__admin_beds",
+        "summary": "GET /admin/beds",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_beds",
+        "summary": "POST /admin/beds",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/beds/{id}": {
+      "delete": {
+        "operationId": "delete__admin_beds_by_id",
+        "summary": "DELETE /admin/beds/{id}",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_beds_by_id",
+        "summary": "GET /admin/beds/{id}",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_beds_by_id",
+        "summary": "PATCH /admin/beds/{id}",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/beds/{id}/qr": {
+      "post": {
+        "operationId": "post__admin_beds_by_id_qr",
+        "summary": "POST /admin/beds/{id}/qr",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/beds/{id}/qr/print": {
+      "post": {
+        "operationId": "post__admin_beds_by_id_qr_print",
+        "summary": "POST /admin/beds/{id}/qr/print",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/beds/{id}/qr/revoke": {
+      "post": {
+        "operationId": "post__admin_beds_by_id_qr_revoke",
+        "summary": "POST /admin/beds/{id}/qr/revoke",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/beds/{id}/qr/rotate": {
+      "post": {
+        "operationId": "post__admin_beds_by_id_qr_rotate",
+        "summary": "POST /admin/beds/{id}/qr/rotate",
+        "tags": [
+          "Beds"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/buildings": {
+      "get": {
+        "operationId": "get__admin_buildings",
+        "summary": "GET /admin/buildings",
+        "tags": [
+          "Buildings"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_buildings",
+        "summary": "POST /admin/buildings",
+        "tags": [
+          "Buildings"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/buildings/{id}": {
+      "delete": {
+        "operationId": "delete__admin_buildings_by_id",
+        "summary": "DELETE /admin/buildings/{id}",
+        "tags": [
+          "Buildings"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_buildings_by_id",
+        "summary": "GET /admin/buildings/{id}",
+        "tags": [
+          "Buildings"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_buildings_by_id",
+        "summary": "PATCH /admin/buildings/{id}",
+        "tags": [
+          "Buildings"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/departments": {
+      "get": {
+        "operationId": "get__admin_departments",
+        "summary": "GET /admin/departments",
+        "tags": [
+          "Departments"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_departments",
+        "summary": "POST /admin/departments",
+        "tags": [
+          "Departments"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/departments/{id}": {
+      "delete": {
+        "operationId": "delete__admin_departments_by_id",
+        "summary": "DELETE /admin/departments/{id}",
+        "tags": [
+          "Departments"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_departments_by_id",
+        "summary": "GET /admin/departments/{id}",
+        "tags": [
+          "Departments"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_departments_by_id",
+        "summary": "PATCH /admin/departments/{id}",
+        "tags": [
+          "Departments"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/escalation-policies": {
+      "get": {
+        "operationId": "get__admin_escalation_policies",
+        "summary": "GET /admin/escalation-policies",
+        "tags": [
+          "Escalation Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_escalation_policies",
+        "summary": "POST /admin/escalation-policies",
+        "tags": [
+          "Escalation Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/escalation-policies/{id}": {
+      "delete": {
+        "operationId": "delete__admin_escalation_policies_by_id",
+        "summary": "DELETE /admin/escalation-policies/{id}",
+        "tags": [
+          "Escalation Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_escalation_policies_by_id",
+        "summary": "GET /admin/escalation-policies/{id}",
+        "tags": [
+          "Escalation Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_escalation_policies_by_id",
+        "summary": "PATCH /admin/escalation-policies/{id}",
+        "tags": [
+          "Escalation Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/floors": {
+      "get": {
+        "operationId": "get__admin_floors",
+        "summary": "GET /admin/floors",
+        "tags": [
+          "Floors"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_floors",
+        "summary": "POST /admin/floors",
+        "tags": [
+          "Floors"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/floors/{id}": {
+      "delete": {
+        "operationId": "delete__admin_floors_by_id",
+        "summary": "DELETE /admin/floors/{id}",
+        "tags": [
+          "Floors"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_floors_by_id",
+        "summary": "GET /admin/floors/{id}",
+        "tags": [
+          "Floors"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_floors_by_id",
+        "summary": "PATCH /admin/floors/{id}",
+        "tags": [
+          "Floors"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/hospital": {
+      "get": {
+        "operationId": "get__admin_hospital",
+        "summary": "GET /admin/hospital",
+        "tags": [
+          "Hospital"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_hospital",
+        "summary": "PATCH /admin/hospital",
+        "tags": [
+          "Hospital"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/hospital/logo": {
+      "delete": {
+        "operationId": "delete__admin_hospital_logo",
+        "summary": "DELETE /admin/hospital/logo",
+        "tags": [
+          "Hospital"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "put": {
+        "operationId": "put__admin_hospital_logo",
+        "summary": "PUT /admin/hospital/logo",
+        "tags": [
+          "Hospital"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/memberships/{id}/roles": {
+      "post": {
+        "operationId": "post__admin_memberships_by_id_roles",
+        "summary": "POST /admin/memberships/{id}/roles",
+        "tags": [
+          "Memberships"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/memberships/{id}/roles/{roleId}": {
+      "delete": {
+        "operationId": "delete__admin_memberships_by_id_roles_by_roleId",
+        "summary": "DELETE /admin/memberships/{id}/roles/{roleId}",
+        "tags": [
+          "Memberships"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "roleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/memberships/{id}/roles/{roleId}/scopes/{scopeId}": {
+      "delete": {
+        "operationId": "delete__admin_memberships_by_id_roles_by_roleId_scopes_by_scopeId",
+        "summary": "DELETE /admin/memberships/{id}/roles/{roleId}/scopes/{scopeId}",
+        "tags": [
+          "Memberships"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "roleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/notifications": {
+      "get": {
+        "operationId": "get__admin_notifications",
+        "summary": "GET /admin/notifications",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/notifications/{id}/read": {
+      "post": {
+        "operationId": "post__admin_notifications_by_id_read",
+        "summary": "POST /admin/notifications/{id}/read",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/notifications/unread-count": {
+      "get": {
+        "operationId": "get__admin_notifications_unread_count",
+        "summary": "GET /admin/notifications/unread-count",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/qr-codes": {
+      "get": {
+        "operationId": "get__admin_qr_codes",
+        "summary": "GET /admin/qr-codes",
+        "tags": [
+          "Qr Codes"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/qr-codes/batch": {
+      "post": {
+        "operationId": "post__admin_qr_codes_batch",
+        "summary": "POST /admin/qr-codes/batch",
+        "tags": [
+          "Qr Codes"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/reports/people/{id}": {
+      "get": {
+        "operationId": "get__admin_reports_people_by_id",
+        "summary": "GET /admin/reports/people/{id}",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/reports/requests": {
+      "get": {
+        "operationId": "get__admin_reports_requests",
+        "summary": "GET /admin/reports/requests",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/reports/requests/{id}": {
+      "get": {
+        "operationId": "get__admin_reports_requests_by_id",
+        "summary": "GET /admin/reports/requests/{id}",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/reports/requests/log": {
+      "get": {
+        "operationId": "get__admin_reports_requests_log",
+        "summary": "GET /admin/reports/requests/log",
+        "tags": [
+          "Reports"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests": {
+      "get": {
+        "operationId": "get__admin_requests",
+        "summary": "GET /admin/requests",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}": {
+      "get": {
+        "operationId": "get__admin_requests_by_id",
+        "summary": "GET /admin/requests/{id}",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/accept": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_accept",
+        "summary": "POST /admin/requests/{id}/accept",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/assign": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_assign",
+        "summary": "POST /admin/requests/{id}/assign",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/cancel": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_cancel",
+        "summary": "POST /admin/requests/{id}/cancel",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/close": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_close",
+        "summary": "POST /admin/requests/{id}/close",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/complete": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_complete",
+        "summary": "POST /admin/requests/{id}/complete",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/events": {
+      "get": {
+        "operationId": "get__admin_requests_by_id_events",
+        "summary": "GET /admin/requests/{id}/events",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/reject": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_reject",
+        "summary": "POST /admin/requests/{id}/reject",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/start": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_start",
+        "summary": "POST /admin/requests/{id}/start",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/{id}/transfer": {
+      "post": {
+        "operationId": "post__admin_requests_by_id_transfer",
+        "summary": "POST /admin/requests/{id}/transfer",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/requests/alerts": {
+      "get": {
+        "operationId": "get__admin_requests_alerts",
+        "summary": "GET /admin/requests/alerts",
+        "tags": [
+          "Requests"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/roles": {
+      "get": {
+        "operationId": "get__admin_roles",
+        "summary": "GET /admin/roles",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_roles",
+        "summary": "POST /admin/roles",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/roles/{id}": {
+      "delete": {
+        "operationId": "delete__admin_roles_by_id",
+        "summary": "DELETE /admin/roles/{id}",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_roles_by_id",
+        "summary": "GET /admin/roles/{id}",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_roles_by_id",
+        "summary": "PATCH /admin/roles/{id}",
+        "tags": [
+          "Roles"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/rooms": {
+      "get": {
+        "operationId": "get__admin_rooms",
+        "summary": "GET /admin/rooms",
+        "tags": [
+          "Rooms"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_rooms",
+        "summary": "POST /admin/rooms",
+        "tags": [
+          "Rooms"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/rooms/{id}": {
+      "delete": {
+        "operationId": "delete__admin_rooms_by_id",
+        "summary": "DELETE /admin/rooms/{id}",
+        "tags": [
+          "Rooms"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_rooms_by_id",
+        "summary": "GET /admin/rooms/{id}",
+        "tags": [
+          "Rooms"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_rooms_by_id",
+        "summary": "PATCH /admin/rooms/{id}",
+        "tags": [
+          "Rooms"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/service-categories": {
+      "get": {
+        "operationId": "get__admin_service_categories",
+        "summary": "GET /admin/service-categories",
+        "tags": [
+          "Service Categories"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_service_categories",
+        "summary": "POST /admin/service-categories",
+        "tags": [
+          "Service Categories"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/service-categories/{id}": {
+      "delete": {
+        "operationId": "delete__admin_service_categories_by_id",
+        "summary": "DELETE /admin/service-categories/{id}",
+        "tags": [
+          "Service Categories"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_service_categories_by_id",
+        "summary": "GET /admin/service-categories/{id}",
+        "tags": [
+          "Service Categories"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_service_categories_by_id",
+        "summary": "PATCH /admin/service-categories/{id}",
+        "tags": [
+          "Service Categories"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/services": {
+      "get": {
+        "operationId": "get__admin_services",
+        "summary": "GET /admin/services",
+        "tags": [
+          "Services"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_services",
+        "summary": "POST /admin/services",
+        "tags": [
+          "Services"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/services/{id}": {
+      "delete": {
+        "operationId": "delete__admin_services_by_id",
+        "summary": "DELETE /admin/services/{id}",
+        "tags": [
+          "Services"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_services_by_id",
+        "summary": "GET /admin/services/{id}",
+        "tags": [
+          "Services"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_services_by_id",
+        "summary": "PATCH /admin/services/{id}",
+        "tags": [
+          "Services"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/shifts": {
+      "get": {
+        "operationId": "get__admin_shifts",
+        "summary": "GET /admin/shifts",
+        "tags": [
+          "Shifts"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_shifts",
+        "summary": "POST /admin/shifts",
+        "tags": [
+          "Shifts"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/shifts/{id}": {
+      "delete": {
+        "operationId": "delete__admin_shifts_by_id",
+        "summary": "DELETE /admin/shifts/{id}",
+        "tags": [
+          "Shifts"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/sla-policies": {
+      "get": {
+        "operationId": "get__admin_sla_policies",
+        "summary": "GET /admin/sla-policies",
+        "tags": [
+          "Sla Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_sla_policies",
+        "summary": "POST /admin/sla-policies",
+        "tags": [
+          "Sla Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/sla-policies/{id}": {
+      "delete": {
+        "operationId": "delete__admin_sla_policies_by_id",
+        "summary": "DELETE /admin/sla-policies/{id}",
+        "tags": [
+          "Sla Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_sla_policies_by_id",
+        "summary": "GET /admin/sla-policies/{id}",
+        "tags": [
+          "Sla Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_sla_policies_by_id",
+        "summary": "PATCH /admin/sla-policies/{id}",
+        "tags": [
+          "Sla Policies"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff": {
+      "get": {
+        "operationId": "get__admin_staff",
+        "summary": "GET /admin/staff",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_staff",
+        "summary": "POST /admin/staff",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}": {
+      "get": {
+        "operationId": "get__admin_staff_by_id",
+        "summary": "GET /admin/staff/{id}",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}/coverage": {
+      "post": {
+        "operationId": "post__admin_staff_by_id_coverage",
+        "summary": "POST /admin/staff/{id}/coverage",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}/coverage/{coverageId}": {
+      "delete": {
+        "operationId": "delete__admin_staff_by_id_coverage_by_coverageId",
+        "summary": "DELETE /admin/staff/{id}/coverage/{coverageId}",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "coverageId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}/departments": {
+      "post": {
+        "operationId": "post__admin_staff_by_id_departments",
+        "summary": "POST /admin/staff/{id}/departments",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}/departments/{departmentId}": {
+      "delete": {
+        "operationId": "delete__admin_staff_by_id_departments_by_departmentId",
+        "summary": "DELETE /admin/staff/{id}/departments/{departmentId}",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "departmentId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}/duty": {
+      "post": {
+        "operationId": "post__admin_staff_by_id_duty",
+        "summary": "POST /admin/staff/{id}/duty",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}/password": {
+      "post": {
+        "operationId": "post__admin_staff_by_id_password",
+        "summary": "POST /admin/staff/{id}/password",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/{id}/status": {
+      "post": {
+        "operationId": "post__admin_staff_by_id_status",
+        "summary": "POST /admin/staff/{id}/status",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/bulk": {
+      "post": {
+        "operationId": "post__admin_staff_bulk",
+        "summary": "POST /admin/staff/bulk",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/staff/eligible": {
+      "get": {
+        "operationId": "get__admin_staff_eligible",
+        "summary": "GET /admin/staff/eligible",
+        "tags": [
+          "Staff"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/wards": {
+      "get": {
+        "operationId": "get__admin_wards",
+        "summary": "GET /admin/wards",
+        "tags": [
+          "Wards"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "post": {
+        "operationId": "post__admin_wards",
+        "summary": "POST /admin/wards",
+        "tags": [
+          "Wards"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/wards/{id}": {
+      "delete": {
+        "operationId": "delete__admin_wards_by_id",
+        "summary": "DELETE /admin/wards/{id}",
+        "tags": [
+          "Wards"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "get": {
+        "operationId": "get__admin_wards_by_id",
+        "summary": "GET /admin/wards/{id}",
+        "tags": [
+          "Wards"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      },
+      "patch": {
+        "operationId": "patch__admin_wards_by_id",
+        "summary": "PATCH /admin/wards/{id}",
+        "tags": [
+          "Wards"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/admin/wards/{id}/bulk-beds": {
+      "post": {
+        "operationId": "post__admin_wards_by_id_bulk_beds",
+        "summary": "POST /admin/wards/{id}/bulk-beds",
+        "tags": [
+          "Wards"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/auth/platform/login": {
+      "post": {
+        "operationId": "post__auth_platform_login",
+        "summary": "POST /auth/platform/login",
+        "tags": [
+          "Authentication"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "public"
+      }
+    },
+    "/auth/platform/logout": {
+      "post": {
+        "operationId": "post__auth_platform_logout",
+        "summary": "POST /auth/platform/logout",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/auth/platform/me": {
+      "get": {
+        "operationId": "get__auth_platform_me",
+        "summary": "GET /auth/platform/me",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/auth/platform/password": {
+      "post": {
+        "operationId": "post__auth_platform_password",
+        "summary": "POST /auth/platform/password",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/auth/staff/login": {
+      "post": {
+        "operationId": "post__auth_staff_login",
+        "summary": "POST /auth/staff/login",
+        "tags": [
+          "Authentication"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "public"
+      }
+    },
+    "/auth/staff/logout": {
+      "post": {
+        "operationId": "post__auth_staff_logout",
+        "summary": "POST /auth/staff/logout",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/auth/staff/me": {
+      "get": {
+        "operationId": "get__auth_staff_me",
+        "summary": "GET /auth/staff/me",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/auth/staff/password": {
+      "post": {
+        "operationId": "post__auth_staff_password",
+        "summary": "POST /auth/staff/password",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "staffBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "staff"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "get__health",
+        "summary": "GET /health",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "public"
+      }
+    },
+    "/platform/clients": {
+      "get": {
+        "operationId": "get__platform_clients",
+        "summary": "GET /platform/clients",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/platform/clients/{id}": {
+      "get": {
+        "operationId": "get__platform_clients_by_id",
+        "summary": "GET /platform/clients/{id}",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      },
+      "patch": {
+        "operationId": "patch__platform_clients_by_id",
+        "summary": "PATCH /platform/clients/{id}",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/platform/hospitals": {
+      "get": {
+        "operationId": "get__platform_hospitals",
+        "summary": "GET /platform/hospitals",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      },
+      "post": {
+        "operationId": "post__platform_hospitals",
+        "summary": "POST /platform/hospitals",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/platform/hospitals/{id}": {
+      "get": {
+        "operationId": "get__platform_hospitals_by_id",
+        "summary": "GET /platform/hospitals/{id}",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      },
+      "patch": {
+        "operationId": "patch__platform_hospitals_by_id",
+        "summary": "PATCH /platform/hospitals/{id}",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/platform/hospitals/{id}/logo": {
+      "delete": {
+        "operationId": "delete__platform_hospitals_by_id_logo",
+        "summary": "DELETE /platform/hospitals/{id}/logo",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      },
+      "put": {
+        "operationId": "put__platform_hospitals_by_id_logo",
+        "summary": "PUT /platform/hospitals/{id}/logo",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/platform/hospitals/{id}/managers": {
+      "post": {
+        "operationId": "post__platform_hospitals_by_id_managers",
+        "summary": "POST /platform/hospitals/{id}/managers",
+        "tags": [
+          "Platform"
+        ],
+        "security": [
+          {
+            "platformBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "platform"
+      }
+    },
+    "/public/logos/{publicId}": {
+      "get": {
+        "operationId": "get__public_logos_by_publicId",
+        "summary": "GET /public/logos/{publicId}",
+        "tags": [
+          "Patient"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "public"
+      }
+    },
+    "/public/qr/resolve": {
+      "post": {
+        "operationId": "post__public_qr_resolve",
+        "summary": "POST /public/qr/resolve",
+        "tags": [
+          "Patient"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "public"
+      }
+    },
+    "/public/requests": {
+      "get": {
+        "operationId": "get__public_requests",
+        "summary": "GET /public/requests",
+        "tags": [
+          "Patient"
+        ],
+        "security": [
+          {
+            "guestBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "guest"
+      },
+      "post": {
+        "operationId": "post__public_requests",
+        "summary": "POST /public/requests",
+        "tags": [
+          "Patient"
+        ],
+        "security": [
+          {
+            "guestBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "guest"
+      }
+    },
+    "/public/requests/{publicId}/cancel": {
+      "post": {
+        "operationId": "post__public_requests_by_publicId_cancel",
+        "summary": "POST /public/requests/{publicId}/cancel",
+        "tags": [
+          "Patient"
+        ],
+        "security": [
+          {
+            "guestBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "guest"
+      }
+    },
+    "/public/services": {
+      "get": {
+        "operationId": "get__public_services",
+        "summary": "GET /public/services",
+        "tags": [
+          "Patient"
+        ],
+        "security": [
+          {
+            "guestBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "guest"
+      }
+    },
+    "/public/session": {
+      "get": {
+        "operationId": "get__public_session",
+        "summary": "GET /public/session",
+        "tags": [
+          "Patient"
+        ],
+        "security": [
+          {
+            "guestBearer": []
+          }
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "guest"
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "get__ready",
+        "summary": "GET /ready",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "2XX": {
+            "description": "Successful endpoint-specific response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "x-access": "public"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "staffBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque"
+      },
+      "platformBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque"
+      },
+      "guestBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque"
+      }
+    },
+    "schemas": {
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Error envelope; common statuses are 400, 401, 403, 404, 409, 413, 429, 500, and 503.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-route-count": 136,
+  "x-source-files": [
+    "src/app.ts",
+    "src/http/crud.ts",
+    "src/http/health.routes.ts",
+    "src/modules/audit/audit.routes.ts",
+    "src/modules/audit/audit.schemas.ts",
+    "src/modules/auth/auth.routes.ts",
+    "src/modules/auth/auth.schemas.ts",
+    "src/modules/bed-sessions/bed-session.routes.ts",
+    "src/modules/bed-sessions/bed-session.schemas.ts",
+    "src/modules/catalog/catalog.routes.ts",
+    "src/modules/catalog/catalog.schemas.ts",
+    "src/modules/departments/department.routes.ts",
+    "src/modules/departments/department.schemas.ts",
+    "src/modules/hospitals/hospital.routes.ts",
+    "src/modules/hospitals/hospital.schemas.ts",
+    "src/modules/locations/location.routes.ts",
+    "src/modules/locations/location.schemas.ts",
+    "src/modules/notifications/notification.routes.ts",
+    "src/modules/notifications/notification.schemas.ts",
+    "src/modules/platform/platform.routes.ts",
+    "src/modules/platform/platform.schemas.ts",
+    "src/modules/qr/qr.routes.ts",
+    "src/modules/qr/qr.schemas.ts",
+    "src/modules/reports/report.routes.ts",
+    "src/modules/reports/report.schemas.ts",
+    "src/modules/requests/request.routes.ts",
+    "src/modules/requests/request.schemas.ts",
+    "src/modules/roles/role.routes.ts",
+    "src/modules/roles/role.schemas.ts",
+    "src/modules/sla/sla.routes.ts",
+    "src/modules/sla/sla.schemas.ts",
+    "src/modules/staff/shift.schemas.ts",
+    "src/modules/staff/staff.routes.ts",
+    "src/modules/staff/staff.schemas.ts",
+    "src/routes/index.ts"
+  ],
+  "x-source-sha256": "01c608ef29568799056aa6a1ec0d8264d96c18730a7f7913b86e12f5ad86d5a3"
+}

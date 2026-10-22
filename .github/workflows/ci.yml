@@ -50,6 +50,7 @@ jobs:
       - run: npm run prisma:status
       - run: npm run prisma:check-drift
       - run: npm run docs:er:check
+      - run: npm run docs:api:check
 
   frontend:
     runs-on: ubuntu-latest
@@ -125,4 +126,3 @@ jobs:
             frontend/playwright-report
             frontend/test-results
           retention-days: 7
-

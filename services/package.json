@@ -24,6 +24,8 @@
     "seed:test": "node --env-file=.env --import tsx src/cli/seed-test.ts",
     "docs:er": "node --import tsx src/cli/generate-er-diagram.ts",
     "docs:er:check": "node --import tsx src/cli/generate-er-diagram.ts --check",
+    "docs:api": "node --import tsx src/cli/generate-openapi.ts",
+    "docs:api:check": "node --import tsx src/cli/generate-openapi.ts --check",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "tsx watch --env-file=.env src/server.ts",
     "format": "prettier --write src tests",
