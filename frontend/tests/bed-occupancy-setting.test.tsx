@@ -144,6 +144,9 @@ describe('Choosing whether the hospital admits patients', () => {
     expect(within(navigation).getByRole('link', { name: 'QR codes' })).toBeTruthy();
     expect(within(navigation).getByRole('link', { name: 'Profile & logo' })).toBeTruthy();
     expect(within(navigation).getByRole('link', { name: 'Settings' })).toBeTruthy();
+    const menuLinks = within(navigation).getAllByRole('link');
+    expect(menuLinks.at(-1)?.textContent).toContain('Settings');
+    expect(screen.getByRole('heading', { name: 'Administration' })).toBeTruthy();
   });
 
   it('explains on Bed management that it is turned off, without loading beds', () => {

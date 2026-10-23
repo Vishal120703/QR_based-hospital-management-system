@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
+import { BedDouble, BellRing, Languages, MessageSquareText, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router';
 import {
   staffApi,
   staffNotificationTypes,
@@ -14,7 +16,7 @@ import { useAdmin } from '../workspace/AdminLayout';
 // The hospital manager's switches: how the hospital works with patients and
 // staff. Every change is checked by the server and kept in the audit log.
 export function SettingsPage() {
-  const { token, reportError, reportSuccess, refreshMe } = useAdmin();
+  const { token, reportError, reportSuccess, refreshMe, can } = useAdmin();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
@@ -91,172 +93,315 @@ export function SettingsPage() {
     <>
       <PageHeading
         title="Settings"
-        description="Choose how your hospital works with CARE QR. Each change applies to everyone in the hospital straight away and is kept in the audit log."
+        description="Control how patients use bedside QR codes, how requests flow, and which updates reach your team."
       />
       <LoadState loading={false} error={loadError} onRetry={reload} />
-      <div className="settings-list">
-        <ChoiceSetting
-          id="occupancy"
-          title="Bed management"
-          help="Choose whether staff admit and discharge patients, or patients simply scan the QR on their bed."
-          legend="How patients use the bedside QR"
-          busy={busy}
-          value={hospital.bedOccupancyEnabled}
-          options={occupancyModes}
-          onChoose={(enabled) => void chooseOccupancy(enabled)}
-        />
 
-        <ChoiceSetting
-          id="patient-requests"
-          title="Patient requests"
-          help="Pause new requests for a while, for example during maintenance or a drill."
-          legend="Whether patients can send new requests"
-          busy={busy}
-          value={hospital.patientRequestsPaused}
-          options={[
-            {
-              value: false,
-              title: 'Accept new requests',
-              help: 'Patients send requests from the bedside QR as usual.',
-            },
-            {
-              value: true,
-              title: 'Pause new requests',
-              help: 'Patients still open their page and can follow or cancel their requests, but cannot send new ones. Staff see a reminder until you turn requests back on.',
-            },
-          ]}
-          onChoose={(paused) =>
-            void change(
-              { patientRequestsPaused: paused },
-              paused
-                ? 'New patient requests are paused. Patients are asked to tell a member of staff.'
-                : 'Patients can send requests again.',
-              paused ? pauseRequestsQuestion : undefined,
-            )
-          }
-        />
-
-        <ChoiceSetting
-          id="escalations"
-          title="Escalations"
-          help="Overdue requests escalate by each service's escalation policy (Response targets)."
-          legend="Whether overdue requests are escalated"
-          busy={busy}
-          value={hospital.escalationsPaused}
-          options={[
-            {
-              value: false,
-              title: 'Escalate overdue requests',
-              help: 'When a request misses its response target, the people in its escalation policy are told.',
-            },
-            {
-              value: true,
-              title: 'Pause escalations',
-              help: 'No request is escalated. When you turn escalations back on, requests that are still overdue escalate then.',
-            },
-          ]}
-          onChoose={(paused) =>
-            void change(
-              { escalationsPaused: paused },
-              paused ? 'Escalations are paused.' : 'Overdue requests escalate again.',
-              paused ? pauseEscalationsQuestion : undefined,
-            )
-          }
-        />
-
-        <section className="card setting" aria-labelledby="notifications-title">
-          <h2 id="notifications-title">Staff notifications</h2>
-          <p className="small muted">
-            What arrives in the bell for the whole hospital. The Requests badge, sound, and desktop
-            alerts are set by each person on the Requests screen.
+      <section className="card settings-overview" aria-labelledby="settings-overview-title">
+        <div className="settings-overview-copy">
+          <p className="eyebrow">Current setup</p>
+          <h2 id="settings-overview-title">{hospital.name}</h2>
+          <p className="muted small">
+            Changes apply across the hospital immediately. Important changes ask for confirmation
+            first, and every saved update is recorded.
           </p>
-          <fieldset className="setting-checks" disabled={busy}>
-            <legend className="visually-hidden">Notifications staff receive</legend>
-            {staffNotificationTypes.map((type) => (
-              <label key={type}>
+          {can('audit.read') && (
+            <Link to="/admin/audit">View settings history in the audit log</Link>
+          )}
+        </div>
+        <nav className="settings-status-grid" aria-label="Current settings summary">
+          <a href="#occupancy-setting">
+            <BedDouble size={18} aria-hidden="true" />
+            <span>
+              <small>Bed management</small>
+              <strong>{hospital.bedOccupancyEnabled ? 'Admissions on' : 'QR codes only'}</strong>
+            </span>
+          </a>
+          <a
+            href="#patient-requests-setting"
+            className={hospital.patientRequestsPaused ? 'is-warning' : undefined}
+          >
+            <MessageSquareText size={18} aria-hidden="true" />
+            <span>
+              <small>Patient requests</small>
+              <strong>{hospital.patientRequestsPaused ? 'Paused' : 'Accepting requests'}</strong>
+            </span>
+          </a>
+          <a
+            href="#escalations-setting"
+            className={hospital.escalationsPaused ? 'is-warning' : undefined}
+          >
+            <ShieldCheck size={18} aria-hidden="true" />
+            <span>
+              <small>Escalations</small>
+              <strong>{hospital.escalationsPaused ? 'Paused' : 'Running'}</strong>
+            </span>
+          </a>
+          <a href="#notifications-setting">
+            <BellRing size={18} aria-hidden="true" />
+            <span>
+              <small>Staff notifications</small>
+              <strong>
+                {savedOn.length} of {staffNotificationTypes.length} on
+              </strong>
+            </span>
+          </a>
+          <a href="#languages-setting">
+            <Languages size={18} aria-hidden="true" />
+            <span>
+              <small>Patient languages</small>
+              <strong>
+                {hospital.patientLanguages.length}{' '}
+                {hospital.patientLanguages.length === 1 ? 'language' : 'languages'}
+              </strong>
+            </span>
+          </a>
+        </nav>
+      </section>
+
+      <div className="settings-list">
+        <section className="settings-section" aria-labelledby="patient-access-title">
+          <div className="settings-section-heading">
+            <span className="settings-section-icon" aria-hidden="true">
+              <BedDouble size={20} />
+            </span>
+            <div>
+              <p className="eyebrow">Patient access</p>
+              <h2 id="patient-access-title">Bedside care</h2>
+              <p className="muted small">Choose how patients connect and ask for help.</p>
+            </div>
+          </div>
+          <div className="settings-grid">
+            <ChoiceSetting
+              id="occupancy"
+              title="Bed management"
+              help="Choose whether staff admit and discharge patients, or patients simply scan the QR on their bed."
+              legend="How patients use the bedside QR"
+              busy={busy}
+              value={hospital.bedOccupancyEnabled}
+              status={hospital.bedOccupancyEnabled ? 'Admissions on' : 'QR codes only'}
+              options={occupancyModes}
+              onChoose={(enabled) => void chooseOccupancy(enabled)}
+            />
+
+            <ChoiceSetting
+              id="patient-requests"
+              title="Patient requests"
+              help="Pause new requests for a while, for example during maintenance or a drill."
+              legend="Whether patients can send new requests"
+              busy={busy}
+              value={hospital.patientRequestsPaused}
+              status={hospital.patientRequestsPaused ? 'Paused' : 'Accepting requests'}
+              warning={hospital.patientRequestsPaused}
+              options={[
+                {
+                  value: false,
+                  title: 'Accept new requests',
+                  help: 'Patients send requests from the bedside QR as usual.',
+                },
+                {
+                  value: true,
+                  title: 'Pause new requests',
+                  help: 'Patients still open their page and can follow or cancel their requests, but cannot send new ones. Staff see a reminder until you turn requests back on.',
+                },
+              ]}
+              onChoose={(paused) =>
+                void change(
+                  { patientRequestsPaused: paused },
+                  paused
+                    ? 'New patient requests are paused. Patients are asked to tell a member of staff.'
+                    : 'Patients can send requests again.',
+                  paused ? pauseRequestsQuestion : undefined,
+                )
+              }
+            />
+          </div>
+        </section>
+
+        <section className="settings-section" aria-labelledby="workflow-settings-title">
+          <div className="settings-section-heading">
+            <span className="settings-section-icon" aria-hidden="true">
+              <BellRing size={20} />
+            </span>
+            <div>
+              <p className="eyebrow">Workflow and alerts</p>
+              <h2 id="workflow-settings-title">Team notifications</h2>
+              <p className="muted small">Control overdue escalation and staff bell updates.</p>
+            </div>
+          </div>
+          <div className="settings-grid">
+            <ChoiceSetting
+              id="escalations"
+              title="Escalations"
+              help="Overdue requests escalate by each service's escalation policy (Response targets)."
+              legend="Whether overdue requests are escalated"
+              busy={busy}
+              value={hospital.escalationsPaused}
+              status={hospital.escalationsPaused ? 'Paused' : 'Running'}
+              warning={hospital.escalationsPaused}
+              options={[
+                {
+                  value: false,
+                  title: 'Escalate overdue requests',
+                  help: 'When a request misses its response target, the people in its escalation policy are told.',
+                },
+                {
+                  value: true,
+                  title: 'Pause escalations',
+                  help: 'No request is escalated. When you turn escalations back on, requests that are still overdue escalate then.',
+                },
+              ]}
+              onChoose={(paused) =>
+                void change(
+                  { escalationsPaused: paused },
+                  paused ? 'Escalations are paused.' : 'Overdue requests escalate again.',
+                  paused ? pauseEscalationsQuestion : undefined,
+                )
+              }
+            />
+
+            <section
+              id="notifications-setting"
+              className="card setting setting-wide"
+              aria-labelledby="notifications-title"
+            >
+              <div className="setting-heading">
+                <div>
+                  <h3 id="notifications-title">Staff notifications</h3>
+                  <p className="small muted">
+                    Choose what arrives in the bell for the whole hospital. Each person controls
+                    request sounds and desktop alerts on their Requests screen.
+                  </p>
+                </div>
+                <span className="setting-status">
+                  {notificationsOn.length} of {staffNotificationTypes.length} on
+                </span>
+              </div>
+              <fieldset className="setting-checks" disabled={busy}>
+                <legend className="visually-hidden">Notifications staff receive</legend>
+                {staffNotificationTypes.map((type) => (
+                  <label
+                    key={type}
+                    className={notificationsOn.includes(type) ? 'is-checked' : undefined}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={notificationsOn.includes(type)}
+                      onChange={(event) =>
+                        setDraftOn(
+                          event.target.checked
+                            ? staffNotificationTypes.filter(
+                                (kind) => kind === type || notificationsOn.includes(kind),
+                              )
+                            : notificationsOn.filter((kind) => kind !== type),
+                        )
+                      }
+                    />
+                    <span>
+                      <strong>{notificationKinds[type].title}</strong>
+                      <span className="muted small">{notificationKinds[type].who}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+              <div className="setting-actions">
+                <p className="small muted" aria-live="polite">
+                  {notificationsChanged
+                    ? 'You have unsaved notification changes.'
+                    : 'Notification choices are up to date.'}
+                </p>
+                <div className="actions">
+                  <button
+                    type="button"
+                    disabled={busy || !notificationsChanged}
+                    onClick={() =>
+                      void change(
+                        {
+                          mutedNotificationTypes: staffNotificationTypes.filter(
+                            (type) => !notificationsOn.includes(type),
+                          ),
+                        },
+                        'Staff notifications saved.',
+                      ).then((saved) => {
+                        if (saved) setDraftOn(null);
+                      })
+                    }
+                  >
+                    Save notifications
+                  </button>
+                  {notificationsChanged && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      onClick={() => setDraftOn(null)}
+                    >
+                      Undo changes
+                    </button>
+                  )}
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section className="settings-section" aria-labelledby="patient-page-settings-title">
+          <div className="settings-section-heading">
+            <span className="settings-section-icon" aria-hidden="true">
+              <Languages size={20} />
+            </span>
+            <div>
+              <p className="eyebrow">Patient experience</p>
+              <h2 id="patient-page-settings-title">Patient page</h2>
+              <p className="muted small">Choose the languages available at the bedside.</p>
+            </div>
+          </div>
+          <section
+            id="languages-setting"
+            className="card setting setting-compact"
+            aria-labelledby="languages-title"
+          >
+            <div className="setting-heading">
+              <div>
+                <h3 id="languages-title">Patient page languages</h3>
+                <p className="small muted">
+                  Patients can switch languages on their bedside page. English is always available.
+                </p>
+              </div>
+              <span className="setting-status">
+                {hospital.patientLanguages.length}{' '}
+                {hospital.patientLanguages.length === 1 ? 'language' : 'languages'}
+              </span>
+            </div>
+            <fieldset className="setting-checks setting-language-checks" disabled={busy}>
+              <legend className="visually-hidden">Languages on the patient page</legend>
+              <label className="is-checked is-required">
+                <input type="checkbox" aria-label="English" checked disabled />
+                <span>
+                  <strong>English</strong>
+                  <span className="muted small">Always available</span>
+                </span>
+              </label>
+              <label className={hindi ? 'is-checked' : undefined}>
                 <input
                   type="checkbox"
-                  checked={notificationsOn.includes(type)}
+                  checked={hindi}
                   onChange={(event) =>
-                    setDraftOn(
+                    void change(
+                      { patientLanguages: event.target.checked ? ['en', 'hi'] : ['en'] },
                       event.target.checked
-                        ? staffNotificationTypes.filter(
-                            (kind) => kind === type || notificationsOn.includes(kind),
-                          )
-                        : notificationsOn.filter((kind) => kind !== type),
+                        ? 'Patients can choose Hindi.'
+                        : 'The patient page is in English only.',
                     )
                   }
                 />
                 <span>
-                  <strong>{notificationKinds[type].title}</strong>
-                  <span className="muted small">{notificationKinds[type].who}</span>
+                  <strong lang="hi">हिन्दी (Hindi)</strong>
+                  <span className="muted small">Optional</span>
                 </span>
               </label>
-            ))}
-          </fieldset>
-          <div className="actions">
-            <button
-              type="button"
-              disabled={busy || !notificationsChanged}
-              onClick={() =>
-                void change(
-                  {
-                    mutedNotificationTypes: staffNotificationTypes.filter(
-                      (type) => !notificationsOn.includes(type),
-                    ),
-                  },
-                  'Staff notifications saved.',
-                ).then((saved) => {
-                  if (saved) setDraftOn(null);
-                })
-              }
-            >
-              Save notifications
-            </button>
-            {notificationsChanged && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() => setDraftOn(null)}
-              >
-                Undo changes
-              </button>
-            )}
-          </div>
-        </section>
-
-        <section className="card setting" aria-labelledby="languages-title">
-          <h2 id="languages-title">Patient page languages</h2>
-          <p className="small muted">
-            The languages patients can choose on their bedside page. English is always offered.
-          </p>
-          <fieldset className="setting-checks" disabled={busy}>
-            <legend className="visually-hidden">Languages on the patient page</legend>
-            <label>
-              <input type="checkbox" checked disabled />
-              <span>
-                <strong>English</strong>
-              </span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={hindi}
-                onChange={(event) =>
-                  void change(
-                    { patientLanguages: event.target.checked ? ['en', 'hi'] : ['en'] },
-                    event.target.checked
-                      ? 'Patients can choose Hindi.'
-                      : 'The patient page is in English only.',
-                  )
-                }
-              />
-              <span>
-                <strong lang="hi">हिन्दी (Hindi)</strong>
-              </span>
-            </label>
-          </fieldset>
+            </fieldset>
+          </section>
         </section>
       </div>
     </>
@@ -271,6 +416,8 @@ function ChoiceSetting({
   legend,
   busy,
   value,
+  status,
+  warning = false,
   options,
   onChoose,
 }: {
@@ -280,13 +427,20 @@ function ChoiceSetting({
   legend: string;
   busy: boolean;
   value: boolean;
+  status: string;
+  warning?: boolean;
   options: { value: boolean; title: string; help: string }[];
   onChoose: (value: boolean) => void;
 }) {
   return (
-    <section className="card setting" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`}>{title}</h2>
-      <p className="small muted">{help}</p>
+    <section id={`${id}-setting`} className="card setting" aria-labelledby={`${id}-title`}>
+      <div className="setting-heading">
+        <div>
+          <h3 id={`${id}-title`}>{title}</h3>
+          <p className="small muted">{help}</p>
+        </div>
+        <span className={`setting-status${warning ? ' is-warning' : ''}`}>{status}</span>
+      </div>
       <fieldset className="size-picker" disabled={busy}>
         <legend className="visually-hidden">{legend}</legend>
         {options.map((option) => (

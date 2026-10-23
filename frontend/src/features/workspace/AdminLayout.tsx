@@ -58,13 +58,6 @@ export const adminPages = [
     icon: Hospital,
   },
   {
-    path: 'settings',
-    label: 'Settings',
-    group: 'Hospital',
-    permissions: ['hospital.manage'],
-    icon: Settings,
-  },
-  {
     path: 'audit',
     label: 'Audit log',
     group: 'Hospital',
@@ -136,6 +129,13 @@ export const adminPages = [
     group: 'Patient services',
     permissions: ['service.read', 'sla.manage'],
     icon: Timer,
+  },
+  {
+    path: 'settings',
+    label: 'Settings',
+    group: 'Administration',
+    permissions: ['hospital.manage'],
+    icon: Settings,
   },
 ] as const;
 
@@ -380,7 +380,14 @@ export function AdminLayout() {
             className={menuOpen ? 'is-open' : undefined}
             aria-label="Hospital administration"
           >
-            {['Work', 'Hospital', 'Care locations', 'People', 'Patient services'].map((group) => {
+            {[
+              'Work',
+              'Hospital',
+              'Care locations',
+              'People',
+              'Patient services',
+              'Administration',
+            ].map((group) => {
               const pages = available.filter((page) => page.group === group);
               return (
                 pages.length > 0 && (

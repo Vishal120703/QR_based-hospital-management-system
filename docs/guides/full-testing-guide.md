@@ -188,7 +188,7 @@ Rules that always apply:
 
 | Person | Menu |
 |---|---|
-| Meera (Hospital Manager) | Overview, Requests, Reports, Profile & logo, Settings, Audit log, Bed management, QR codes, Location setup, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog, Response targets (SLA) |
+| Meera (Hospital Manager) | Overview, Requests, Reports, Profile & logo, Audit log, Bed management, QR codes, Location setup, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog, Response targets (SLA), Settings |
 | Arjun (Operations Manager) | Overview, Requests, Reports, Audit log, Bed management, QR codes, Departments, Staff & coverage, Roles & access, Who can respond?, Service catalog |
 | Kavita (Admission Desk) | Overview, Bed management, QR codes |
 | Ravi, Sunita (Floor Managers); Priya (Ward Manager) | Overview, Requests, Reports, Bed management, QR codes |

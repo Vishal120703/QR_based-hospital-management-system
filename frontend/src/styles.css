@@ -4486,21 +4486,212 @@ button.danger-solid:hover:not(:disabled) {
   }
 }
 
-/* Settings: one card per switch, each choice explained. */
+/* Settings: a quick overview followed by clearly grouped hospital controls. */
+.settings-overview,
+.settings-list {
+  max-width: 72rem;
+}
+.settings-overview {
+  display: grid;
+  gap: 1.15rem;
+  margin-bottom: 1.75rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #fff 0%, #f2faf7 100%);
+  border-color: #cfe3dc;
+}
+.settings-overview-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 1rem;
+  align-items: start;
+}
+.settings-overview-copy .eyebrow,
+.settings-overview-copy h2,
+.settings-overview-copy p {
+  grid-column: 1;
+  margin: 0;
+}
+.settings-overview-copy h2 {
+  margin-top: 0.1rem;
+  font-size: 1.2rem;
+}
+.settings-overview-copy p {
+  max-width: 700px;
+  margin-top: 0.3rem;
+}
+.settings-overview-copy > a {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  align-self: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.settings-status-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+.settings-status-grid a {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  color: var(--text);
+  background: rgb(255 255 255 / 82%);
+  border: 1px solid #d9e8e3;
+  border-radius: 10px;
+  text-decoration: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+.settings-status-grid a:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+.settings-status-grid a > svg {
+  flex: none;
+  color: var(--primary);
+}
+.settings-status-grid a.is-warning > svg,
+.settings-status-grid a.is-warning strong {
+  color: var(--warning-text);
+}
+.settings-status-grid a > span {
+  display: grid;
+  min-width: 0;
+}
+.settings-status-grid small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.settings-status-grid strong {
+  overflow: hidden;
+  font-size: 0.82rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
 .settings-list {
   display: grid;
-  gap: 1rem;
-  max-width: 60rem;
+  gap: 2rem;
 }
-.setting h2 {
-  margin-bottom: 0.25rem;
+.settings-section {
+  display: grid;
+  gap: 0.85rem;
+  scroll-margin-top: 1rem;
+}
+.settings-section + .settings-section {
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--border);
+}
+.settings-section-heading {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.settings-section-heading .eyebrow,
+.settings-section-heading h2,
+.settings-section-heading p {
+  margin: 0;
+}
+.settings-section-heading h2 {
+  margin-top: 0.05rem;
+  font-size: 1.2rem;
+}
+.settings-section-heading p:last-child {
+  margin-top: 0.15rem;
+}
+.settings-section-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  color: var(--primary-dark);
+  background: var(--primary-soft);
+  border-radius: 10px;
+}
+.settings-grid {
+  display: grid;
+  gap: 1rem;
+}
+.setting {
+  scroll-margin-top: 1rem;
+}
+.setting-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.setting-heading h3,
+.setting-heading p {
+  margin: 0;
+}
+.setting-heading h3 {
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+.setting-heading p {
+  max-width: 760px;
+  margin-top: 0.25rem;
+}
+.setting-status {
+  flex: none;
+  padding: 0.22rem 0.55rem;
+  color: #11683f;
+  background: #e3f5ec;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.setting-status.is-warning {
+  color: var(--warning-text);
+  background: var(--warning-bg);
 }
 .setting .size-picker {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
 }
 /* A shorter choice beside a longer one keeps its words together at the top. */
 .setting .size-picker label {
+  position: relative;
   align-content: start;
+  min-height: 88px;
+  gap: 0.2rem;
+  padding: 0.8rem 0.9rem 0.8rem 2.15rem;
+  border-radius: 10px;
+}
+.setting .size-picker label::before {
+  content: '';
+  /* The global border-box rule does not reach ::before; without this the
+     selected (thicker) ring grows into the option's title. */
+  box-sizing: border-box;
+  position: absolute;
+  top: 0.9rem;
+  left: 0.85rem;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  background: white;
+}
+.setting .size-picker label.active::before {
+  border: 4px solid var(--primary);
+}
+.setting .size-picker label:hover {
+  border-color: var(--border-strong);
+}
+.setting .size-picker label.active {
+  border-color: var(--primary);
+  background: #f1f8f5;
+  box-shadow: 0 0 0 1px rgb(15 118 110 / 8%);
 }
 .setting fieldset:disabled label {
   cursor: progress;
@@ -4509,23 +4700,38 @@ button.danger-solid:hover:not(:disabled) {
 .setting-checks {
   border: none;
   padding: 0;
-  margin: 0.75rem 0;
+  margin: 1rem 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
 }
 .setting-checks label {
   display: flex;
   align-items: flex-start;
-  gap: 0.6rem;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+.setting-checks label:hover {
+  border-color: var(--border-strong);
+}
+.setting-checks label.is-checked {
+  border-color: #b9d9cf;
+  background: #f2f9f6;
+}
+.setting-checks label.is-required {
+  cursor: default;
 }
 .setting-checks label > span {
   display: grid;
   gap: 0.1rem;
+  min-width: 0;
 }
 .setting-checks input {
   flex: none;
@@ -4533,6 +4739,59 @@ button.danger-solid:hover:not(:disabled) {
 }
 .setting-checks input:disabled + span {
   opacity: 0.75;
+}
+.setting-language-checks {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 38rem;
+  margin-bottom: 0;
+}
+.setting-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.setting-actions p {
+  margin: 0;
+}
+.setting-actions .actions {
+  flex: none;
+}
+@media (max-width: 920px) {
+  .settings-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .settings-overview-copy {
+    display: block;
+  }
+  .settings-overview-copy > a {
+    display: inline-block;
+    margin-top: 0.65rem;
+    white-space: normal;
+  }
+  .setting-checks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .settings-status-grid,
+  .setting .size-picker,
+  .setting-checks,
+  .setting-language-checks {
+    grid-template-columns: 1fr;
+  }
+  .setting-heading,
+  .setting-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .setting-actions .actions {
+    width: 100%;
+  }
 }
 /* While patient requests are paused, staff screens say so. */
 .notice-paused {
