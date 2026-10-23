@@ -1,4 +1,5 @@
 import { type DutyStatus, type MembershipStatus, type Prisma } from '@prisma/client';
+import { pageWindow } from '../../common/pagination.js';
 import { type Db } from '../../database/client.js';
 
 // A staff member is a HospitalMembership; the User is the global identity.
@@ -58,8 +59,7 @@ export class StaffRepository {
       where,
       select: staffSelect,
       orderBy: [{ user: { displayName: 'asc' } }, { id: 'asc' }],
-      skip: (filter.page - 1) * filter.pageSize,
-      take: filter.pageSize,
+      ...pageWindow(filter),
     });
   }
 

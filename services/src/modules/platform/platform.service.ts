@@ -1,5 +1,6 @@
 import { type Prisma, type PrismaClient } from '@prisma/client';
 import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
+import { pageResult, pageWindow } from '../../common/pagination.js';
 import { recordPlatformAudit } from '../audit/index.js';
 import { hashPassword, revokeHospitalSessions } from '../auth/index.js';
 import { bootstrapHospital, logoUrl, removeLogo, storeLogo } from '../hospitals/index.js';
@@ -14,23 +15,14 @@ import {
   type UpdateHospitalInput,
   type PlatformListQuery,
 } from './platform.schemas.js';
+import {
+  clientAuditSnapshot,
+  countsByHospital,
+  hospitalAuditSnapshot,
+  withClientTotals,
+} from './platform-view.js';
 
 type Transaction = Prisma.TransactionClient;
-
-function withTotals<T extends object>(
-  client: T,
-  hospitals: readonly { activeBeds: number; activeStaff: number; openRequests: number }[],
-) {
-  const sum = (pick: (hospital: (typeof hospitals)[number]) => number) =>
-    hospitals.reduce((total, hospital) => total + pick(hospital), 0);
-  return {
-    ...client,
-    hospitalCount: hospitals.length,
-    activeBeds: sum((hospital) => hospital.activeBeds),
-    activeStaff: sum((hospital) => hospital.activeStaff),
-    openRequests: sum((hospital) => hospital.openRequests),
-  };
-}
 
 // The super admin's work: clients (customers) and their hospitals. It never
 // reads patients, requests, or other clinical data beyond simple counts.
@@ -68,14 +60,15 @@ export class PlatformService {
       this.database,
       hospitals.map((hospital) => hospital.id),
     );
-    const countOf = (rows: { hospitalId: string; _count: number }[], id: string) =>
-      rows.find((row) => row.hospitalId === id)?._count ?? 0;
+    const bedCounts = countsByHospital(beds);
+    const staffCounts = countsByHospital(staff);
+    const requestCounts = countsByHospital(openRequests);
     return hospitals.map(({ logo, ...hospital }) => ({
       ...hospital,
       logoUrl: logoUrl(logo?.publicId),
-      activeBeds: countOf(beds, hospital.id),
-      activeStaff: countOf(staff, hospital.id),
-      openRequests: countOf(openRequests, hospital.id),
+      activeBeds: bedCounts.get(hospital.id) ?? 0,
+      activeStaff: staffCounts.get(hospital.id) ?? 0,
+      openRequests: requestCounts.get(hospital.id) ?? 0,
     }));
   }
 
@@ -90,13 +83,10 @@ export class PlatformService {
         }
       : {};
     const [items, total] = await Promise.all([
-      this.hospitalSummaries(where, {
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
+      this.hospitalSummaries(where, pageWindow(query)),
       this.platform.countHospitals(this.database, where),
     ]);
-    return { items, page: query.page, pageSize: query.pageSize, total };
+    return pageResult(items, query, total);
   }
 
   // Clients with how many hospitals, beds, staff, and open requests they have.
@@ -111,10 +101,7 @@ export class PlatformService {
         }
       : {};
     const [clients, total] = await Promise.all([
-      this.platform.listClients(this.database, where, {
-        skip: (query.page - 1) * query.pageSize,
-        take: query.pageSize,
-      }),
+      this.platform.listClients(this.database, where, pageWindow(query)),
       this.platform.countClients(this.database, where),
     ]);
     const hospitals = await this.hospitalSummaries(
@@ -122,19 +109,19 @@ export class PlatformService {
       { skip: 0, take: 1_000 },
     );
     const items = clients.map((client) =>
-      withTotals(
+      withClientTotals(
         client,
         hospitals.filter((hospital) => hospital.client.id === client.id),
       ),
     );
-    return { items, page: query.page, pageSize: query.pageSize, total };
+    return pageResult(items, query, total);
   }
 
   public async getClient(id: string) {
     const client = await this.platform.findClient(this.database, id);
     if (!client) throw new NotFoundError();
     const hospitals = await this.hospitalSummaries({ clientId: id }, { skip: 0, take: 1_000 });
-    return { ...withTotals(client, hospitals), hospitals };
+    return { ...withClientTotals(client, hospitals), hospitals };
   }
 
   // Changes a client's details or status. Suspending a client closes all its
@@ -164,19 +151,12 @@ export class PlatformService {
           input.status === 'SUSPENDED' && before.status !== 'SUSPENDED'
             ? await revokeHospitalSessions(transaction, hospitalIds)
             : 0;
-        const view = (client: typeof after) => ({
-          name: client.name,
-          status: client.status,
-          contactName: client.contactName,
-          contactEmail: client.contactEmail,
-          contactPhone: client.contactPhone,
-        });
         // Recorded in each hospital's audit log, where its managers can see it.
         for (const hospitalId of hospitalIds) {
           await this.audit(transaction, context, requestId, hospitalId, 'platform.client.update', {
             clientId: id,
-            before: view(before),
-            after: view(after),
+            before: clientAuditSnapshot(before),
+            after: clientAuditSnapshot(after),
             revokedStaffSessions,
           });
         }
@@ -283,18 +263,8 @@ export class PlatformService {
             ? await revokeHospitalSessions(transaction, [id])
             : 0;
         await this.audit(transaction, context, requestId, id, 'platform.hospital.update', {
-          before: {
-            name: before.name,
-            timezone: before.timezone,
-            status: before.status,
-            clientId: before.clientId,
-          },
-          after: {
-            name: after.name,
-            timezone: after.timezone,
-            status: after.status,
-            clientId: after.clientId,
-          },
+          before: hospitalAuditSnapshot(before),
+          after: hospitalAuditSnapshot(after),
           revokedStaffSessions,
         });
       },

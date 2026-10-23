@@ -12,38 +12,14 @@ import {
 } from '../../common/errors/app-error.js';
 import { recordStaffAudit } from '../audit/index.js';
 import { type StaffContext } from '../auth/index.js';
-import { builtInRoles, lockedRoleKey } from './built-in-roles.js';
-import { RoleRepository, type RoleRow } from './role.repository.js';
+import { lockedRoleKey } from './built-in-roles.js';
+import { RoleRepository } from './role.repository.js';
+import { permissionsExceedCaller, scopeTypeForLevel } from './role-rules.js';
 import { type CreateRoleInput, type UpdateRoleInput } from './role.schemas.js';
+import { roleSnapshot, sortRolesForDisplay, toRoleView } from './role-view.js';
 
 type Transaction = Prisma.TransactionClient;
 const repository = new RoleRepository();
-
-function toView({ rolePermissions, _count, ...role }: RoleRow) {
-  return {
-    ...role,
-    permissionKeys: rolePermissions.map((item) => item.permissionKey).sort(),
-    // Kept for older clients that read the raw relation.
-    rolePermissions,
-    memberCount: _count.userRoles,
-    builtIn: role.systemKey !== null,
-    locked: role.systemKey === lockedRoleKey,
-  };
-}
-
-const scopeTypeFor: Record<RoleScopeLevel, ScopeType> = {
-  HOSPITAL: 'HOSPITAL',
-  FLOOR: 'FLOOR',
-  WARD: 'WARD',
-  DEPARTMENT: 'DEPARTMENT',
-};
-
-// Nobody may hand out, change, or take away more power than they hold
-// hospital-wide.
-const exceedsCaller = (
-  context: StaffContext,
-  permissions: readonly { readonly permissionKey: string }[],
-) => permissions.some((item) => !context.hospitalPermissions.has(item.permissionKey));
 
 export class RoleService {
   public constructor(
@@ -53,12 +29,7 @@ export class RoleService {
 
   public async list(context: StaffContext) {
     const roles = await this.roles.list(this.database, context.tenant.hospitalId);
-    // Built-in roles in hierarchy order, then the hospital's own roles by name.
-    const rank = (role: RoleRow) => {
-      const index = builtInRoles.findIndex((item) => item.key === role.systemKey);
-      return index < 0 ? builtInRoles.length : index;
-    };
-    return roles.sort((left, right) => rank(left) - rank(right)).map(toView);
+    return sortRolesForDisplay(roles).map(toRoleView);
   }
 
   public async get(context: StaffContext, id: string) {
@@ -66,7 +37,7 @@ export class RoleService {
     if (!role) {
       throw new NotFoundError();
     }
-    return toView(role);
+    return toRoleView(role);
   }
 
   public async create(context: StaffContext, input: CreateRoleInput, requestId: string) {
@@ -89,7 +60,7 @@ export class RoleService {
         targetId: role.id,
         metadata: { name: role.name, scopeLevel: role.scopeLevel, permissionKeys },
       });
-      return toView((await this.roles.findById(transaction, hospitalId, role.id))!);
+      return toRoleView((await this.roles.findById(transaction, hospitalId, role.id))!);
     });
   }
 
@@ -117,7 +88,7 @@ export class RoleService {
           );
         }
         // Nobody may weaken or reshape a role more powerful than their own.
-        if (exceedsCaller(context, existing.rolePermissions)) {
+        if (permissionsExceedCaller(context, existing.rolePermissions)) {
           throw new ForbiddenError();
         }
         if (existing.systemKey && (input.name !== undefined || input.scopeLevel !== undefined)) {
@@ -152,20 +123,13 @@ export class RoleService {
           await this.roles.addPermissions(transaction, hospitalId, id, permissionKeys);
         }
         const updated = (await this.roles.findById(transaction, hospitalId, id))!;
-        const snapshot = (row: RoleRow) => ({
-          name: row.name,
-          description: row.description,
-          active: row.active,
-          scopeLevel: row.scopeLevel,
-          permissionKeys: row.rolePermissions.map((item) => item.permissionKey),
-        });
         await recordStaffAudit(transaction, context, requestId, {
           action: 'role.update',
           targetType: 'Role',
           targetId: id,
-          metadata: { before: snapshot(existing), after: snapshot(updated) },
+          metadata: { before: roleSnapshot(existing), after: roleSnapshot(updated) },
         });
-        return toView(updated);
+        return toRoleView(updated);
       },
       { isolationLevel: 'Serializable' },
     );
@@ -182,7 +146,7 @@ export class RoleService {
         if (existing.systemKey) {
           throw new ConflictError('Built-in roles cannot be deleted.');
         }
-        if (exceedsCaller(context, existing.rolePermissions)) {
+        if (permissionsExceedCaller(context, existing.rolePermissions)) {
           throw new ForbiddenError();
         }
         if ((await this.roles.countAssignments(transaction, hospitalId, id)) > 0) {
@@ -226,7 +190,7 @@ export class RoleService {
         if (membership.status !== 'ACTIVE') {
           throw new ConflictError('The staff membership is not active.');
         }
-        if (exceedsCaller(context, role.rolePermissions)) {
+        if (permissionsExceedCaller(context, role.rolePermissions)) {
           throw new ForbiddenError();
         }
         const scope = await this.resolveScope(transaction, hospitalId, role.scopeLevel, scopeId);
@@ -274,7 +238,7 @@ export class RoleService {
           throw new NotFoundError();
         }
         // Symmetric with assignment: nobody can remove a role more privileged than their own.
-        if (exceedsCaller(context, userRole.role.rolePermissions)) {
+        if (permissionsExceedCaller(context, userRole.role.rolePermissions)) {
           throw new ForbiddenError();
         }
         const removing = scopeId
@@ -347,7 +311,7 @@ export class RoleService {
     if (!place.active) {
       throw new ConflictError(`That ${level.toLowerCase()} is inactive.`);
     }
-    return { scopeType: scopeTypeFor[level], scopeId };
+    return { scopeType: scopeTypeForLevel(level), scopeId };
   }
 
   private async validatePermissionGrant(

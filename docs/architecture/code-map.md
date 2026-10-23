@@ -96,7 +96,9 @@ Tests: `services/tests/integration/public-requests.test.ts`, `request-core.test.
 - **locations:** one service per level (`building`, `floor`, `ward`, `room`, `bed`) composed by `location.service.ts`; shared rules in `location-rules.ts`; area filters in `location-access.ts`.
 - **requests:** `request-query.service.ts` (read), `patient-request.service.ts` (patients), `request-command.service.ts` (staff commands), composed by `request.service.ts`; the state machine in `request-transitions.ts`; the SLA worker in `escalation.service.ts`.
 - **reports:** `report.service.ts` loads data and checks access; the figures are pure functions in `report-facts.ts`, `report-metrics.ts`, and `person-activity.ts` (unit-tested in `tests/unit/report-metrics.test.ts`).
-- **roles, staff:** setup helpers that skip staff checks (for onboarding and the super admin) are in `role-setup.ts` and `staff-account.ts`, apart from the checked services.
+- **roles, staff:** setup helpers that skip staff checks (for onboarding and the super admin) are in `role-setup.ts` and `staff-account.ts`, apart from the checked services. Their API mapping is in `role-view.ts` / `staff-view.ts`, while reusable authorization and invariants are in `role-rules.ts` / `staff-rules.ts`.
+- **qr:** `qr.service.ts` is the issue/rotate/revoke/resolve workflow; `qr-code.ts` owns token storage, recovery, and the public view; `qr-batch.ts` owns printed-label order and location text.
+- **platform:** `platform.service.ts` orchestrates client and hospital changes; `platform-view.ts` owns totals and the deliberately small audit snapshots.
 
 On the web side, a screen's file holds its state and layout, with its parts beside it: for example `features/requests/` has `RequestsPage.tsx`, `RequestCard.tsx`, `RequestDialogs.tsx`, and `use-request-queue.ts`; `features/locations/` has one panel per level, its forms, and `LayoutTree.tsx`; `features/patient/` keeps the English and Hindi text in `patient-copy.ts`. Shared UI is in `frontend/src/components/` (one file per kind, imported from `components/index.tsx`).
 

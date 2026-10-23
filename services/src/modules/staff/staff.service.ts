@@ -1,11 +1,6 @@
-import {
-  type DutyStatus,
-  type MembershipStatus,
-  type Prisma,
-  type PrismaClient,
-} from '@prisma/client';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../common/errors/app-error.js';
-import { type Db } from '../../database/client.js';
+import { type DutyStatus, type MembershipStatus, type PrismaClient } from '@prisma/client';
+import { ConflictError, NotFoundError } from '../../common/errors/app-error.js';
+import { pageResult } from '../../common/pagination.js';
 import { recordStaffAudit } from '../audit/index.js';
 import {
   canAccessLocation,
@@ -14,42 +9,24 @@ import {
   revokeStaffSessions,
   type StaffContext,
 } from '../auth/index.js';
-import { lockedRoleKey } from '../roles/index.js';
 import { createStaffInBulk } from './bulk-staff.js';
 import { findEligibleStaff } from './eligibility.js';
 import { createStaffAccount } from './staff-account.js';
-import { StaffRepository, type StaffRow } from './staff.repository.js';
+import { StaffRepository } from './staff.repository.js';
+import {
+  requireActiveStaffLocation,
+  requireNoGreaterPowers,
+  requireSafeStatusChange,
+  requireStaffMember,
+} from './staff-rules.js';
 import {
   type BulkCreateStaffInput,
   type CoverageInput,
   type CreateStaffInput,
   type StaffFilter,
 } from './staff.schemas.js';
-
-type Transaction = Prisma.TransactionClient;
+import { toStaffView } from './staff-view.js';
 const repository = new StaffRepository();
-
-function toView(row: StaffRow) {
-  return {
-    id: row.id,
-    userId: row.user.id,
-    email: row.user.email,
-    displayName: row.user.displayName,
-    userStatus: row.user.status,
-    status: row.status,
-    dutyStatus: row.dutyStatus,
-    dutyChangedAt: row.dutyChangedAt,
-    createdAt: row.createdAt,
-    departmentIds: row.departments.map((item) => item.departmentId),
-    coverage: row.locationScopes,
-    roleIds: row.userRoles.map((item) => item.roleId),
-    // Where each role applies: the hospital, or specific floors, wards, or departments.
-    roleAssignments: row.userRoles.map((item) => ({
-      roleId: item.roleId,
-      scopes: item.scopes.map((scope) => ({ type: scope.scopeType, id: scope.scopeId })),
-    })),
-  };
-}
 
 export class StaffService {
   public constructor(
@@ -62,16 +39,11 @@ export class StaffService {
       this.staff.list(this.database, context.tenant.hospitalId, filter),
       this.staff.count(this.database, context.tenant.hospitalId, filter),
     ]);
-    return {
-      items: rows.map(toView),
-      page: filter.page,
-      pageSize: filter.pageSize,
-      total,
-    };
+    return pageResult(rows.map(toStaffView), filter, total);
   }
 
   public async get(context: StaffContext, id: string) {
-    return toView(await this.requireMember(this.database, context, id));
+    return toStaffView(await requireStaffMember(this.staff, this.database, context, id));
   }
 
   public async eligible(context: StaffContext, query: { bedId: string; departmentId: string }) {
@@ -112,13 +84,15 @@ export class StaffService {
           displayName: input.displayName,
         },
       });
-      return toView(await this.requireMember(transaction, context, created.membershipId));
+      return toStaffView(
+        await requireStaffMember(this.staff, transaction, context, created.membershipId),
+      );
     });
   }
 
   public async bulkCreate(context: StaffContext, input: BulkCreateStaffInput, requestId: string) {
     return (await createStaffInBulk(this.database, this.staff, context, input, requestId)).map(
-      toView,
+      toStaffView,
     );
   }
 
@@ -129,10 +103,11 @@ export class StaffService {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(
       async (transaction) => {
-        const before = await this.requireMember(transaction, context, id);
+        const before = await requireStaffMember(this.staff, transaction, context, id);
         const deactivating = status !== 'ACTIVE';
         if (status !== before.status) {
-          await this.requireSafeStatusChange(
+          await requireSafeStatusChange(
+            this.staff,
             transaction,
             context,
             id,
@@ -155,7 +130,7 @@ export class StaffService {
           targetId: id,
           metadata: { from: before.status, to: status, revokedSessions },
         });
-        return toView(await this.requireMember(transaction, context, id));
+        return toStaffView(await requireStaffMember(this.staff, transaction, context, id));
       },
       { isolationLevel: 'Serializable' },
     );
@@ -165,9 +140,9 @@ export class StaffService {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(
       async (transaction) => {
-        const before = await this.requireMember(transaction, context, id);
+        const before = await requireStaffMember(this.staff, transaction, context, id);
         if (before.dutyStatus === dutyStatus) {
-          return toView(before);
+          return toStaffView(before);
         }
         if (
           dutyStatus === 'ON_DUTY' &&
@@ -185,7 +160,7 @@ export class StaffService {
           targetId: id,
           metadata: { from: before.dutyStatus, to: dutyStatus },
         });
-        return toView(await this.requireMember(transaction, context, id));
+        return toStaffView(await requireStaffMember(this.staff, transaction, context, id));
       },
       { isolationLevel: 'Serializable' },
     );
@@ -194,7 +169,7 @@ export class StaffService {
   public addDepartment(context: StaffContext, id: string, departmentId: string, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
-      await this.requireMember(transaction, context, id);
+      await requireStaffMember(this.staff, transaction, context, id);
       const department = await this.staff.findDepartment(transaction, hospitalId, departmentId);
       if (!department) {
         throw new NotFoundError('The referenced department was not found.');
@@ -210,7 +185,7 @@ export class StaffService {
         targetId: id,
         metadata: { departmentId },
       });
-      return toView(await this.requireMember(transaction, context, id));
+      return toStaffView(await requireStaffMember(this.staff, transaction, context, id));
     });
   }
 
@@ -222,7 +197,7 @@ export class StaffService {
   ) {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
-      await this.requireMember(transaction, context, id);
+      await requireStaffMember(this.staff, transaction, context, id);
       if ((await this.staff.removeDepartment(transaction, hospitalId, id, departmentId)) !== 1) {
         throw new NotFoundError();
       }
@@ -232,22 +207,22 @@ export class StaffService {
         targetId: id,
         metadata: { departmentId },
       });
-      return toView(await this.requireMember(transaction, context, id));
+      return toStaffView(await requireStaffMember(this.staff, transaction, context, id));
     });
   }
 
   public addCoverage(context: StaffContext, id: string, input: CoverageInput, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
-      await this.requireMember(transaction, context, id);
+      await requireStaffMember(this.staff, transaction, context, id);
       if (input.scopeType === 'FLOOR') {
-        requireActiveLocation(
+        requireActiveStaffLocation(
           await this.staff.findFloor(transaction, hospitalId, input.floorId),
           'floor',
         );
       }
       if (input.scopeType === 'WARD') {
-        requireActiveLocation(
+        requireActiveStaffLocation(
           await this.staff.findWard(transaction, hospitalId, input.wardId),
           'ward',
         );
@@ -271,14 +246,14 @@ export class StaffService {
           wardId: scope.wardId,
         },
       });
-      return toView(await this.requireMember(transaction, context, id));
+      return toStaffView(await requireStaffMember(this.staff, transaction, context, id));
     });
   }
 
   public removeCoverage(context: StaffContext, id: string, coverageId: string, requestId: string) {
     const hospitalId = context.tenant.hospitalId;
     return this.database.$transaction(async (transaction) => {
-      await this.requireMember(transaction, context, id);
+      await requireStaffMember(this.staff, transaction, context, id);
       if ((await this.staff.removeCoverage(transaction, hospitalId, id, coverageId)) !== 1) {
         throw new NotFoundError();
       }
@@ -288,7 +263,7 @@ export class StaffService {
         targetId: id,
         metadata: { coverageId },
       });
-      return toView(await this.requireMember(transaction, context, id));
+      return toStaffView(await requireStaffMember(this.staff, transaction, context, id));
     });
   }
 
@@ -310,8 +285,8 @@ export class StaffService {
     const hospitalId = context.tenant.hospitalId;
     const passwordHash = await hashPassword(temporaryPassword);
     return this.database.$transaction(async (transaction) => {
-      const member = await this.requireMember(transaction, context, id);
-      await this.requireNoGreaterPowers(transaction, context, id);
+      const member = await requireStaffMember(this.staff, transaction, context, id);
+      await requireNoGreaterPowers(this.staff, transaction, context, id);
       const reset = await resetStaffPassword(
         transaction,
         { hospitalId, membershipId: id, userId: member.user.id },
@@ -328,65 +303,7 @@ export class StaffService {
         targetId: id,
         metadata: { sessionsEnded: reset.sessionsEnded },
       });
-      return toView(member);
+      return toStaffView(member);
     });
-  }
-
-  // A staff manager may act on someone only if they hold every permission
-  // that person has.
-  private async requireNoGreaterPowers(
-    transaction: Transaction,
-    context: StaffContext,
-    membershipId: string,
-  ) {
-    const roles = await this.staff.findActiveRoles(
-      transaction,
-      context.tenant.hospitalId,
-      membershipId,
-    );
-    const held = roles.flatMap(({ role }) =>
-      role.rolePermissions.map((item) => item.permissionKey),
-    );
-    if (held.some((key) => !context.hospitalPermissions.has(key))) throw new ForbiddenError();
-    return roles;
-  }
-
-  // A staff manager may only change the status of someone whose permissions they
-  // hold themselves, and a hospital must keep at least one active Hospital Manager.
-  private async requireSafeStatusChange(
-    transaction: Transaction,
-    context: StaffContext,
-    membershipId: string,
-    deactivating: boolean,
-  ): Promise<void> {
-    const hospitalId = context.tenant.hospitalId;
-    const roles = await this.requireNoGreaterPowers(transaction, context, membershipId);
-    if (!deactivating || !roles.some(({ role }) => role.systemKey === lockedRoleKey)) return;
-    const others = await this.staff.countOtherActiveHolders(
-      transaction,
-      hospitalId,
-      lockedRoleKey,
-      membershipId,
-    );
-    if (others === 0) {
-      throw new ConflictError('A hospital must keep at least one active Hospital Manager.');
-    }
-  }
-
-  private async requireMember(db: Db, context: StaffContext, id: string): Promise<StaffRow> {
-    const member = await this.staff.findMember(db, context.tenant.hospitalId, id);
-    if (!member) {
-      throw new NotFoundError();
-    }
-    return member;
-  }
-}
-
-function requireActiveLocation(location: { active: boolean } | null, label: string): void {
-  if (!location) {
-    throw new NotFoundError(`The referenced ${label} was not found.`);
-  }
-  if (!location.active) {
-    throw new ConflictError(`The ${label} is inactive.`);
   }
 }

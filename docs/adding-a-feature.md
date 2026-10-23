@@ -6,6 +6,9 @@ CARE QR stays one backend and one frontend. Extend an existing domain module if 
 
 1. Write the behavior, tenant boundary, permission, and request/response shape. If data changes, edit `services/prisma/schema.prisma`, add a reviewed migration, run `npm run prisma:generate` in `services/`, and regenerate the [ER diagram](./database/er-diagram.md) with `npm run docs:er`. Never edit a deployed migration in place.
 2. Put strict Zod input schemas in `*.schemas.ts`. Put URLs and permission guards in `*.routes.ts`; HTTP parsing and responses in `*.controller.ts`; decisions and transactions in `*.service.ts`; Prisma reads/writes in `*.repository.ts`.
+   - Keep each service method readable as one use case: **load and validate → change state → audit → return a view**.
+   - Put reusable invariants in `*-rules.ts`, repository-row/API mapping in `*-view.ts`, and a substantial sub-workflow in a descriptive file such as `bulk-staff.ts` or `qr-batch.ts`. Avoid catch-all `helpers.ts` or `utils.ts` files.
+   - For an ordinary paged list, use `common/pagination.ts` so offset calculation and the response shape stay consistent.
 3. Export only the public service/helper/controller/route interface from `index.ts`. Other modules import that file, never another module's internals. Pass the current transaction into exported cross-module write functions when both changes must commit together.
 4. Create the new controller in `services/src/container.ts` and mount its routes in `services/src/routes/index.ts`. Shared middleware belongs in `src/middleware/` only if several modules need it; do not add a second server or network call between in-process modules.
 5. Add unit tests for pure rules and integration tests for success, denied permission, wrong hospital/scope, invalid input, rollback, and concurrency where relevant. Integration tests require a separate disposable `TEST_DATABASE_URL` with migrations applied.

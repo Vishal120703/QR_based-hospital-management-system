@@ -36,7 +36,7 @@ Staff sign-in by hospital code, email, and password; 8-hour sessions (only the t
 The super admin (CARE QR / Healio team). Manages clients and their hospitals; never reads patients, requests, or staff records.
 
 - **Public interface:** `PlatformAuthService`, `PlatformContext`, `PlatformService`, `PlatformAuthController`, `PlatformController`, `createPlatformRoutes`.
-- **Uses:** `hospitals.bootstrapHospital` (create), `staff.createStaffAccount` + `roles.grantRole` (add a manager), `auth.revokeHospitalSessions` (suspend), `audit.recordPlatformAudit`.
+- **Uses:** `hospitals.bootstrapHospital` (create), `staff.createStaffAccount` + `roles.grantRole` (add a manager), `auth.revokeHospitalSessions` (suspend), `audit.recordPlatformAudit`. `platform-view.ts` keeps totals and audit snapshots out of the orchestration service.
 
 ## hospitals
 
@@ -47,7 +47,7 @@ The super admin (CARE QR / Healio team). Manages clients and their hospitals; ne
 ## roles
 
 - **Public interface:** `PermissionKey`, `lockedRoleKey`, `createBuiltInRoles`, `ensurePermissionCatalog`, `grantRole`, `RoleService`, `RoleController`, routes.
-- **Rules:** nobody may grant, change, or remove more power than they hold hospital-wide; the Hospital Manager role is locked; a hospital always keeps one active Hospital Manager.
+- **Rules:** nobody may grant, change, or remove more power than they hold hospital-wide; the Hospital Manager role is locked; a hospital always keeps one active Hospital Manager. Reusable permission/scope rules live in `role-rules.ts`; API and audit mapping live in `role-view.ts`.
 
 ## departments
 
@@ -59,7 +59,7 @@ The simplest module and the best template to copy. Standard list / get / create 
 
 - **Public interface:** `StaffService`, `ShiftService`, their controllers, `createStaffRoutes`, `createStaffAccount`, `findEligibleStaff`.
 - **Eligibility rule** (`eligibility.ts`): a person can receive a request only when their membership and account are active, they are on duty, they belong to the request's department, and their coverage includes the bed (hospital, floor, or ward).
-- **Rules:** a staff manager can only change the status of, or reset the password of, someone whose permissions they hold; going inactive also ends their sessions and duty. A reset is refused for oneself and for an account also used at another hospital or on the platform.
+- **Rules:** a staff manager can only change the status of, or reset the password of, someone whose permissions they hold; going inactive also ends their sessions and duty. A reset is refused for oneself and for an account also used at another hospital or on the platform. These reusable checks live in `staff-rules.ts`; `staff-view.ts` owns the client-facing shape.
 
 ## locations
 
@@ -74,7 +74,7 @@ The simplest module and the best template to copy. Standard list / get / create 
 ## qr
 
 - **Public interface:** `QrCodeService`, `QrController`, routes.
-- **Rules:** scans use a one-way token hash; an AES-256-GCM encrypted copy lets an authorized hospital manager reopen the same active label. Viewing/printing is audited and does not change the code or guest sessions. Replacing or disabling ends the guest sessions opened with the old code; a scan locks the row so it cannot race a replacement.
+- **Rules:** scans use a one-way token hash; an AES-256-GCM encrypted copy lets an authorized hospital manager reopen the same active label. Viewing/printing is audited and does not change the code or guest sessions. Replacing or disabling ends the guest sessions opened with the old code; a scan locks the row so it cannot race a replacement. `QrTokenCodec` in `qr-code.ts` is the single token conversion boundary; `qr-batch.ts` owns label ordering and location formatting.
 
 ## catalog
 
